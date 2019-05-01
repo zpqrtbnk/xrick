@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <ProjectGuid>{FD11A8D7-90E4-475D-835C-0410965E4BC5}</ProjectGuid>
+    <RootNamespace>xrick</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>include;..\..\lib\SDL-1.2.15\include;..\..\lib\zlib1211\zlib-1.2.11</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_MBCS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalLibraryDirectories>..\..\lib\SDL-libs;..\..\lib\zlib-win-build\build-VS2019-MT\Debug</AdditionalLibraryDirectories>
+      <AdditionalDependencies>SDL.lib;SDLmain.lib;libz.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="include\config.h" />
+    <ClInclude Include="include\control.h" />
+    <ClInclude Include="include\data.h" />
+    <ClInclude Include="include\debug.h" />
+    <ClInclude Include="include\devtools.h" />
+    <ClInclude Include="include\draw.h" />
+    <ClInclude Include="include\ents.h" />
+    <ClInclude Include="include\e_bomb.h" />
+    <ClInclude Include="include\e_bonus.h" />
+    <ClInclude Include="include\e_box.h" />
+    <ClInclude Include="include\e_bullet.h" />
+    <ClInclude Include="include\e_rick.h" />
+    <ClInclude Include="include\e_sbonus.h" />
+    <ClInclude Include="include\e_them.h" />
+    <ClInclude Include="include\game.h" />
+    <ClInclude Include="include\img.h" />
+    <ClInclude Include="include\maps.h" />
+    <ClInclude Include="include\pics.h" />
+    <ClInclude Include="include\rects.h" />
+    <ClInclude Include="include\screens.h" />
+    <ClInclude Include="include\scroller.h" />
+    <ClInclude Include="include\sprites.h" />
+    <ClInclude Include="include\syssnd.h" />
+    <ClInclude Include="include\system.h" />
+    <ClInclude Include="include\sysvid.h" />
+    <ClInclude Include="include\tiles.h" />
+    <ClInclude Include="include\unzip.h" />
+    <ClInclude Include="include\util.h" />
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\control.c" />
+    <ClCompile Include="src\data.c" />
+    <ClCompile Include="src\dat_ents.c" />
+    <ClCompile Include="src\dat_maps.c" />
+    <ClCompile Include="src\dat_picsPC.c" />
+    <ClCompile Include="src\dat_picsST.c" />
+    <ClCompile Include="src\dat_screens.c" />
+    <ClCompile Include="src\dat_snd.c" />
+    <ClCompile Include="src\dat_spritesPC.c" />
+    <ClCompile Include="src\dat_spritesST.c" />
+    <ClCompile Include="src\dat_tilesPC.c" />
+    <ClCompile Include="src\dat_tilesST.c" />
+    <ClCompile Include="src\devtools.c" />
+    <ClCompile Include="src\draw.c" />
+    <ClCompile Include="src\ents.c" />
+    <ClCompile Include="src\e_bomb.c" />
+    <ClCompile Include="src\e_bonus.c" />
+    <ClCompile Include="src\e_box.c" />
+    <ClCompile Include="src\e_bullet.c" />
+    <ClCompile Include="src\e_rick.c" />
+    <ClCompile Include="src\e_sbonus.c" />
+    <ClCompile Include="src\e_them.c" />
+    <ClCompile Include="src\game.c" />
+    <ClCompile Include="src\maps.c" />
+    <ClCompile Include="src\rects.c" />
+    <ClCompile Include="src\scroller.c" />
+    <ClCompile Include="src\scr_gameover.c" />
+    <ClCompile Include="src\scr_getname.c" />
+    <ClCompile Include="src\scr_imain.c" />
+    <ClCompile Include="src\scr_imap.c" />
+    <ClCompile Include="src\scr_pause.c" />
+    <ClCompile Include="src\scr_xrick.c" />
+    <ClCompile Include="src\sysarg.c" />
+    <ClCompile Include="src\sysevt.c" />
+    <ClCompile Include="src\sysjoy.c" />
+    <ClCompile Include="src\syskbd.c" />
+    <ClCompile Include="src\syssnd.c" />
+    <ClCompile Include="src\system.c" />
+    <ClCompile Include="src\sysvid.c" />
+    <ClCompile Include="src\unzip.c" />
+    <ClCompile Include="src\util.c" />
+    <ClCompile Include="src\xrick.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="xrick.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="icons\xrickST.ico" />
+    <Image Include="icons\xrickPC.ico" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
