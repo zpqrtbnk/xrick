@@ -1,7 +1,7 @@
 /*
  * xrick/include/screens.h
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -32,7 +32,7 @@ extern screen_imapsteps_t screen_imapsteps[];  /* map intro steps */
 extern U8 screen_imapsofs[];  /* first step for each map */
 extern U8 *screen_imaptext[];  /* map intro texts */
 extern U8 screen_imainhoft[];  /* hall of fame title */
-extern U8 screen_imainrdt[];  /*rick dangerous title */
+extern U8 screen_imainrdt[];  /* rick dangerous title */
 extern U8 screen_imaincdc[];  /* core design copyright text */
 extern U8 screen_gameovertxt[];  /* game over */
 extern U8 screen_pausedtxt[];  /* paused */

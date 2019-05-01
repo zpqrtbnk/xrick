@@ -1,7 +1,7 @@
 /*
  * xrick/src/e_bomb.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -11,12 +11,21 @@
  * You must not remove this notice, or any other, from this software.
  */
 
-#include "system.h"
-#include "game.h"
-#include "ents.h"
-#include "e_bomb.h"
 
+
+#include "system.h"
+#include "config.h"
+#include "env.h"
+
+#include "ents.h"
+#include "sounds.h"
+#include "e_bomb.h"
 #include "e_rick.h"
+
+/* fixme is this for sounds only? */
+#include "game.h"
+
+
 
 /*
  * public vars (for performance reasons)

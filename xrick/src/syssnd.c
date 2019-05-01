@@ -1,7 +1,7 @@
 /*
  * xrick/src/syssnd.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -14,14 +14,14 @@
 #include <SDL.h>
 #include <stdlib.h>
 #include <memory.h>
+#include <string.h> /* strlen, strncpy */
 
-#include "config.h"
+#include "syssnd.h"
 
 #ifdef ENABLE_SOUND
 
-#include "system.h"
+#include "sysarg.h"
 #include "game.h"
-#include "syssnd.h"
 #include "debug.h"
 #include "data.h"
 
@@ -313,7 +313,6 @@ syssnd_isplaying(sound_t *sound)
 	SDL_mutexV(sndlock);
 	return playing;
 }
-
 
 /*
  * Stops all channels.

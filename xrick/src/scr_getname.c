@@ -1,7 +1,7 @@
 /*
  * xrick/src/scr_getname.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -12,11 +12,16 @@
  */
 
 #include "system.h"
-#include "game.h"
+#include "config.h"
+#include "env.h"
+
 #include "screens.h"
 
+#include "game.h"
 #include "draw.h"
 #include "control.h"
+#include "tiles.h"
+#include "fb.h"
 
 /*
  * local vars
@@ -55,13 +60,13 @@ screen_getname(void)
 
   if (seq == 0) {
     /* figure out if this is a high score */
-    if (game_score < game_hscores[7].score)
+    if (env_score < game_hscores[7].score)
       return SCREEN_DONE;
 
     /* prepare */
-    draw_tilesBank = 0;
+    tiles_setBank(0);
 #ifdef GFXPC
-    draw_filter = 0xffff;
+    tiles_setFilter(0xffff);
 #endif
     for (i = 0; i < 10; i++)
       name[i] = '@';
@@ -70,33 +75,28 @@ screen_getname(void)
     seq = 1;
   }
 
-  switch (seq) {
-  case 1:  /* prepare screen */
-    sysvid_clear();
+	switch (seq) {
+	case 1:  /* prepare screen */
+		fb_clear();
 #ifdef GFXPC
-    draw_setfb(32, 8);
-    draw_filter = 0xaaaa; /* red */
-    draw_tilesListImm(screen_congrats);
+		tiles_setFilter(0xaaaa); /* red */
+		tiles_paintListAt(screen_congrats, 32, 8);
 #endif
-    draw_setfb(76, 40);
 #ifdef GFXPC
-    draw_filter = 0xffff; /* yellow */
+		tiles_setFilter(0xffff); /* yellow */
 #endif
-    draw_tilesListImm((U8 *)"PLEASE@ENTER@YOUR@NAME\376");
+		tiles_paintListAt((U8 *)"PLEASE@ENTER@YOUR@NAME\376", 76, 40);
 #ifdef GFXPC
-    draw_filter = 0x5555; /* green */
+		tiles_setFilter(0x5555); /* green */
 #endif
-    for (i = 0; i < 6; i++)
-      for (j = 0; j < 4; j++) {
-	draw_setfb(TOPLEFT_X + i * 8 * 2, TOPLEFT_Y + j * 8 * 2);
-	draw_tile('A' + i + j * 6);
-      }
-    draw_setfb(TOPLEFT_X, TOPLEFT_Y + 64);
+	for (i = 0; i < 6; i++)
+		for (j = 0; j < 4; j++)
+			tiles_paintAt('A' + i + j * 6, TOPLEFT_X + i * 8 * 2, TOPLEFT_Y + j * 8 * 2);
 #ifdef GFXST
-    draw_tilesListImm((U8 *)"Y@Z@.@@@\074\373\374\375\376");
+    tiles_paintListAt((U8 *)"Y@Z@.@@@\074\373\374\375\376", TOPLEFT_X, TOPLEFT_Y + 64);
 #endif
 #ifdef GFXPC
-    draw_tilesListImm((U8 *)"Y@Z@.@@@\074@\075@\376");
+    tiles_paintListAt((U8 *)"Y@Z@.@@@\074@\075@\376", TOPLEFT_X, TOPLEFT_Y + 64);
 #endif
     name_draw();
     pointer_show(TRUE);
@@ -150,7 +150,7 @@ screen_getname(void)
     if (!(control_status & CONTROL_FIRE)) {
       if (x == 5 && y == 4) {  /* end */
 	i = 0;
-	while (game_score < game_hscores[i].score)
+	while (env_score < game_hscores[i].score)
 	  i++;
 	j = 7;
 	while (j > i) {
@@ -159,7 +159,7 @@ screen_getname(void)
 	    game_hscores[j].name[x] = game_hscores[j - 1].name[x];
 	  j--;
 	}
-	game_hscores[i].score = game_score;
+	game_hscores[i].score = env_score;
 	for (x = 0; x < 10; x++)
 	  game_hscores[i].name[x] = name[x];
 	seq = 99;
@@ -212,7 +212,7 @@ screen_getname(void)
     return SCREEN_EXIT;
 
   if (seq == 99) {  /* seq 99, we're done */
-    sysvid_clear();
+    fb_clear();
     seq = 0;
     return SCREEN_DONE;
   }
@@ -224,11 +224,11 @@ screen_getname(void)
 static void
 pointer_show(U8 show)
 {
-  draw_setfb(TOPLEFT_X + x * 8 * 2, TOPLEFT_Y + y * 8 * 2 + 8);
 #ifdef GFXPC
-  draw_filter = 0xaaaa; /* red */
+	tiles_setFilter(0xaaaa); /* red */
 #endif
-  draw_tile((show == TRUE)?TILE_POINTER:'@');
+	tiles_paintAt(show == TRUE ? TILE_POINTER : '@',
+		TOPLEFT_X + x * 8 * 2, TOPLEFT_Y + y * 8 * 2 + 8);
 }
 
 static void
@@ -248,26 +248,25 @@ name_update(void)
   }
 }
 
+/* FIXME WHAT IS P??? */
+
 static void
 name_draw(void)
 {
-  U8 i;
+	U8 i;
 
-  draw_setfb(NAMEPOS_X, NAMEPOS_Y);
 #ifdef GFXPC
-  draw_filter = 0xaaaa; /* red */
+	tiles_setFilter(0xaaaa); /* red */
 #endif
-  for (i = 0; i < p; i++)
-    draw_tile(name[i]);
-  for (i = p; i < 10; i++)
-    draw_tile(TILE_CURSOR);
+	for (i = 0; i < p; i++)
+		tiles_paintAt(name[i], NAMEPOS_X + i * 8, NAMEPOS_Y);
+	for (i = p; i < 10; i++)
+		tiles_paintAt(TILE_CURSOR, NAMEPOS_X + i * 8, NAMEPOS_Y);
 
 #ifdef GFXST
-  draw_setfb(NAMEPOS_X, NAMEPOS_Y + 8);
-  for (i = 0; i < 10; i++)
-    draw_tile('@');
-  draw_setfb(NAMEPOS_X + 8 * (p < 9 ? p : 9), NAMEPOS_Y + 8);
-  draw_tile(TILE_POINTER);
+	for (i = 0; i < 10; i++)
+		tiles_paintAt('@', NAMEPOS_X + i * 8, NAMEPOS_Y + 8);
+	tiles_paintAt(TILE_POINTER, NAMEPOS_X + 8 * (p < 9 ? p : 9), NAMEPOS_Y + 8);
 #endif
 }
 

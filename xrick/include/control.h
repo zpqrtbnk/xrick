@@ -1,7 +1,7 @@
 /*
  * xrick/include/control.h
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -13,6 +13,8 @@
 
 #ifndef _CONTROL_H
 #define _CONTROL_H
+
+#include "system.h"
 
 #define CONTROL_UP 0x08
 #define CONTROL_DOWN 0x04

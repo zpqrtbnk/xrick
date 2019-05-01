@@ -1,7 +1,7 @@
 /*
  * xrick/src/scr_devtools.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -22,6 +22,7 @@
 #include "screens.h"
 #include "draw.h"
 #include "sprites.h"
+#include "tiles.h"
 #include "maps.h"
 
 /*
@@ -31,213 +32,242 @@
 U8
 devtools_run(void)
 {
-  static U8 seq = 0;
-  static U8 pos = 0;
-  static U8 pos2 = 0;
-  U8 i, j, k, l;
-  U8 s[128];
+	static U8 seq = 0;
+	static U8 pos = 0;
+	static U8 pos2 = 0;
+	U8 i, j, k, l;
+	U8 s[128];
 
-  if (seq == 0) {
-    sysvid_clear();
-    game_rects = &draw_SCREENRECT;
+	if (seq == 0)
+	{
+		sysvid_clear();
+		game_rects = &draw_SCREENRECT;
 #ifdef GFXPC
-    draw_filter = 0xffff;
+		tiles_setFilter(0xffff);
 #endif
-    seq = 1;
-  }
+		seq = 1;
+	}
 
-  switch (seq) {
-  case 1:  /* draw tiles */
-    sysvid_clear();
-    draw_tilesBank = 0;
-    sprintf(s, "TILES@BANK@%d\376", pos);
-    draw_setfb(4, 4);
-    draw_tilesListImm(s);
-    k = 0;
-    for (i = 0; i < 0x10; i++) {
-      draw_setfb(80 + i * 0x0a, 14);
-      draw_tile((i<10?0x30:'A'-10) + i);
-      draw_setfb(64, 30 + i * 0x0a);
-      draw_tile((i<10?0x30:'A'-10) + i);
-    }
-    draw_tilesBank = pos;
-    for (i = 0; i < 0x10; i++)
-      for (j = 0; j < 0x10; j++) {
-	draw_setfb(80 + j * 0x0a, 30 + i * 0x0a);
-	draw_tile(k++);
-      }
-    seq = 10;
-    break;
-  case 10:  /* wait for key pressed */
-    if (control_status & CONTROL_FIRE)
-      seq = 98;
-    if (control_status & CONTROL_UP)
-      seq = 12;
-    if (control_status & CONTROL_DOWN)
-      seq = 13;
-    if (control_status & CONTROL_RIGHT)
-      seq = 11;
-    break;
-  case 11:  /* wait for key released */
-    if (!(control_status & CONTROL_RIGHT)) {
-      pos = 0;
-      seq = 21;
-    }
-    break;
-  case 12:  /* wait for key released */
-    if (!(control_status & CONTROL_UP)) {
-      if (pos < 4) pos++;
-      seq = 1;
-    }
-    break;
-  case 13:  /* wait for key released */
-    if (!(control_status & CONTROL_DOWN)) {
-      if (pos > 0) pos--;
-      seq = 1;
-    }
-    break;
-  case 21:  /* draw sprites */
-    sysvid_clear();
-    draw_tilesBank = 0;
-    sprintf(s, "SPRITES\376");
-    draw_setfb(4, 4);
-    draw_tilesListImm(s);
-    for (i = 0; i < 8; i++) {
-      draw_setfb(0x08 + 0x20 + i * 0x20, 0x30 - 26);
-      draw_tile((i<10?0x30:'A'-10) + i);
-      draw_setfb(0x08 + 0x20 + i * 0x20, 0x30 - 16);
-      draw_tile((i+8<10?0x30:'A'-10) + i+8);
-    }
-    for (i = 0; i < 4; i++) {
-      k = pos + i * 8;
-      draw_setfb(0x20 - 16, 0x08 + 0x30 + i * 0x20);
-      j = k%16;
-      k /= 16;
-      draw_tile((j<10?0x30:'A'-10) + j);
-      draw_setfb(0x20 - 26, 0x08 + 0x30 + i * 0x20);
-      j = k%16;
-      draw_tile((j<10?0x30:'A'-10) + j);
-    }
-    k = pos;
-    for (i = 0; i < 4; i++)
-      for (j = 0; j < 8; j++) {
-	  draw_sprite(k++, 0x20 + j * 0x20, 0x30 + i * 0x20);
-      }
-    seq = 30;
-    break;
-  case 30:  /* wait for key pressed */
-    if (control_status & CONTROL_FIRE)
-      seq = 98;
-    if (control_status & CONTROL_UP)
-      seq = 32;
-    if (control_status & CONTROL_DOWN)
-      seq = 33;
-    if (control_status & CONTROL_LEFT)
-      seq = 31;
-    if (control_status & CONTROL_RIGHT)
-      seq = 40;
-    break;
-  case 31:  /* wait for key released */
-    if (!(control_status & CONTROL_LEFT)) {
-      pos = 0;
-      seq = 1;
-    }
-    break;
-  case 32:  /* wait for key released */
-    if (!(control_status & CONTROL_UP)) {
-      if (pos < SPRITES_NBR_SPRITES - 32) pos += 32;
-      seq = 21;
-    }
-    break;
-  case 33:  /* wait for key released */
-    if (!(control_status & CONTROL_DOWN)) {
-      if (pos > 0) pos -= 32;
-      seq = 21;
-    }
-    break;
-  case 40:
-    sysvid_clear();
+	switch (seq)
+	{
+		case 1:  /* draw tiles */
+			sysvid_clear();
+			tiles_setBank(0;)
+			sprintf(s, "TILES@BANK@%d\376", pos);
+			tiles_paintListAt(s, 4, 4);
+			k = 0;
+			for (i = 0; i < 0x10; i++)
+			{
+				tiles_paintAt((i<10?0x30:'A'-10) + i, 80 + i * 0x0a, 14);
+				draw_tile((i<10?0x30:'A'-10) + i, 64, 30 + i * 0x0a);
+			}
+			tiles_setBank(pos);
+			for (i = 0; i < 0x10; i++)
+			for (j = 0; j < 0x10; j++)
+			{
+				tiles_paintAt(k++, 80 + j * 0x0a, 30 + i * 0x0a);
+			}
+			seq = 10;
+			break;
+
+		case 10:  /* wait for key pressed */
+			if (control_status & CONTROL_FIRE)
+				seq = 98;
+			if (control_status & CONTROL_UP)
+				seq = 12;
+			if (control_status & CONTROL_DOWN)
+				seq = 13;
+			if (control_status & CONTROL_RIGHT)
+				seq = 11;
+			break;
+
+		case 11:  /* wait for key released */
+			if (!(control_status & CONTROL_RIGHT))
+			{
+				pos = 0;
+				seq = 21;
+			}
+			break;
+
+		case 12:  /* wait for key released */
+			if (!(control_status & CONTROL_UP))
+			{
+				if (pos < 4) pos++;
+				seq = 1;
+			}
+			break;
+
+		case 13:  /* wait for key released */
+			if (!(control_status & CONTROL_DOWN))
+			{
+				if (pos > 0) pos--;
+				seq = 1;
+			}
+			break;
+
+		case 21:  /* draw sprites */
+			sysvid_clear();
+			tiles_setBank(0);
+			sprintf(s, "SPRITES\376");
+			tiles_paintListAt(s, 4, 4);
+			for (i = 0; i < 8; i++)
+			{
+				tiles_paintAt((i<10?0x30:'A'-10) + i,
+					0x08 + 0x20 + i * 0x20, 0x30 - 26);
+				tiles_paintAt((i+8<10?0x30:'A'-10) + i+8,
+					0x08 + 0x20 + i * 0x20, 0x30 - 16);
+			}
+			for (i = 0; i < 4; i++)
+			{
+				k = pos + i * 8;
+				j = k%16;
+				k /= 16;
+				tiles_paintAt((j<10?0x30:'A'-10) + j,
+					0x20 - 16, 0x08 + 0x30 + i * 0x20);
+				j = k%16;
+				tiles_paintAt((j<10?0x30:'A'-10) + j,
+					0x20 - 26, 0x08 + 0x30 + i * 0x20);
+			}
+			k = pos;
+			for (i = 0; i < 4; i++)
+				for (j = 0; j < 8; j++)
+				{
+					sprite_paint(k++, 0x20 + j * 0x20, 0x30 + i * 0x20);
+				}
+			seq = 30;
+			break;
+
+		case 30:  /* wait for key pressed */
+			if (control_status & CONTROL_FIRE)
+				seq = 98;
+			if (control_status & CONTROL_UP)
+				seq = 32;
+			if (control_status & CONTROL_DOWN)
+				seq = 33;
+			if (control_status & CONTROL_LEFT)
+				seq = 31;
+			if (control_status & CONTROL_RIGHT)
+				seq = 40;
+			break;
+
+		case 31:  /* wait for key released */
+			if (!(control_status & CONTROL_LEFT))
+			{
+				pos = 0;
+				seq = 1;
+			}
+			break;
+
+		case 32:  /* wait for key released */
+			if (!(control_status & CONTROL_UP))
+			{
+				if (pos < SPRITES_NBR_SPRITES - 32) pos += 32;
+				seq = 21;
+			}
+			break;
+
+		case 33:  /* wait for key released */
+			if (!(control_status & CONTROL_DOWN))
+			{
+				if (pos > 0) pos -= 32;
+				seq = 21;
+			}
+			break;
+
+		case 40:
+			sysvid_clear();
 #ifdef GFXPC
-    if (pos2 == 0) pos2 = 2;
+			if (pos2 == 0) pos2 = 2;
 #endif
 #ifdef GFXST
-    if (pos2 == 0) pos2 = 1;
+			if (pos2 == 0) pos2 = 1;
 #endif
-    sprintf(s, "BLOCKS@%#04X@TO@%#04X@WITH@BANK@%d\376",
-	    pos, pos + 4*8-1, pos2);
-    draw_setfb(4, 4);
-    draw_tilesBank = 0;
-    draw_tilesListImm(s);
-    draw_tilesBank = pos2;
-    for (l = 0; l < 8; l++)
-      for (k = 0; k < 4; k++)
-	for (i = 0; i < 4; i++)
-	  for (j = 0; j < 4; j++) {
-	    draw_setfb(20 + j * 8 + l * 36, 30 + i * 8 + k * 36);
-	    draw_tile(map_blocks[pos + l + k * 8][i * 4 + j]);
-	  }
-    seq = 41;
-    break;
-  case 41:
-    if (control_status & CONTROL_FIRE)
-      seq = 98;
-    if (control_status & CONTROL_UP)
-      seq = 42;
-    if (control_status & CONTROL_DOWN)
-      seq = 43;
-    if (control_status & CONTROL_LEFT)
-      seq = 44;
-    if (control_status & CONTROL_PAUSE)
-      seq = 45;
-    break;
-  case 42:
-    if (!(control_status & CONTROL_UP)) {
-      if (pos < MAP_NBR_BLOCKS - 8*4) pos += 8 * 4;
-      seq = 40;
-    }
-    break;
-  case 43:
-    if (!(control_status & CONTROL_DOWN)) {
-      if (pos > 0) pos -= 8 * 4;
-      seq = 40;
-    }
-    break;
-  case 44:
-    if (!(control_status & CONTROL_LEFT)) {
-      pos = 0;
-      pos2 = 0;
-      seq = 21;
-    }
-    break;
-  case 45:
-    if (!(control_status & CONTROL_PAUSE)) {
+			sprintf(s, "BLOCKS@%#04X@TO@%#04X@WITH@BANK@%d\376",
+				pos, pos + 4*8-1, pos2);
+			tiles_setBank(0);
+			tiles_paintListAt(s, 4, 4);
+			tiles_setBank(pos2);
+			for (l = 0; l < 8; l++)
+				for (k = 0; k < 4; k++)
+					for (i = 0; i < 4; i++)
+						for (j = 0; j < 4; j++)
+						{
+							tiles_paintAt(map_blocks[pos + l + k * 8][i * 4 + j],
+								20 + j * 8 + l * 36, 30 + i * 8 + k * 36);
+						}
+			seq = 41;
+			break;
+
+		case 41:
+			if (control_status & CONTROL_FIRE)
+				seq = 98;
+			if (control_status & CONTROL_UP)
+				seq = 42;
+			if (control_status & CONTROL_DOWN)
+				seq = 43;
+			if (control_status & CONTROL_LEFT)
+				seq = 44;
+			if (control_status & CONTROL_PAUSE)
+				seq = 45;
+			break;
+
+		case 42:
+			if (!(control_status & CONTROL_UP))
+			{
+				if (pos < MAP_NBR_BLOCKS - 8*4) pos += 8 * 4;
+				seq = 40;
+			}
+			break;
+
+		case 43:
+			if (!(control_status & CONTROL_DOWN))
+			{
+				if (pos > 0) pos -= 8 * 4;
+				seq = 40;
+			}
+			break;
+
+		case 44:
+			if (!(control_status & CONTROL_LEFT))
+			{
+				pos = 0;
+				pos2 = 0;
+				seq = 21;
+			}
+			break;
+
+		case 45:
+			if (!(control_status & CONTROL_PAUSE))
+			{
 #ifdef GFXPC
-      if (pos2 == 2) pos2 = 3;
-      else pos2 = 2;
+				if (pos2 == 2) pos2 = 3;
+				else pos2 = 2;
 #endif
 #ifdef GFXST
-      if (pos2 == 1) pos2 = 2;
-      else pos2 = 1;
+				if (pos2 == 1) pos2 = 2;
+				else pos2 = 1;
 #endif
-      seq = 40;
-    }
-    break;
-  case 98:  /* wait for key released */
-    if (!(control_status & CONTROL_FIRE))
-      seq = 99;
-    break;
-  }
+				seq = 40;
+			}
+			break;
 
-  if (control_status & CONTROL_EXIT)  /* check for exit request */
-    return SCREEN_EXIT;
+		case 98:  /* wait for key released */
+			if (!(control_status & CONTROL_FIRE))
+				seq = 99;
+			break;
+	}
 
-  if (seq == 99) {  /* we're done */
-    sysvid_clear();
-    seq = 0;
-    return SCREEN_DONE;
-  }
+	if (control_status & CONTROL_EXIT)  /* check for exit request */
+		return SCREEN_EXIT;
 
-  return SCREEN_RUNNING;
+	if (seq == 99)  /* we're done */
+	{
+		fb_clear();
+		seq = 0;
+		return SCREEN_DONE;
+	}
+
+	return SCREEN_RUNNING;
 }
 
 #endif /* ENABLE_DEVTOOLS */

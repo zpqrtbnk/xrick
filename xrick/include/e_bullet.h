@@ -1,7 +1,7 @@
 /*
  * xrick/include/e_bullet.h
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -20,7 +20,7 @@
 #define E_BULLET_ENT ent_ents[E_BULLET_NO]
 
 extern S8 e_bullet_offsx;
-extern S16 e_bullet_xc, e_bullet_yc;
+extern U16 e_bullet_xc, e_bullet_yc;
 
 extern void e_bullet_init(U16, U16);
 extern void e_bullet_action(U8);

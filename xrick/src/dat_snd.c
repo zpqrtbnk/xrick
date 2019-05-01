@@ -1,7 +1,7 @@
 /*
  * xrick/data/dat_snd.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -11,11 +11,9 @@
  * You must not remove this notice, or any other, from this software.
  */
 
-#include "config.h"
+#include "syssnd.h"
 
 #ifdef ENABLE_SOUND
-
-#include "system.h"
 
 sound_t *WAV_WAA;
 sound_t *WAV_BOMB;

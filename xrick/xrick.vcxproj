@@ -135,6 +135,7 @@
     <ClInclude Include="include\devtools.h" />
     <ClInclude Include="include\draw.h" />
     <ClInclude Include="include\ents.h" />
+    <ClInclude Include="include\env.h" />
     <ClInclude Include="include\e_bomb.h" />
     <ClInclude Include="include\e_bonus.h" />
     <ClInclude Include="include\e_box.h" />
@@ -142,6 +143,7 @@
     <ClInclude Include="include\e_rick.h" />
     <ClInclude Include="include\e_sbonus.h" />
     <ClInclude Include="include\e_them.h" />
+    <ClInclude Include="include\fb.h" />
     <ClInclude Include="include\game.h" />
     <ClInclude Include="include\img.h" />
     <ClInclude Include="include\maps.h" />
@@ -149,7 +151,12 @@
     <ClInclude Include="include\rects.h" />
     <ClInclude Include="include\screens.h" />
     <ClInclude Include="include\scroller.h" />
+    <ClInclude Include="include\sounds.h" />
     <ClInclude Include="include\sprites.h" />
+    <ClInclude Include="include\sysarg.h" />
+    <ClInclude Include="include\sysevt.h" />
+    <ClInclude Include="include\sysjoy.h" />
+    <ClInclude Include="include\syskbd.h" />
     <ClInclude Include="include\syssnd.h" />
     <ClInclude Include="include\system.h" />
     <ClInclude Include="include\sysvid.h" />
@@ -174,6 +181,7 @@
     <ClCompile Include="src\devtools.c" />
     <ClCompile Include="src\draw.c" />
     <ClCompile Include="src\ents.c" />
+    <ClCompile Include="src\env.c" />
     <ClCompile Include="src\e_bomb.c" />
     <ClCompile Include="src\e_bonus.c" />
     <ClCompile Include="src\e_box.c" />
@@ -181,7 +189,9 @@
     <ClCompile Include="src\e_rick.c" />
     <ClCompile Include="src\e_sbonus.c" />
     <ClCompile Include="src\e_them.c" />
+    <ClCompile Include="src\fb.c" />
     <ClCompile Include="src\game.c" />
+    <ClCompile Include="src\img.c" />
     <ClCompile Include="src\maps.c" />
     <ClCompile Include="src\rects.c" />
     <ClCompile Include="src\scroller.c" />
@@ -191,6 +201,8 @@
     <ClCompile Include="src\scr_imap.c" />
     <ClCompile Include="src\scr_pause.c" />
     <ClCompile Include="src\scr_xrick.c" />
+    <ClCompile Include="src\sounds.c" />
+    <ClCompile Include="src\sprites.c" />
     <ClCompile Include="src\sysarg.c" />
     <ClCompile Include="src\sysevt.c" />
     <ClCompile Include="src\sysjoy.c" />
@@ -198,6 +210,7 @@
     <ClCompile Include="src\syssnd.c" />
     <ClCompile Include="src\system.c" />
     <ClCompile Include="src\sysvid.c" />
+    <ClCompile Include="src\tiles.c" />
     <ClCompile Include="src\unzip.c" />
     <ClCompile Include="src\util.c" />
     <ClCompile Include="src\xrick.c" />

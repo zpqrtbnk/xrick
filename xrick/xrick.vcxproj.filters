@@ -57,6 +57,12 @@
     <ClInclude Include="include\ents.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\env.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\fb.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="include\game.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -97,6 +103,24 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\util.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sysarg.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sysevt.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sysjoy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\syskbd.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sounds.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -167,7 +191,16 @@
     <ClCompile Include="src\ents.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\env.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\fb.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\game.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\img.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\maps.c">
@@ -197,6 +230,9 @@
     <ClCompile Include="src\scroller.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\sprites.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\sysarg.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -218,6 +254,9 @@
     <ClCompile Include="src\sysvid.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\tiles.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\unzip.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -227,5 +266,18 @@
     <ClCompile Include="src\xrick.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\sounds.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="xrick.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="icons\xrickST.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

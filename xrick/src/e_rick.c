@@ -1,7 +1,7 @@
 /*
  * xrick/src/e_rick.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -13,22 +13,27 @@
 
 #include "system.h"
 #include "config.h"
-#include "game.h"
-#include "ents.h"
+#include "env.h"
+
 #include "e_rick.h"
 
+#include "game.h"
+#include "ents.h"
+#include "sounds.h"
 #include "e_bullet.h"
 #include "e_bomb.h"
 #include "control.h"
 #include "maps.h"
 #include "util.h"
 
+
 /*
  * public vars
  */
-S16 e_rick_stop_x = 0;
-S16 e_rick_stop_y = 0;
+U16 e_rick_stop_x = 0;
+U16 e_rick_stop_y = 0;
 U8 e_rick_state = 0;
+U8 e_rick_atExit = FALSE; // TRUE when rick is exiting the submap
 
 /*
  * local vars
@@ -84,9 +89,7 @@ e_rick_boxtest(U8 e)
 void
 e_rick_gozombie(void)
 {
-#ifdef ENABLE_CHEATS
-	if (game_cheat2) return;
-#endif
+	if (env_invicible) return;
 
 	/* already zombie? */
 	if E_RICK_STTST(E_RICK_STZOMBIE) return;
@@ -140,7 +143,7 @@ void
 e_rick_action2(void)
 {
 	U8 env0, env1;
-	S16 x, y;
+	U16 x, y;
 	U32 i;
 
 	E_RICK_STRST(E_RICK_STSTOP|E_RICK_STSHOOT);
@@ -212,7 +215,7 @@ e_rick_action2(void)
 		x = E_RICK_ENT.x - 2;
 		game_dir = LEFT;
 		if (x < 0) {  /* prev submap */
-			game_chsm = TRUE;
+			e_rick_atExit = TRUE;
 			E_RICK_ENT.x = 0xe2;
 			return;
 		}
@@ -220,7 +223,7 @@ e_rick_action2(void)
 		x = E_RICK_ENT.x + 2;
 		game_dir = RIGHT;
 		if (x >= 0xe8) {  /* next submap */
-			game_chsm = TRUE;
+			e_rick_atExit = TRUE;
 			E_RICK_ENT.x = 0x04;
 			return;
 		}
@@ -299,12 +302,11 @@ e_rick_action2(void)
     if (E_BULLET_ENT.n)
       return;
     /* else use a bullet, if any available */
-    if (!game_bullets)
+    if (!env_bullets)
       return;
-#ifdef ENABLE_CHEATS
-    if (!game_cheat1)
-      game_bullets--;
-#endif
+    if (!env_trainer)
+      env_bullets--;
+
     /* initialize bullet */
     e_bullet_init(E_RICK_ENT.x, E_RICK_ENT.y);
     return;
@@ -318,12 +320,11 @@ e_rick_action2(void)
     if (E_BOMB_ENT.n)
       return;
     /* else use a bomb, if any available */
-    if (!game_bombs)
+    if (!env_bombs)
       return;
-#ifdef ENABLE_CHEATS
-    if (!game_cheat1)
-      game_bombs--;
-#endif
+    if (!env_trainer)
+      env_bombs--;
+
     /* initialize bomb */
     e_bomb_init(E_RICK_ENT.x, E_RICK_ENT.y);
     return;
@@ -408,7 +409,7 @@ e_rick_action2(void)
     if (control_status & CONTROL_LEFT) {
       x = E_RICK_ENT.x - 0x02;
       if (x < 0) {  /* (i.e. negative) prev submap */
-	game_chsm = TRUE;
+	e_rick_atExit = TRUE;
 	/*6dbd = 0x00;*/
 	E_RICK_ENT.x = 0xe2;
 	return;
@@ -417,7 +418,7 @@ e_rick_action2(void)
     else {
       x = E_RICK_ENT.x + 0x02;
       if (x >= 0xe8) {  /* next submap */
-	game_chsm = TRUE;
+	e_rick_atExit = TRUE;
 	/*6dbd = 0x01;*/
 	E_RICK_ENT.x = 0x04;
 	return;

@@ -1,7 +1,7 @@
 /*
  * xrick/src/e_them.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -12,10 +12,13 @@
  */
 
 #include "system.h"
+#include "config.h"
+#include "env.h"
+
 #include "game.h"
 #include "ents.h"
+#include "sounds.h"
 #include "e_them.h"
-
 #include "e_rick.h"
 #include "e_bomb.h"
 #include "e_bullet.h"
@@ -75,7 +78,7 @@ e_them_gozombie(U8 e)
 #ifdef ENABLE_SOUND
   syssnd_play(WAV_DIE, 1);
 #endif
-  game_score += 50;
+  env_score += 50;
   if (ent_ents[e].flags & ENT_FLG_ONCE) {
     /* make sure entity won't be activated again */
     map_marks[ent_ents[e].mark].ent |= MAP_MARK_NACT;
@@ -101,7 +104,7 @@ e_them_t1_action2(U8 e, U8 type)
 #define offsx c1
 #define step_count c2
   U32 i;
-  S16 x, y;
+  U16 x, y;
   U8 env0, env1;
 
   /* by default, try vertical move. calculate new y */
@@ -327,7 +330,8 @@ e_them_t2_action2(U8 e)
 #define flgclmb c1
 #define offsx c2
   U32 i;
-  S16 x, y, yd;
+  U16 x, y;
+  S16 yd;
   U8 env0, env1;
 
   /*
@@ -566,7 +570,7 @@ e_them_t3_action2(U8 e)
 #define sproffs c1
 #define step_count c2
   U8 i;
-  S16 x, y;
+  U16 x, y;
 
   while (1) {
 

@@ -1,7 +1,7 @@
 /*
  * xrick/src/scr_imap.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -14,13 +14,19 @@
 #include <stdio.h>
 
 #include "system.h"
-#include "game.h"
+#include "config.h"
+#include "env.h"
+
 #include "screens.h"
 
+#include "game.h"
 #include "rects.h"
 #include "draw.h"
 #include "control.h"
 #include "maps.h"
+#include "tiles.h"
+#include "sprites.h"
+#include "fb.h"
 
 /*
  * local vars
@@ -29,7 +35,7 @@ static U16 step;              /* current step */
 static U16 count;             /* number of loops for current step */
 static U16 run;               /* 1 = run, 0 = no more step */
 static U8 flipflop;           /* flipflop for top, bottom, left, right */
-static U16 spnum;             /* sprite number */
+static U8 spnum;             /* sprite number */
 static U16 spx, spdx;         /* sprite x position and delta */
 static U16 spy, spdy;         /* sprite y position and delta */
 static U16 spbase, spoffs;    /* base, offset for sprite numbers table */
@@ -51,96 +57,109 @@ static void init(void);
 /*
  * Map introduction
  *
- * ASM: 1948
- *
  * return: SCREEN_RUNNING, SCREEN_DONE, SCREEN_EXIT
  */
-U8
-screen_introMap(void)
+U8 screen_introMap(void)
 {
-  switch (seq) {
-  case 0:
-    sysvid_clear();
+	switch (seq)
+	{
+		case 0: /* initialize */
+			fb_clear();
+			sysvid_setGamma(0);
 
 #ifdef GFXPC
-    draw_tilesBank = 1;
-    draw_filter = 0xAAAA;
+			tiles_setBank(1);
+			tiles_setFilter(0xaaaa);
 #endif
 #ifdef GFXST
-    draw_tilesBank = 0;
+			tiles_setBank(0);
 #endif
-    draw_tllst = screen_imaptext[game_map];
-    draw_setfb(32, 0);
-    draw_tilesSubList();
-
-    draw_setfb(32, 96);
-#ifdef GFXPC
-    draw_filter = 0x5555;
-#endif
-    draw_tilesList();
-
-    game_rects = NULL;
+			tiles_paintListAt(maps_intros[env_map].title, 32, 0);
 
 #ifdef GFXPC
-    draw_filter = 0xFFFF;
+			tiles_setFilter(0x5555);
+#endif
+			tiles_paintListAt(maps_intros[env_map].body, 32, 96);
+
+#ifdef GFXPC
+			tiles_setFilter(0xffff);
 #endif
 
-    init();
-    nextstep();
-    drawcenter();
-    drawtb();
-    drawlr();
-    drawsprite();
-    control_last = 0;
+			init();
+			nextstep();
+			drawcenter();
+			drawtb();
+			drawlr();
+			drawsprite();
+			control_last = 0;
 
-    game_rects = &draw_SCREENRECT;
+			//game_rects = &draw_SCREENRECT;
 
 #ifdef ENABLE_SOUND
-	game_setmusic(map_maps[game_map].tune, 1);
+			sounds_setMusic(map_maps[env_map].tune, 1);
 #endif
 
-	seq = 1;
-    break;
-  case 1:  /* top and bottom borders */
-    drawtb();
-    game_rects = &anim_rect;
-    seq = 2;
-    break;
-  case 2:  /* background and sprite */
-    anim();
-    drawcenter();
-    drawsprite();
-    game_rects = &anim_rect;
-    seq = 3;
-    break;
-  case 3:  /* all borders */
-    drawtb();
-    drawlr();
-    game_rects = &anim_rect;
-    seq = 1;
-    break;
-  case 4:  /* wait for key release */
-    if (!(control_status & CONTROL_FIRE))
-      seq = 5;
-    else
-      sys_sleep(50); /* .5s */
-    break;
-  }
+			seq = 1;
+			break;
 
-  if (control_status & CONTROL_FIRE) {  /* end as soon as key pressed */
-    seq = 4;
-  }
+		case 1: /* fade-in */
+			if (fb_fadeIn())
+				seq = 10;
+			break;
 
-  if (control_status & CONTROL_EXIT)  /* check for exit request */
-    return SCREEN_EXIT;
+		case 10:  /* top and bottom borders */
+			if (control_status & CONTROL_FIRE)
+			{
+				seq = 20;
+			}
+			else
+			{
+				drawtb();
+				game_rects = &anim_rect;
+				seq = 12;
+			}
+			break;
 
-  if (seq == 5) {  /* end as soon as key pressed */
-    sysvid_clear();
-    seq = 0;
-	return SCREEN_DONE;
-  }
-  else
-    return SCREEN_RUNNING;
+		case 12:  /* background and sprite */
+			anim();
+			drawcenter();
+			drawsprite();
+			game_rects = &anim_rect;
+			seq = 13;
+			break;
+
+		case 13:  /* all borders */
+			drawtb();
+			drawlr();
+			game_rects = &anim_rect;
+			seq = 10;
+			break;
+
+		case 20:  /* wait for key release */
+			if (!(control_status & CONTROL_FIRE))
+				seq = 21;
+			else
+				sys_sleep(50);
+			break;
+
+		case 21:
+			if (fb_fadeOut())
+				seq = 30;
+			break;
+	}
+
+	if (control_status & CONTROL_EXIT)  /* check for exit request */
+		return SCREEN_EXIT;
+
+	if (seq == 30)
+	{
+		fb_clear();
+		sysvid_setGamma(255);
+		seq = 0;
+		return SCREEN_DONE;
+	}
+	else
+		return SCREEN_RUNNING;
 }
 
 
@@ -151,25 +170,23 @@ screen_introMap(void)
 static void
 drawtb(void)
 {
-  U8 i;
+	U8 i;
 
-  flipflop++;
-  if (flipflop & 0x01) {
-    draw_setfb(128, 16);
-    for (i = 0; i < 6; i++)
-      draw_tile(0x40);
-    draw_setfb(128, 72);
-    for (i = 0; i < 6; i++)
-      draw_tile(0x06);
-  }
-  else {
-    draw_setfb(128, 16);
-    for (i = 0; i < 6; i++)
-      draw_tile(0x05);
-    draw_setfb(128, 72);
-    for (i = 0; i < 6; i++)
-      draw_tile(0x40);
-  }
+	flipflop++;
+	if (flipflop & 0x01)
+	{
+		for (i = 0; i < 6; i++)
+			tiles_paintAt(0x40, 128 + i * 8, 16);
+		for (i = 0; i < 6; i++)
+			tiles_paintAt(0x06, 128 + i * 8, 72);
+	}
+	else
+	{
+		for (i = 0; i < 6; i++)
+			tiles_paintAt(0x05, 128 + i * 8, 16);
+		for (i = 0; i < 6; i++)
+			tiles_paintAt(0x40, 128 + i * 8, 72);
+	}
 }
 
 
@@ -180,24 +197,24 @@ drawtb(void)
 static void
 drawlr(void)
 {
-  U8 i;
+	U8 i;
 
-  if (flipflop & 0x02) {
-    for (i = 0; i < 8; i++) {
-      draw_setfb(120, 16 + i * 8);
-      draw_tile(0x04);
-      draw_setfb(176, 16 + i * 8);
-      draw_tile(0x04);
-    }
-  }
-  else {
-    for (i = 0; i < 8; i++) {
-      draw_setfb(120, 16 + i * 8);
-      draw_tile(0x2B);
-      draw_setfb(176, 16 + i * 8);
-      draw_tile(0x2B);
-    }
-  }
+	if (flipflop & 0x02)
+	{
+		for (i = 0; i < 8; i++)
+		{
+			tiles_paintAt(0x04, 120, 16 + i * 8);
+			tiles_paintAt(0x04, 176, 16 + i * 8);
+		}
+	}
+	else
+	{
+		for (i = 0; i < 8; i++)
+		{
+			tiles_paintAt(0x2B, 120, 16 + i * 8);
+			tiles_paintAt(0x2B, 176, 16 + i * 8);
+		}
+	}
 }
 
 
@@ -208,7 +225,9 @@ drawlr(void)
 static void
 drawsprite(void)
 {
-  draw_sprite(spnum, 128 + ((spx << 1) & 0x1C), 24 + (spy << 1));
+	U8 x = 128 + ((spx << 1) & 0x1C);
+	U8 y = 24 + (spy << 1);
+	sprites_paint(spnum, x, y);
 }
 
 
@@ -219,15 +238,13 @@ drawsprite(void)
 static void
 drawcenter(void)
 {
-  static U8 tn0[] = { 0x07, 0x5B, 0x7F, 0xA3, 0xC7 };
-  U8 i, j, tn;
+	static U8 tn0[] = { 0x07, 0x5B, 0x7F, 0xA3, 0xC7 };
+	U8 i, j, tn;
 
-  tn = tn0[game_map];
-  for (i = 0; i < 6; i++) {
-    draw_setfb(128, (24 + 8 * i));
-    for (j = 0; j < 6; j++)
-      draw_tile(tn++);
-  }
+	tn = tn0[env_map];
+	for (i = 0; i < 6; i++)
+		for (j = 0; j < 6; j++)
+			tiles_paintAt(tn++, 128 + 8 * j, 24 + 8 * i);
 }
 
 
@@ -238,17 +255,19 @@ drawcenter(void)
 static void
 nextstep(void)
 {
-  if (screen_imapsteps[step].count) {
-    count = screen_imapsteps[step].count;
-    spdx = screen_imapsteps[step].dx;
-    spdy = screen_imapsteps[step].dy;
-    spbase = screen_imapsteps[step].base;
-    spoffs = 0;
-    step++;
-  }
-  else {
-    run = 0;
-  }
+	if (screen_imapsteps[step].count)
+	{
+		count = screen_imapsteps[step].count;
+		spdx = screen_imapsteps[step].dx;
+		spdy = screen_imapsteps[step].dy;
+		spbase = screen_imapsteps[step].base;
+		spoffs = 0;
+		step++;
+	}
+	else
+	{
+		run = 0;
+	}
 }
 
 
@@ -259,22 +278,24 @@ nextstep(void)
 static void
 anim(void)
 {
-  U16 i;
+	U8 i;
 
-  if (run) {
-    i = screen_imapsl[spbase + spoffs];
-    if (i == 0) {
-      spoffs = 0;
-      i = screen_imapsl[spbase];
-    }
-    spnum = i;
-    spoffs++;
-    spx += spdx;
-    spy += spdy;
-    count--;
-    if (count == 0)
-      nextstep();
-  }
+	if (run)
+	{
+		i = screen_imapsl[spbase + spoffs];
+		if (i == 0)
+		{
+			spoffs = 0;
+			i = screen_imapsl[spbase];
+		}
+		spnum = i;
+		spoffs++;
+		spx += spdx;
+		spy += spdy;
+		count--;
+		if (count == 0)
+			nextstep();
+	}
 }
 
 
@@ -285,12 +306,12 @@ anim(void)
 static void
 init(void)
 {
-  run = 0; run--;
-  step = screen_imapsofs[game_map];
-  spx = screen_imapsteps[step].dx;
-  spy = screen_imapsteps[step].dy;
-  step++;
-  spnum = 0; /* NOTE spnum in [8728] is never initialized ? */
+	run = 0; run--;
+	step = screen_imapsofs[env_map];
+	spx = screen_imapsteps[step].dx;
+	spy = screen_imapsteps[step].dy;
+	step++;
+	spnum = 0; /* NOTE spnum in [8728] is never initialized ? */
 }
 
 /* eof */

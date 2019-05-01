@@ -1,7 +1,7 @@
 /*
  * xrick/src/ents.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -15,8 +15,11 @@
 
 #include "system.h"
 #include "config.h"
-#include "game.h"
+#include "env.h"
+
 #include "ents.h"
+
+#include "game.h"
 #include "debug.h"
 
 #include "e_bullet.h"
@@ -29,6 +32,8 @@
 #include "rects.h"
 #include "maps.h"
 #include "draw.h"
+#include "tiles.h"
+#include "sprites.h"
 
 /*
  * global vars
@@ -40,7 +45,7 @@ rect_t *ent_rects = NULL;
 /*
  * prototypes
  */
-static void ent_addrect(S16, S16, U16, U16);
+static void ent_addrect(U16, U16, U16, U16);
 static U8 ent_creat1(U8 *);
 static U8 ent_creat2(U8 *, U16);
 
@@ -142,7 +147,7 @@ ent_actvis(U8 frow, U8 lrow)
 	* is visible, i.e. which has a row greater than the
 	* first row (marks being ordered by row number).
 	*/
-	for (m = map_submaps[game_submap].mark;
+	for (m = map_submaps[env_submap].mark;
 		map_marks[m].row != 0xff && map_marks[m].row < frow;
 		m++);
 
@@ -285,9 +290,9 @@ ent_actvis(U8 frow, U8 lrow)
  * so it fits into the display zone.
  */
 static void
-ent_addrect(S16 x, S16 y, U16 width, U16 height)
+ent_addrect(U16 x, U16 y, U16 width, U16 height)
 {
-  S16 x0, y0;
+  U16 x0, y0;
   U16 w0, h0;
 
   /*sys_printf("rect %#04x,%#04x %#04x %#04x ", x, y, width, height);*/
@@ -301,7 +306,7 @@ ent_addrect(S16 x, S16 y, U16 width, U16 height)
   if (y - y0) h0 = (h0 + (y - y0)) | 0x0007;
 
   /* clip */
-  if (draw_clipms(&x0, &y0, &w0, &h0)) {  /* do not add if fully clipped */
+  if (maps_clip(&x0, &y0, &w0, &h0)) {  /* do not add if fully clipped */
     /*sys_printf("-> [clipped]\n");*/
     return;
   }
@@ -329,114 +334,98 @@ ent_addrect(S16 x, S16 y, U16 width, U16 height)
  * NOTE This may need to be part of draw.c. Also needs better comments,
  * NOTE and probably better rectangles management.
  */
-void
-ent_draw(void)
+void ents_clearAll()
 {
-  U8 i;
-#ifdef ENABLE_CHEATS
-  static U8 ch3 = FALSE;
-#endif
-  S16 dx, dy;
+}
 
-  draw_tilesBank = map_tilesBank;
+void ents_paintAll()
+{
+	U8 i;
+	U16 dx, dy;
+	static U8 prev_h = FALSE;
 
-  /* reset rectangles list */
-  rects_free(ent_rects);
-  ent_rects = NULL;
+	tiles_setBank(map_tilesBank);
 
-  /*sys_printf("\n");*/
+	/* reset rectangles list */
+	rects_free(ent_rects);
+	ent_rects = NULL;
 
-  /*
-   * background loop : erase all entities that were visible
-   */
-  for (i = 0; ent_ents[i].n != 0xff; i++) {
-#ifdef ENABLE_CHEATS
-    if (ent_ents[i].prev_n && (ch3 || ent_ents[i].prev_s))
-#else
-    if (ent_ents[i].prev_n && ent_ents[i].prev_s)
-#endif
-      /* if entity was active, then erase it (redraw the map) */
-      draw_spriteBackground(ent_ents[i].prev_x, ent_ents[i].prev_y);
-  }
-
-  /*
-   * foreground loop : draw all entities that are visible
-   */
-  for (i = 0; ent_ents[i].n != 0xff; i++) {
-    /*
-     * If entity is active now, draw the sprite. If entity was
-     * not active before, add a rectangle for the sprite.
-     */
-#ifdef ENABLE_CHEATS
-    if (ent_ents[i].n && (game_cheat3 || ent_ents[i].sprite))
-#else
-    if (ent_ents[i].n && ent_ents[i].sprite)
-#endif
-      /* If entitiy is active, draw the sprite. */
-      draw_sprite2(ent_ents[i].sprite,
-		   ent_ents[i].x, ent_ents[i].y,
-		   ent_ents[i].front);
-  }
-
-  /*
-   * rectangles loop : figure out which parts of the screen have been
-   * impacted and need to be refreshed, then save state
-   */
-  for (i = 0; ent_ents[i].n != 0xff; i++) {
-#ifdef ENABLE_CHEATS
-    if (ent_ents[i].prev_n && (ch3 || ent_ents[i].prev_s)) {
-#else
-    if (ent_ents[i].prev_n && ent_ents[i].prev_s) {
-#endif
-      /* (1) if entity was active and has been drawn ... */
-#ifdef ENABLE_CHEATS
-      if (ent_ents[i].n && (game_cheat3 || ent_ents[i].sprite)) {
-#else
-      if (ent_ents[i].n && ent_ents[i].sprite) {
-#endif
-	/* (1.1) ... and is still active now and still needs to be drawn, */
-	/*       then check if rectangles intersect */
-	dx = abs(ent_ents[i].x - ent_ents[i].prev_x);
-	dy = abs(ent_ents[i].y - ent_ents[i].prev_y);
-	if (dx < 0x20 && dy < 0x16) {
-	  /* (1.1.1) if they do, then create one rectangle */
-	  ent_addrect((ent_ents[i].prev_x < ent_ents[i].x)
-		      ? ent_ents[i].prev_x : ent_ents[i].x,
-		      (ent_ents[i].prev_y < ent_ents[i].y)
-		      ? ent_ents[i].prev_y : ent_ents[i].y,
-		      dx + 0x20, dy + 0x15);
+	/* background loop : erase all entities that were visible */
+	for (i = 0; ent_ents[i].n != 0xff; i++)
+	{
+	    if (ent_ents[i].prev_n && (prev_h || ent_ents[i].prev_s))
+	    {
+			/* if entity was active, then erase it (redraw the map) */
+			maps_paintRect(ent_ents[i].prev_x, ent_ents[i].prev_y, 0x20, 0x15);
+		}
 	}
-	else {
-	  /* (1.1.2) else, create two rectangles */
-	  ent_addrect(ent_ents[i].x, ent_ents[i].y, 0x20, 0x15);
-	  ent_addrect(ent_ents[i].prev_x, ent_ents[i].prev_y, 0x20, 0x15);
+
+	/* foreground loop : draw all entities that are visible */
+	for (i = 0; ent_ents[i].n != 0xff; i++)
+	{
+		if (ent_ents[i].n && (env_highlight || ent_ents[i].sprite))
+		{
+			/* if entitiy is active, draw the sprite. */
+			sprites_paint2(ent_ents[i].sprite,
+				ent_ents[i].x, ent_ents[i].y,
+				ent_ents[i].front);
+		}
 	}
-      }
-      else
-	/* (1.2) ... and is not active anymore or does not need to be drawn */
-	/*       then create one single rectangle */
-	ent_addrect(ent_ents[i].prev_x, ent_ents[i].prev_y, 0x20, 0x15);
-    }
-#ifdef ENABLE_CHEATS
-    else if (ent_ents[i].n && (game_cheat3 || ent_ents[i].sprite)) {
-#else
-    else if (ent_ents[i].n && ent_ents[i].sprite) {
-#endif
-      /* (2) if entity is active and needs to be drawn, */
-      /*     then create one rectangle */
-      ent_addrect(ent_ents[i].x, ent_ents[i].y, 0x20, 0x15);
-    }
 
-    /* save state */
-    ent_ents[i].prev_x = ent_ents[i].x;
-    ent_ents[i].prev_y = ent_ents[i].y;
-    ent_ents[i].prev_n = ent_ents[i].n;
-    ent_ents[i].prev_s = ent_ents[i].sprite;
-  }
+	/*
+	* rectangles loop : figure out which parts of the screen have been
+	* impacted and need to be refreshed, then save state
+	*/
+	for (i = 0; ent_ents[i].n != 0xff; i++)
+	{
+		if (ent_ents[i].prev_n && (prev_h || ent_ents[i].prev_s))
+		{
+			/* (1) if entity was active and has been painted... */
+			if (ent_ents[i].n && (env_highlight || ent_ents[i].sprite))
+			{
+				/* (1.1) ... and is still active now and still needs to be */
+				/*       painted, then check if rectangles intersect */
+				dx = abs(ent_ents[i].x - ent_ents[i].prev_x);
+				dy = abs(ent_ents[i].y - ent_ents[i].prev_y);
+				if (dx < 0x20 && dy < 0x16)
+				{
+					/* (1.1.1) if they do, then create one rectangle */
+					ent_addrect((ent_ents[i].prev_x < ent_ents[i].x) ?
+						ent_ents[i].prev_x : ent_ents[i].x,
+						(ent_ents[i].prev_y < ent_ents[i].y) ?
+						ent_ents[i].prev_y : ent_ents[i].y,
+						dx + 0x20, dy + 0x15);
+				}
+				else
+				{
+					/* (1.1.2) else, create two rectangles */
+					ent_addrect(ent_ents[i].x, ent_ents[i].y, 0x20, 0x15);
+					ent_addrect(ent_ents[i].prev_x, ent_ents[i].prev_y, 0x20, 0x15);
+				}
+			}
+			else
+			{
+				/* (1.2) ... and is not active anymore or does not need to be */
+				/*       painted then create one single rectangle */
+				ent_addrect(ent_ents[i].prev_x, ent_ents[i].prev_y, 0x20, 0x15);
+			}
+		}
+		else
+		if (ent_ents[i].n && (env_highlight || ent_ents[i].sprite))
+		{
+			/* (2) if entity is active and needs to be painted, */
+			/*     then create one rectangle */
+			ent_addrect(ent_ents[i].x, ent_ents[i].y, 0x20, 0x15);
+		}
 
-#ifdef ENABLE_CHEATS
-  ch3 = game_cheat3;
-#endif
+		/* save state */
+		ent_ents[i].prev_x = ent_ents[i].x;
+		ent_ents[i].prev_y = ent_ents[i].y;
+		ent_ents[i].prev_n = ent_ents[i].n;
+		ent_ents[i].prev_s = ent_ents[i].sprite;
+	}
+
+	prev_h = env_highlight;
 }
 
 

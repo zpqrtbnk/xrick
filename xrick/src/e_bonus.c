@@ -1,7 +1,7 @@
 /*
  * xrick/src/e_bonus.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -12,10 +12,13 @@
  */
 
 #include "system.h"
+#include "config.h"
+#include "env.h"
+
 #include "game.h"
 #include "ents.h"
+#include "sounds.h"
 #include "e_bonus.h"
-
 #include "e_rick.h"
 #include "maps.h"
 
@@ -32,7 +35,7 @@ e_bonus_action(U8 e)
 
   if (ent_ents[e].seq == 0) {
     if (e_rick_boxtest(e)) {
-      game_score += 500;
+      env_score += 500;
 #ifdef ENABLE_SOUND
       syssnd_play(WAV_BONUS, 1);
 #endif

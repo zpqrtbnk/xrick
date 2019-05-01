@@ -1,7 +1,7 @@
 /*
  * xrick/src/game.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -14,12 +14,15 @@
 #include <stdlib.h>
 
 #include "system.h"
-#include "config.h"
+#include "sysarg.h"
+#include "env.h"
+
 #include "game.h"
 
 #include "draw.h"
 #include "maps.h"
 #include "ents.h"
+#include "sounds.h"
 #include "e_rick.h"
 #include "e_sbonus.h"
 #include "e_them.h"
@@ -28,6 +31,9 @@
 #include "scroller.h"
 #include "control.h"
 #include "data.h"
+#include "fb.h"
+#include "tiles.h"
+#include "draw.h"
 
 #ifdef ENABLE_DEVTOOLS
 #include "devtools.h"
@@ -41,12 +47,14 @@ typedef enum {
 #ifdef ENABLE_DEVTOOLS
   DEVTOOLS,
 #endif
-  XRICK,
-  INIT_GAME, INIT_BUFFER,
-  INTRO_MAIN, INTRO_MAP,
+  XRICK, XRICK_CLR,
+  MAIN_INTRO, MAP_INTRO,
+  INIT,
+  INIT_MAP, INIT_SUBMAP,
+  FADEIN__CTRL_ACTION, FADEOUT__MAP_INTRO, FADEOUT__GAMEOVER,
   PAUSE_PRESSED1, PAUSE_PRESSED1B, PAUSED, PAUSE_PRESSED2,
-  PLAY0, PLAY1, PLAY2, PLAY3,
-  CHAIN_SUBMAP, CHAIN_MAP, CHAIN_END,
+  CTRL_ACTION, CTRL_PAUSE, CTRL_RICK, PAINT, CTRL_SCROLL,
+  NEXT_SUBMAP, NEXT_MAP,
   SCROLL_UP, SCROLL_DOWN,
   RESTART, GAMEOVER, GETNAME, EXIT
 } game_state_t;
@@ -59,20 +67,7 @@ U8 game_period = 0;
 U8 game_waitevt = FALSE;
 rect_t *game_rects = NULL;
 
-U8 game_lives = 0;
-U8 game_bombs = 0;
-U8 game_bullets = 0;
-U32 game_score = 0;
-
-U16 game_map = 0;
-U16 game_submap = 0;
-
 U8 game_dir = 0;
-U8 game_chsm = FALSE;
-
-U8 game_cheat1 = 0;
-U8 game_cheat2 = 0;
-U8 game_cheat3 = 0;
 
 #ifdef GFXST
 hscore_t game_hscores[8] = {
@@ -98,164 +93,145 @@ hscore_t game_hscores[8] = {
   { 1000, "ANDYSPLEEN" }
 };
 #endif
-#ifdef ENABLE_SOUND
-sound_t *WAV_GAMEOVER;
-sound_t *WAV_SBONUS2;
-sound_t *WAV_BULLET;
-sound_t *WAV_BOMBSHHT;
-sound_t *WAV_EXPLODE;
-sound_t *WAV_STICK;
-sound_t *WAV_WALK;
-sound_t *WAV_CRAWL;
-sound_t *WAV_JUMP;
-sound_t *WAV_PAD;
-sound_t *WAV_BOX;
-sound_t *WAV_BONUS;
-sound_t *WAV_SBONUS1;
-sound_t *WAV_DIE;
-sound_t *WAV_ENTITY[10];
-#endif
 
 
 /*
  * local vars
  */
-static U8 isave_frow;
+static U8 save_map_row;
 static game_state_t game_state;
-#ifdef ENABLE_SOUND
-static sound_t *music_snd;
-#endif
 
 
 /*
  * prototypes
  */
-static void frame(void);
+static void game_cycle(void);
 static void init(void);
-static void play0(void);
-static void play3(void);
 static void restart(void);
-static void isave(void);
-static void irestore(void);
-static void loaddata(void);
-static void freedata(void);
+static void loadData(void);
+static void freeData(void);
+static void game_paintEntities();
+static void game_save(void);
 
 
 /*
- * Cheats
+ * game_toggleCheat
+ *
+ * toggles one of the three cheat options
+ * FIXME weird dependencies here! + _state exclusion is not complete
  */
+void game_toggleCheat(U8 nbr)
+{
 #ifdef ENABLE_CHEATS
-void
-game_toggleCheat(U8 nbr)
-{
-  if (game_state != INTRO_MAIN && game_state != INTRO_MAP &&
-      game_state != GAMEOVER && game_state != GETNAME &&
+	if (game_state != MAIN_INTRO && game_state != MAP_INTRO &&
+		game_state != GAMEOVER && game_state != GETNAME &&
 #ifdef ENABLE_DEVTOOLS
-      game_state != DEVTOOLS &&
+		game_state != DEVTOOLS &&
 #endif
-      game_state != XRICK && game_state != EXIT) {
-    switch (nbr) {
-    case 1:
-      game_cheat1 = ~game_cheat1;
-      game_lives = 6;
-      game_bombs = 6;
-      game_bullets = 6;
-      break;
-    case 2:
-      game_cheat2 = ~game_cheat2;
-      break;
-    case 3:
-      game_cheat3 = ~game_cheat3;
-      break;
-    }
-    draw_infos();
-    /* FIXME this should probably only raise a flag ... */
-    /* plus we only need to update INFORECT not the whole screen */
-    sysvid_update(&draw_SCREENRECT);
-  }
-}
-#endif
-
-#ifdef ENABLE_SOUND
-/*
- * Music
- */
-void
-game_setmusic(char *name, U8 loop)
-{
-	U8 channel;
-
-	if (music_snd)
-		game_stopmusic();
-	music_snd = syssnd_load(name);
-	if (music_snd)
+		game_state != XRICK && game_state != EXIT)
 	{
-		music_snd->dispose = TRUE; /* music is always "fire and forget" */
-		channel = syssnd_play(music_snd, loop);
+		switch (nbr)
+		{
+			case 1:
+				env_trainer = ~env_trainer;
+				env_lives = 6;
+				env_bombs = 6;
+				env_bullets = 6;
+				break;
+
+			case 2:
+				env_invicible = ~env_invicible;
+				break;
+
+			case 3:
+				env_highlight = ~env_highlight;
+			break;
+		}
+
+		env_paintXtra(); /* fixme -- shouldn't this be done elswhere? */
+
+		/* FIXME this should probably only raise a flag ... */
+		/* plus we only need to update INFORECT not the whole screen */
+		sysvid_update(&draw_SCREENRECT);
 	}
+#endif
 }
 
-void
-game_stopmusic(void)
-{
-	syssnd_stopsound(music_snd);
-	music_snd = NULL;
-}
-#endif
+
 
 /*
- * Main loop
+ * game_run
+ *
+ * main loop.
  */
 void
-game_run(void)
+game_run(char *path)
 {
-  U32 tm, tmx;
+	U32 tm, tmx;
 
-	loaddata(); /* load cached data */
+	data_setpath(path);
+	loadData(); /* load cached data */
 
 	game_period = sysarg_args_period ? sysarg_args_period : GAME_PERIOD;
 	tm = sys_gettime();
 	game_state = XRICK;
 
 	/* main loop */
-	while (game_state != EXIT) {
-
+	while (game_state != EXIT)
+	{
 		/* timer */
 		tmx = tm; tm = sys_gettime(); tmx = tm - tmx;
 		if (tmx < game_period) sys_sleep(game_period - tmx);
 
 		/* video */
 		/*DEBUG*//*game_rects=&draw_SCREENRECT;*//*DEBUG*/
+		// FIXME:??
+		//sysvid_update(fb_updatedRects);
 		sysvid_update(game_rects);
 		draw_STATUSRECT.next = NULL;  /* FIXME freerects should handle this */
 
-		/* sound */
-		/*snd_mix();*/
+		/* sound: nothing to do here, everything is managed via callbacks */
 
 		/* events */
 		if (game_waitevt)
-			sysevt_wait();  /* wait for an event */
+			sysevt_wait();  /* wait for an event, stop doing anything */
 		else
 			sysevt_poll();  /* process events (non-blocking) */
 
-		/* frame */
-		frame();
+		/*
+		 * game_cycle: depending on the game state
+		 * - process events
+		 * - run the game logic, AI, ...
+		 * - paints a new frame onto the frame buffer
+		 * - updates fb_updatedRects
+		 */
+		game_cycle();
+
 	}
 
-	freedata(); /* free cached data */
+	freeData(); /* free cached data */
+	data_closepath();
 }
 
+
+//static game_state_t game_state2;
+
 /*
- * Prepare frame
+ * game_cycle
  *
  * This function loops forever: use 'return' when a frame is ready.
  * When returning, game_rects must contain every parts of the buffer
  * that have been modified.
  */
-static void
-frame(void)
+static void game_cycle(void)
 {
 	while (1) {
+
+		//if (game_state != game_state2)
+		//{
+		//	sprintf("xrick/game: state = %d", (U8) game_state);
+		//	game_state2 = game_state;
+		//}
 
 		switch (game_state) {
 
@@ -263,6 +239,7 @@ frame(void)
 
 #ifdef ENABLE_DEVTOOLS
 		case DEVTOOLS:
+
 			switch (devtools_run()) {
 			case SCREEN_RUNNING:
 				return;
@@ -277,78 +254,123 @@ frame(void)
 #endif
 
 
-
 		case XRICK:
-			switch(screen_xrick()) {
-			case SCREEN_RUNNING:
-				return;
-			case SCREEN_DONE:
-#ifdef ENABLE_DEVTOOLS
-				game_state = DEVTOOLS;
-#else
-				game_state = INIT_GAME;
-#endif
-				break;
-			case SCREEN_EXIT:
-				game_state = EXIT;
-				return;
+
+			switch(screen_xrick())
+			{
+				case SCREEN_RUNNING:
+					return;
+				case SCREEN_DONE:
+					game_state = XRICK_CLR;
+					return;
+				case SCREEN_EXIT:
+					game_state = EXIT;
+					return;
 			}
 		break;
 
 
 
-		case INIT_GAME:
-			init();
-			game_state = INTRO_MAIN;
+		case XRICK_CLR:
+
+			/* this step is required to force a screen update (clear) before changing the palette */
+			fb_initPalette();
+#ifdef ENABLE_DEVTOOLS
+			game_state = DEVTOOLS;
+#else
+			game_state = MAIN_INTRO;
+#endif
 			break;
 
 
 
-		case INTRO_MAIN:
-			switch (screen_introMain()) {
-			case SCREEN_RUNNING:
-				return;
-			case SCREEN_DONE:
-				game_state = INTRO_MAP;
-				break;
-			case SCREEN_EXIT:
-				game_state = EXIT;
-				return;
+		case MAIN_INTRO:
+
+			switch (screen_introMain())
+			{
+				case SCREEN_RUNNING:
+					return;
+				case SCREEN_DONE:
+					game_state = INIT;
+					break;
+				case SCREEN_EXIT:
+					game_state = EXIT;
+					return;
 			}
-		break;
+			break;
 
 
 
-		case INTRO_MAP:
-			switch (screen_introMap()) {
-			case SCREEN_RUNNING:
-				return;
-			case SCREEN_DONE:
-				game_waitevt = FALSE;
-				game_state = INIT_BUFFER;
-				break;
-			case SCREEN_EXIT:
-				game_state = EXIT;
-				return;
+		case INIT:
+
+			init();
+			if (env_submap == map_maps[env_map].submap)
+			{
+				game_state = MAP_INTRO;
 			}
-		break;
+			else
+			{
+				game_state = INIT_MAP; /* no intro if not first submap */
+			}
+			break;
 
 
 
-		case INIT_BUFFER:
-			sysvid_clear();                 /* clear buffer */
-			draw_map();                     /* draw the map onto the buffer */
-			draw_drawStatus();              /* draw the status bar onto the buffer */
-#ifdef ENABLE_CHEATS
-			draw_infos();                   /* draw the info bar onto the buffer */
-#endif
-			game_rects = &draw_SCREENRECT;  /* request full buffer refresh */
-			game_state = PLAY0;
+		case MAP_INTRO:
+
+			switch (screen_introMap())
+			{
+				case SCREEN_RUNNING:
+					return;
+				case SCREEN_DONE:
+					game_waitevt = FALSE;
+					game_state = INIT_MAP;
+					break;
+				case SCREEN_EXIT:
+					game_state = EXIT;
+					return;
+			}
+			break;
+
+
+
+		case INIT_MAP:
+
+			if (env_map >= 0x04) /* reached end of game */
+			{
+				sysarg_args_map = 0; // FIXME game completed, start all over. fine, but... ack...
+				sysarg_args_submap = 0;
+				game_state = FADEOUT__GAMEOVER;
+			}
+			else
+			{
+				map_init();
+				game_save();
+				fb_clear();                 /* clear buffer */
+				//ent_clprev();
+				maps_paint();                     /* draw the map onto the buffer */
+				//ents_paintAll();
+				env_paintGame();              /* draw the status bar onto the buffer */
+				env_paintXtra();                   /* draw the info bar onto the buffer */
+				game_rects = &draw_SCREENRECT;  /* request full buffer refresh */
+				game_state = FADEIN__CTRL_ACTION;
+			}
+			break;
+
+
+
+		case FADEIN__CTRL_ACTION:
+
+			if (fb_fadeIn())
+			{
+				game_state = CTRL_ACTION;
+			}
 			return;
 
 
 
 		case PAUSE_PRESSED1:
+
 			screen_pause(TRUE);
 			game_state = PAUSE_PRESSED1B;
 			break;
@@ -356,6 +378,7 @@ frame(void)
 
 
 		case PAUSE_PRESSED1B:
+
 			if (control_status & CONTROL_PAUSE)
 				return;
 			game_state = PAUSED;
@@ -364,42 +387,68 @@ frame(void)
 
 
 		case PAUSED:
+
 			if (control_status & CONTROL_PAUSE)
+			{
 				game_state = PAUSE_PRESSED2;
+			}
 			if (control_status & CONTROL_EXIT)
+			{
 				game_state = EXIT;
+			}
 			return;
 
 
 
 		case PAUSE_PRESSED2:
-			if (!(control_status & CONTROL_PAUSE)) {
+
+			if (!(control_status & CONTROL_PAUSE)) 
+			{
 				game_waitevt = FALSE;
 				screen_pause(FALSE);
 #ifdef ENABLE_SOUND
 				syssnd_pause(FALSE, FALSE);
 #endif
-				game_state = PLAY2;
+				game_state = CTRL_RICK;
 			}
 		return;
 
 
 
-		case PLAY0:
-			play0();
+		case CTRL_ACTION:
+
+			if (control_status & CONTROL_END) /* request to end the game */
+			{
+				game_state = FADEOUT__GAMEOVER;
+			}
+			else
+			if (control_last == CONTROL_EXIT) /* request to exit the game */
+			{
+				game_state = EXIT;
+			}
+			else
+			{
+				ent_action();      /* run entities */
+				e_them_rndseed++;  /* (0270) */
+				game_state = CTRL_PAUSE;
+			}
 			break;
 
 
 
-		case PLAY1:
-			if (control_status & CONTROL_PAUSE) {
+		case CTRL_PAUSE:
+
+			if (control_status & CONTROL_PAUSE)
+			{
 #ifdef ENABLE_SOUND
 				syssnd_pause(TRUE, FALSE);
 #endif
 				game_waitevt = TRUE;
 				game_state = PAUSE_PRESSED1;
 			}
-			else if (control_active == FALSE) {
+			else
+			if (control_active == FALSE)
+			{
 #ifdef ENABLE_SOUND
 				syssnd_pause(TRUE, FALSE);
 #endif
@@ -408,161 +457,229 @@ frame(void)
 				game_state = PAUSED;
 			}
 			else
-				game_state = PLAY2;
+			{
+				game_state = CTRL_RICK;
+			}
 			break;
 
 
 
-		case PLAY2:
-			if E_RICK_STTST(E_RICK_STDEAD) {  /* rick is dead */
-				if (game_cheat1 || --game_lives) {
+		case CTRL_RICK:
+
+			// FIXME if (e_rick_isDead)
+			if E_RICK_STTST(E_RICK_STDEAD) /* rick is dead */
+			{
+				if (env_trainer || --env_lives)
+				{
 					game_state = RESTART;
-				} else {
-					game_state = GAMEOVER;
+				}
+				else
+				{
+					game_state = FADEOUT__GAMEOVER;
 				}
 			}
-			else if (game_chsm)  /* request to chain to next submap */
-				game_state = CHAIN_SUBMAP;
+			else 
+			if (e_rick_atExit) /* rick is exiting the submap, must chain to next submap */
+			{
+				//	e_rick_enterMap(); // akn
+				e_rick_atExit = FALSE;
+				game_state = NEXT_SUBMAP;
+			}
 			else
-				game_state = PLAY3;
+			{
+				game_state = PAINT;
+			}
 			break;
 
 
 
-    case PLAY3:
-      play3();
-      return;
+		case PAINT:
+
+			game_paintEntities();
+			game_state = CTRL_SCROLL;
+			return;
 
 
 
-    case CHAIN_SUBMAP:
-      if (map_chain())
-	game_state = CHAIN_END;
-      else {
-	game_bullets = 0x06;
-	game_bombs = 0x06;
-	game_map++;
-
-	if (game_map == 0x04) {
-	  /* reached end of game */
-	  /* FIXME @292?*/
-	}
-
-	game_state = CHAIN_MAP;
-      }
-      break;
-
-
-
-    case CHAIN_MAP:                             /* CHAIN MAP */
-      switch (screen_introMap()) {
-      case SCREEN_RUNNING:
-	return;
-      case SCREEN_DONE:
-	if (game_map >= 0x04) {  /* reached end of game */
-	  sysarg_args_map = 0;
-	  sysarg_args_submap = 0;
-	  game_state = GAMEOVER;
-	}
-	else {  /* initialize game */
-	  ent_ents[1].x = map_maps[game_map].x;
-	  ent_ents[1].y = map_maps[game_map].y;
-	  map_frow = (U8)map_maps[game_map].row;
-	  game_submap = map_maps[game_map].submap;
-	  game_state = CHAIN_END;
-	}
-	break;
-      case SCREEN_EXIT:
-	game_state = EXIT;
-	return;
-      }
-      break;
+		case CTRL_SCROLL:
+			if (!E_RICK_STTST(E_RICK_STZOMBIE))
+			{
+				if (ent_ents[1].y >= 0xcc)
+				{
+					game_state = SCROLL_UP;
+				}
+				else
+				if (ent_ents[1].y <= 0x60)
+				{
+					game_state = SCROLL_DOWN;
+				}
+				else
+				{
+					game_state = CTRL_ACTION;
+				}
+			}
+			else
+			{
+				game_state = CTRL_ACTION;
+			}
+			break;
 
 
 
-    case CHAIN_END:
-      map_init();                     /* initialize the map */
-      isave();                        /* save data in case of a restart */
-      ent_clprev();                   /* cleanup entities */
-      draw_map();                     /* draw the map onto the buffer */
-      draw_drawStatus();              /* draw the status bar onto the buffer */
-      game_rects = &draw_SCREENRECT;  /* request full screen refresh */
-      game_state = PLAY3;
-      return;
+		case NEXT_SUBMAP:
+
+			if (map_chain())
+			{
+				/* next submap, now initialize */
+				game_state = INIT_SUBMAP;
+			}
+			else
+			{
+				/* end of submap, chain to next map */
+
+				env_bullets = 0x06;
+				env_bombs = 0x06;
+				env_map++;
+
+				if (env_map == 0x04)
+				{
+					/* reached end of game */
+					/* FIXME @292?*/
+				}
+
+				game_state = NEXT_MAP;
+			}
+			break;
 
 
 
-    case SCROLL_UP:
-      switch (scroll_up()) {
-      case SCROLL_RUNNING:
-	return;
-      case SCROLL_DONE:
-	game_state = PLAY0;
-	break;
-      }
-      break;
+		case NEXT_MAP:
+
+			ent_ents[1].x = map_maps[env_map].x;
+			ent_ents[1].y = map_maps[env_map].y;
+			map_frow = (U8)map_maps[env_map].row;
+			env_submap = map_maps[env_map].submap;
+			game_state = FADEOUT__MAP_INTRO;
+			break;
 
 
 
-    case SCROLL_DOWN:
-      switch (scroll_down()) {
-      case SCROLL_RUNNING:
-	return;
-      case SCROLL_DONE:
-	game_state = PLAY0;
-	break;
-      }
-      break;
+		case FADEOUT__MAP_INTRO:
+
+			if (fb_fadeOut())
+			{
+				game_state = MAP_INTRO;
+			}
+			return;
 
 
 
-    case RESTART:
-      restart();
-      game_state = PLAY0;
-      return;
+		case INIT_SUBMAP:
+
+			map_init();                     /* initialize the map */
+			game_save();                        /* save data in case of a restart */
+			fb_clear();
+			ent_clprev();                   /* cleanup entities */
+			maps_paint();                     /* draw the map onto the buffer */
+			ents_paintAll();
+			env_paintGame();              /* draw the status bar onto the buffer */
+			env_paintXtra();
+			game_rects = &draw_SCREENRECT;  /* request full screen refresh */
+			game_state = CTRL_ACTION;
+			return;
 
 
 
-    case GAMEOVER:
-      switch (screen_gameover()) {
-      case SCREEN_RUNNING:
-	return;
-      case SCREEN_DONE:
-	game_state = GETNAME;
-	break;
-      case SCREEN_EXIT:
-	game_state = EXIT;
-	break;
-      }
-      break;
+		case SCROLL_UP:
+
+			switch (scroll_up())
+			{
+				case SCROLL_RUNNING:
+					return;
+				case SCROLL_DONE:
+					game_state = CTRL_ACTION;
+					break;
+			}
+			break;
 
 
 
-    case GETNAME:
-      switch (screen_getname()) {
-      case SCREEN_RUNNING:
-	return;
-      case SCREEN_DONE:
-	game_state = INIT_GAME;
-	return;
-      case SCREEN_EXIT:
-	game_state = EXIT;
-	break;
-      }
-      break;
+		case SCROLL_DOWN:
+
+			switch (scroll_down())
+			{
+				case SCROLL_RUNNING:
+					return;
+				case SCROLL_DONE:
+					game_state = CTRL_ACTION;
+					break;
+			}
+			break;
 
 
 
-    case EXIT:
-      return;
+		case RESTART:
 
+			restart();
+			game_state = CTRL_ACTION;
+			return;
+
+
+
+		case FADEOUT__GAMEOVER:
+
+			if (fb_fadeOut())
+				game_state = GAMEOVER;
+			return;
+
+
+
+		case GAMEOVER:
+
+			switch (screen_gameover())
+			{
+				case SCREEN_RUNNING:
+					return;
+				case SCREEN_DONE:
+					game_state = GETNAME;
+					break;
+				case SCREEN_EXIT:
+					game_state = EXIT;
+					break;
+			}
+			break;
+
+
+
+		case GETNAME:
+
+			switch (screen_getname())
+			{
+				case SCREEN_RUNNING:
+					return;
+				case SCREEN_DONE:
+					game_state = XRICK_CLR;
+					return;
+				case SCREEN_EXIT:
+					game_state = EXIT;
+					break;
+			}
+			break;
+
+
+
+		case EXIT:
+			return;
     }
   }
 }
 
 
+
 /*
- * Initialize the game
+ * init
+ *
+ * FIXME some dirty hacks here, plus we should not manage sysargs_ this way
  */
 static void
 init(void)
@@ -571,31 +688,34 @@ init(void)
 
   E_RICK_STRST(0xff);
 
-  game_lives = 6;
-  game_bombs = 6;
-  game_bullets = 6;
-  game_score = 0;
+  env_lives = 6;
+  env_bombs = 6;
+  env_bullets = 6;
+  env_score = 0;
 
-  game_map = sysarg_args_map;
+  env_map = sysarg_args_map;
 
   if (sysarg_args_submap == 0) {
-    game_submap = map_maps[game_map].submap;
-    map_frow = (U8)map_maps[game_map].row;
+    env_submap = map_maps[env_map].submap;
+    map_frow = (U8)map_maps[env_map].row;
   }
   else {
-    /* dirty hack to determine frow */
-    game_submap = sysarg_args_submap;
+    /* dirty hack to determine frow by chaining submaps...*/
+    env_submap = sysarg_args_submap;
+    i = 0;
+    while (i < 4 && map_maps[i++].submap <= env_submap);
+    env_map = i - 1;
     i = 0;
     while (i < MAP_NBR_CONNECT &&
-	   (map_connect[i].submap != game_submap ||
+	   (map_connect[i].submap != env_submap ||
 	    map_connect[i].dir != RIGHT))
       i++;
-    map_frow = map_connect[i].rowin - 0x10;
-    ent_ents[1].y = 0x10 << 3;
+    map_frow = map_connect[i].rowin - 0x10; // WHY 0x10??
+    ent_ents[1].y = 0x10 << 3; // FIXME?
   }
 
-  ent_ents[1].x = map_maps[game_map].x;
-  ent_ents[1].y = map_maps[game_map].y;
+  ent_ents[1].x = map_maps[env_map].x;
+  ent_ents[1].y = map_maps[env_map].y;
   ent_ents[1].w = 0x18;
   ent_ents[1].h = 0x15;
   ent_ents[1].n = 0x01;
@@ -604,186 +724,99 @@ init(void)
   ent_ents[ENT_ENTSNUM].n = 0xFF;
 
   map_resetMarks();
-
-  map_init();
-  isave();
 }
+
 
 
 /*
- * play0
+ * game_paintEntities
  *
+ * paints the entities.
  */
-static void
-play0(void)
+static void game_paintEntities()
 {
-  if (control_status & CONTROL_END) {  /* request to end the game */
-    game_state = GAMEOVER;
-    return;
-  }
+	static rect_t *r;
 
-  if (control_last == CONTROL_EXIT) {  /* request to exit the game */
-    game_state = EXIT;
-    return;
-  }
+	env_clearGame();  /* clear the status bar */
+	ents_paintAll();  /* draw all entities onto the buffer */
+	env_paintGame();  /* draw the status bar onto the buffer*/
 
-  ent_action();      /* run entities */
-  e_them_rndseed++;  /* (0270) */
-
-  game_state = PLAY1;
+	/* fixme: rectangle management!!*/
+	// should just do: fb_touchRect(env_GameRect)
+	r = &draw_STATUSRECT; r->next = ent_rects;  /* refresh status bar too */
+	game_rects = r;   /* take care to cleanup draw_STATUSRECT->next later! */
 }
 
-
-/*
- * play3
- *
- */
-static void
-play3(void)
-{
-  static rect_t *r;
-
-  draw_clearStatus();  /* clear the status bar */
-  ent_draw();          /* draw all entities onto the buffer */
-  /* sound */
-  draw_drawStatus();   /* draw the status bar onto the buffer*/
-
-  r = &draw_STATUSRECT; r->next = ent_rects;  /* refresh status bar too */
-  game_rects = r;  /* take care to cleanup draw_STATUSRECT->next later! */
-
-  if (!E_RICK_STTST(E_RICK_STZOMBIE)) {  /* need to scroll ? */
-    if (ent_ents[1].y >= 0xCC) {
-      game_state = SCROLL_UP;
-      return;
-    }
-    if (ent_ents[1].y <= 0x60) {
-      game_state = SCROLL_DOWN;
-      return;
-    }
-  }
-
-  game_state = PLAY0;
-}
 
 
 /*
  * restart
  *
+ * restarts the game after rick died. just come back to the beginning
+ * of the current submap, restore positions and flags and...
  */
-static void
-restart(void)
+static void restart(void)
 {
-  E_RICK_STRST(E_RICK_STDEAD|E_RICK_STZOMBIE);
+	E_RICK_STRST(E_RICK_STDEAD|E_RICK_STZOMBIE); // should be part of e_rick
 
-  game_bullets = 6;
-  game_bombs = 6;
+	env_bullets = 6;
+	env_bombs = 6;
 
-  ent_ents[1].n = 1;
+	ent_ents[1].n = 1; // FIXMEwhy??
 
-  irestore();
-  map_init();
-  isave();
-  ent_clprev();
-  draw_map();
-  draw_drawStatus();
-  game_rects = &draw_SCREENRECT;
+	e_rick_restore(); // FIXME that should restore the state ?!!?
+	map_frow = save_map_row;
+
+	map_init(); // see INIT_MAP check that everything is OK here
+	game_save();
+	ent_clprev();
+	maps_paint();
+	env_paintGame(); // and Xtra???
+	game_rects = &draw_SCREENRECT; //fb_touchFb();
 }
 
 
+
 /*
- * isave (0bbb)
+ * game_save
  *
+ * save game state so it can be restored when rick dies, by <restart>.
+ * it is NOT a "save game" option!
  */
-static void
-isave(void)
+static void game_save(void)
 {
   e_rick_save();
-  isave_frow = map_frow;
+  save_map_row = map_frow;
 }
 
 
-/*
- * irestore (0bdc)
- *
- */
-static void
-irestore(void)
-{
-  e_rick_restore();
-  map_frow = isave_frow;
-}
 
 /*
+ * loadData
  *
+ * loads data into cache.
  */
-static void
-loaddata()
+static void loadData()
 {
 #ifdef ENABLE_SOUND
-	/*
-	 * Cache sounds
-	 *
-	 * tune[0-5].wav not cached
-	 */
-	WAV_GAMEOVER = syssnd_load("sounds/gameover.wav");
-	WAV_SBONUS2 = syssnd_load("sounds/sbonus2.wav");
-	WAV_BULLET = syssnd_load("sounds/bullet.wav");
-	WAV_BOMBSHHT = syssnd_load("sounds/bombshht.wav");
-	WAV_EXPLODE = syssnd_load("sounds/explode.wav");
-	WAV_STICK = syssnd_load("sounds/stick.wav");
-	WAV_WALK = syssnd_load("sounds/walk.wav");
-	WAV_CRAWL = syssnd_load("sounds/crawl.wav");
-	WAV_JUMP = syssnd_load("sounds/jump.wav");
-	WAV_PAD = syssnd_load("sounds/pad.wav");
-	WAV_BOX = syssnd_load("sounds/box.wav");
-	WAV_BONUS = syssnd_load("sounds/bonus.wav");
-	WAV_SBONUS1 = syssnd_load("sounds/sbonus1.wav");
-	WAV_DIE = syssnd_load("sounds/die.wav");
-	WAV_ENTITY[0] = syssnd_load("sounds/ent0.wav");
-	WAV_ENTITY[1] = syssnd_load("sounds/ent1.wav");
-	WAV_ENTITY[2] = syssnd_load("sounds/ent2.wav");
-	WAV_ENTITY[3] = syssnd_load("sounds/ent3.wav");
-	WAV_ENTITY[4] = syssnd_load("sounds/ent4.wav");
-	WAV_ENTITY[5] = syssnd_load("sounds/ent5.wav");
-	WAV_ENTITY[6] = syssnd_load("sounds/ent6.wav");
-	WAV_ENTITY[7] = syssnd_load("sounds/ent7.wav");
-	WAV_ENTITY[8] = syssnd_load("sounds/ent8.wav");
+	sounds_load();
 #endif
 }
 
+
+
 /*
+ * freeData
  *
+ * free cached data
  */
-static void
-freedata()
+static void freeData()
 {
 #ifdef ENABLE_SOUND
-	syssnd_stopall();
-	syssnd_free(WAV_GAMEOVER);
-	syssnd_free(WAV_SBONUS2);
-	syssnd_free(WAV_BULLET);
-	syssnd_free(WAV_BOMBSHHT);
-	syssnd_free(WAV_EXPLODE);
-	syssnd_free(WAV_STICK);
-	syssnd_free(WAV_WALK);
-	syssnd_free(WAV_CRAWL);
-	syssnd_free(WAV_JUMP);
-	syssnd_free(WAV_PAD);
-	syssnd_free(WAV_BOX);
-	syssnd_free(WAV_BONUS);
-	syssnd_free(WAV_SBONUS1);
-	syssnd_free(WAV_DIE);
-	syssnd_free(WAV_ENTITY[0]);
-	syssnd_free(WAV_ENTITY[1]);
-	syssnd_free(WAV_ENTITY[2]);
-	syssnd_free(WAV_ENTITY[3]);
-	syssnd_free(WAV_ENTITY[4]);
-	syssnd_free(WAV_ENTITY[5]);
-	syssnd_free(WAV_ENTITY[6]);
-	syssnd_free(WAV_ENTITY[7]);
-	syssnd_free(WAV_ENTITY[8]);
+	sounds_free();
 #endif
 }
+
 
 
 /* eof */

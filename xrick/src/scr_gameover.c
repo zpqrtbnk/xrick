@@ -1,7 +1,7 @@
 /*
  * xrick/src/scr_gameover.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -19,6 +19,8 @@
 
 #include "draw.h"
 #include "control.h"
+#include "tiles.h"
+#include "fb.h"
 
 /*
  * Display the game over screen
@@ -39,27 +41,25 @@ screen_gameover(void)
 #endif
 
 	if (seq == 0) {
-		draw_tilesBank = 0;
+		tiles_setBank(0);
 		seq = 1;
 		period = game_period; /* save period, */
 		game_period = 50;     /* and use our own */
 #ifdef ENABLE_SOUND
-		game_setmusic("sounds/gameover.wav", 1);
+		sounds_setMusic("sounds/gameover.wav", 1);
 #endif
 	}
 
 	switch (seq) {
 	case 1:  /* display banner */
 #ifdef GFXST
-		sysvid_clear();
+		fb_clear();
 		tm = sys_gettime();
 #endif
-		draw_tllst = screen_gameovertxt;
-		draw_setfb(120, 80);
 #ifdef GFXPC
-		draw_filter = 0xAAAA;
+		tiles_setFilter(0xaaaa);
 #endif
-		draw_tilesList();
+		tiles_paintListAt(screen_gameovertxt, 120, 80);
 
 		game_rects = &draw_SCREENRECT;
 		seq = 2;
@@ -88,7 +88,7 @@ screen_gameover(void)
 		return SCREEN_EXIT;
 
 	if (seq == 4) {  /* we're done */
-		sysvid_clear();
+		fb_clear();
 		seq = 0;
 		game_period = period;
 		return SCREEN_DONE;

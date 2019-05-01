@@ -1,7 +1,7 @@
 /*
  * xrick/data/dat_tiles.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -11,14 +11,11 @@
  * You must not remove this notice, or any other, from this software.
  */
 
-#include "config.h"
+#include "tiles.h"
 
 #ifdef GFXPC
 
-#include "system.h"
-#include "tiles.h"
-
-tile_t tiles_data[TILES_NBR_BANKS][0x100] = {
+tile_t tiles_banks[TILES_BANKS_COUNT][256] = {
   /* BANK 0 */
   {
   {000000, 000000, 000000, 000000, 000000, 000000, 000000, 000000},

@@ -1,7 +1,7 @@
 /*
  * xrick/src/e_bullet.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -14,6 +14,7 @@
 #include "system.h"
 #include "game.h"
 #include "ents.h"
+#include "sounds.h"
 #include "e_bullet.h"
 
 #include "maps.h"
@@ -22,7 +23,7 @@
  * public vars (for performance reasons)
  */
 S8 e_bullet_offsx;
-S16 e_bullet_xc, e_bullet_yc;
+U16 e_bullet_xc, e_bullet_yc;
 
 /*
  * Initialize bullet

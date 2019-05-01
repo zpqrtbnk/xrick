@@ -1,7 +1,7 @@
 /*
  * xrick/src/sysevt.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -19,7 +19,7 @@
 #include <SDL.h>
 
 #include "system.h"
-#include "config.h"
+#include "syskbd.h"
 #include "game.h"
 #include "debug.h"
 
@@ -99,7 +99,6 @@ processEvent()
       syssnd_vol(+1);
     }
 #endif
-#ifdef ENABLE_CHEATS
     else if (key == SDLK_F7) {
       game_toggleCheat(1);
     }
@@ -109,7 +108,6 @@ processEvent()
     else if (key == SDLK_F9) {
       game_toggleCheat(3);
     }
-#endif
     break;
   case SDL_KEYUP:
     key = event.key.keysym.sym;

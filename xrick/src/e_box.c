@@ -1,7 +1,7 @@
 /*
  * xrick/src/e_box.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -12,10 +12,13 @@
  */
 
 #include "system.h"
+#include "config.h"
+#include "env.h"
+
 #include "game.h"
 #include "ents.h"
+#include "sounds.h"
 #include "e_box.h"
-
 #include "e_bullet.h"
 #include "e_bomb.h"
 #include "e_rick.h"
@@ -69,9 +72,9 @@ e_box_action(U8 e)
 			syssnd_play(WAV_BOX, 1);
 #endif
 			if (ent_ents[e].n == 0x10)
-				game_bombs = GAME_BOMBS_INIT;
+				env_bombs = GAME_BOMBS_INIT;
 			else  /* 0x11 */
-				game_bullets = GAME_BULLETS_INIT;
+				env_bullets = GAME_BULLETS_INIT;
 			ent_ents[e].n = 0;
 			map_marks[ent_ents[e].mark].ent |= MAP_MARK_NACT;
 		}

@@ -1,7 +1,7 @@
 /*
  * xrick/src/scr_xrick.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -18,6 +18,7 @@
 #include "draw.h"
 #include "control.h"
 #include "img.h"
+#include "fb.h"
 
 #include "img_splash.e"
 
@@ -32,18 +33,22 @@ screen_xrick(void)
 	static U8 seq = 0;
 	static U8 wait = 0;
 
-	if (seq == 0) {
-		sysvid_clear();
-		draw_img(IMG_SPLASH);
+	if (seq == 0)
+	{
+		fb_clear();
+		sysvid_setGamma(255);
+		img_paintImg(IMG_SPLASH);
 		game_rects = &draw_SCREENRECT;
 		seq = 1;
 	}
 
-	switch (seq) {
+	switch (seq)
+	{
 	case 1:  /* wait */
-		if (wait++ > 0x2) {
+		if (wait++ > 0x2)
+		{
 #ifdef ENABLE_SOUND
-			game_setmusic("sounds/bullet.wav", 1);
+			sounds_setMusic("sounds/bullet.wav", 1);
 #endif
 			seq = 2;
 			wait = 0;
@@ -51,7 +56,8 @@ screen_xrick(void)
 		break;
 
 	case 2:  /* wait */
-		if (wait++ > 0x20) {
+		if (wait++ > 0x20)
+		{
 			seq = 99;
 			wait = 0;
 		}
@@ -60,9 +66,9 @@ screen_xrick(void)
 	if (control_status & CONTROL_EXIT)  /* check for exit request */
 		return SCREEN_EXIT;
 
-	if (seq == 99) {  /* we're done */
-		sysvid_clear();
-		sysvid_setGamePalette();
+	if (seq == 99) /* we're done */
+	{
+		fb_clear();
 		seq = 0;
 		return SCREEN_DONE;
 	}

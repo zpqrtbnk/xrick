@@ -1,7 +1,7 @@
 /*
- * xrick/include/draw.h
+ * XRICK
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -15,9 +15,7 @@
 #define _DRAW_H
 
 #include "system.h"
-
 #include "rects.h"
-#include "img.h"
 
 /* map coordinates of the screen */
 #define DRAW_XYMAP_SCRLEFT (-0x0020)
@@ -25,30 +23,19 @@
 /* map coordinates of the top of the hidden bottom of the map */
 #define DRAW_XYMAP_HBTOP (0x0100)
 
-extern U8 *draw_tllst;
-#ifdef GFXPC
-extern U16 draw_filter;
-#endif
-extern U8 draw_tilesBank;
+/* x-position of the fb, expressed in map-coordinates */
+#define MAPS_FBX (-0x0020)
+/* y-position of the fb, expressed in map-coordinates */
+#define MAPS_FBY (0x0040)
+/* y-position of the top of the hidden botton of the map, expressed in FIXME */
+#define MAPS_FBB (0x0100)
+
+/* */
 extern rect_t draw_STATUSRECT;
+
+/* */
 extern rect_t draw_SCREENRECT;
 
-extern void draw_setfb(U16, U16);
-extern U8 draw_clipms(S16 *, S16 *, U16 *, U16 *);
-extern void draw_tilesList(void);
-extern void draw_tilesListImm(U8 *);
-extern U8 draw_tilesSubList(void);
-extern void draw_tile(register U8);
-extern void draw_sprite(U8, U16, U16);
-extern void draw_sprite2(U8, U16, U16, U8);
-extern void draw_spriteBackground(U16, U16);
-extern void draw_map(void);
-extern void draw_drawStatus(void);
-extern void draw_clearStatus(void);
-extern void draw_pic(U16, U16, U16, U16, U32 *);
-extern void draw_infos(void);
-extern void draw_img(img_t *);
-
-#endif
+#endif /* _DRAW_H */
 
 /* eof */

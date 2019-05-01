@@ -1,7 +1,7 @@
 /*
  * xrick/src/syskbd.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -14,6 +14,12 @@
 #include <SDL.h>
 
 #include "system.h"
+
+/*
+ * Using the SDLK_xxx keysyms, which map to a QWERTY keyboard. We do *not*
+ * rely on SDL_enableUNICODE() to get the true key mapping. So, LEFT on
+ * an AZERTY keyboard will be 'w' instead of 'z'.
+ */
 
 U8 syskbd_up = SDLK_o;
 U8 syskbd_down = SDLK_k;

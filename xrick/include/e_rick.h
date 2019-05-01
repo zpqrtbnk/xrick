@@ -1,7 +1,7 @@
 /*
  * xrick/include/e_rick.h
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -19,8 +19,8 @@
 #define E_RICK_NO 1
 #define E_RICK_ENT ent_ents[E_RICK_NO]
 
-extern U8 e_rick_state;
-extern S16 e_rick_stop_x, e_rick_stop_y;
+extern U8 e_rick_state, e_rick_atExit;
+extern U16 e_rick_stop_x, e_rick_stop_y;
 
 #define E_RICK_STSTOP 0x01
 #define E_RICK_STSHOOT 0x02

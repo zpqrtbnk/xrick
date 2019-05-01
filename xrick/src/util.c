@@ -1,7 +1,7 @@
 /*
  * xrick/src/util.c
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -15,9 +15,11 @@
 
 #include "system.h"
 #include "config.h"
-#include "game.h"
+#include "env.h"
+
 #include "util.h"
 
+#include "game.h"
 #include "ents.h"
 #include "e_rick.h"
 #include "maps.h"
@@ -32,7 +34,7 @@
  * ret: TRUE/(x,y) is within e's space, FALSE/not.
  */
 U8
-u_fboxtest(U8 e, S16 x, S16 y)
+u_fboxtest(U8 e, U16 x, U16 y)
 {
   if (ent_ents[e].x >= x ||
       ent_ents[e].x + ent_ents[e].w < x ||
@@ -87,7 +89,7 @@ u_boxtest(U8 e1, U8 e2)
  * rc1: anything CHANGED to the environment flag (6DAD)
  */
 void
-u_envtest(S16 x, S16 y, U8 crawl, U8 *rc0, U8 *rc1)
+u_envtest(U16 x, U16 y, U8 crawl, U8 *rc0, U8 *rc1)
 {
   U8 i, xx;
 
@@ -165,7 +167,7 @@ u_envtest(S16 x, S16 y, U8 crawl, U8 *rc0, U8 *rc1)
    * boxtests this entity, then raise SOLID flag. This is how we make
    * sure that no entity can move over the entity that is on slot zero.
    *
-   * Beware! When game_cheat2 is set, this means that a block can
+   * Beware! When env_invicible is set, this means that a block can
    * move over rick without killing him -- but then rick is trapped
    * because the block is solid.
    */
@@ -175,10 +177,8 @@ u_envtest(S16 x, S16 y, U8 crawl, U8 *rc0, U8 *rc1)
     *rc1 |= MAP_EFLG_SOLID;
   }
 
-  /* When game_cheat2 is set, the environment can not be lethal. */
-#ifdef ENABLE_CHEATS
-  if (game_cheat2) *rc1 &= ~MAP_EFLG_LETHAL;
-#endif
+  /* When invicible, the environment can not be lethal. */
+  if (env_invicible) *rc1 &= ~MAP_EFLG_LETHAL;
 }
 
 
@@ -189,7 +189,7 @@ u_envtest(S16 x, S16 y, U8 crawl, U8 *rc0, U8 *rc1)
  * return: FALSE if not in box, TRUE if in box.
  */
 U8
-u_trigbox(U8 e, S16 x, S16 y)
+u_trigbox(U8 e, U16 x, U16 y)
 {
   U16 xmax, ymax;
 

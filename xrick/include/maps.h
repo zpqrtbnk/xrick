@@ -1,7 +1,7 @@
 /*
  * xrick/include/maps.h
  *
- * Copyright (C) 1998-2002 BigOrno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -15,6 +15,29 @@
 #define _MAPS_H
 
 #include "system.h"
+
+/*
+ * methods
+ */
+extern void maps_paint(void);
+extern void maps_paintRect(U16, U16, U16, U16);
+extern void maps_alignRect(U16 *, U16 *, U16 *, U16 *);
+extern U8 maps_clip(U16 *, U16 *, U16 *, U16 *);
+
+/* map dimensions */
+#define MAPS_WIDTH_PX 0x0100
+#define MAPS_TOPHEIGHT_PX 0x40
+#define MAPS_VISHEIGHT_PX 0xc0
+#define MAPS_BOTHEIGHT_PX 0x40
+#define MAPS_TOPHEIGHT_TL 0x08
+#define MAPS_VISHEIGHT_TL 0x20
+#define MAPS_BOTHEIGHT_TL 0x08
+
+/* position of the fb origin, expressed in map/px */
+/* MAPS_FB_X = (MAPS_WIDTH_PX - FB_WIDTH) / 2 */
+/* MAPS_FB_Y = MAPS_TOPHEIGHT_PX + (MAPS_HEIGHT_PX - FB_HEIGHT) / 2 */
+#define MAPS_FB_X (-0x20)
+#define MAPS_FB_Y (0x40)
 
 #define MAP_NBR_MAPS 0x05
 #define MAP_NBR_SUBMAPS 0x2F
@@ -144,6 +167,19 @@ extern void map_expand(void);
 extern void map_init(void);
 extern U8 map_chain(void);
 extern void map_resetMarks(void);
+
+
+/*
+ * intros
+ */
+typedef struct
+{
+	U8 *title;
+	U8 *body;
+} maps_intros_t;
+
+extern maps_intros_t maps_intros[];
+
 
 #endif
 
