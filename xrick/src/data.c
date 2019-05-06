@@ -22,14 +22,18 @@
 /*
  * Private typedefs
  */
+#ifdef WITH_ZLIB
 typedef struct {
 	char *name;
 	unzFile zip;
 } zipped_t;
+#endif
 
 typedef struct {
 	char *name;
+#ifdef WITH_ZLIB
 	unzFile zip;
+#endif
 } path_t;
 
 /*
@@ -50,6 +54,7 @@ static char *str_slash(char *);
 void
 data_setpath(char *name)
 {
+#ifdef WITH_ZLIB
 	unzFile zip;
 	char *n;
 
@@ -65,11 +70,14 @@ data_setpath(char *name)
 			path.name = n;
 		}
 	} else {
+#endif
 		/* path has no .zip extension. it should be a directory */
 		/* FIXME check that it is a valid directory */
-		path.zip = NULL;
 		path.name = str_dup(name);
+#ifdef WITH_ZLIB
+		path.zip = NULL;
 	}
+#endif
 }
 
 /*
@@ -78,10 +86,12 @@ data_setpath(char *name)
 void
 data_closepath()
 {
+#ifdef WITH_ZLIB
 	if (path.zip) {
 		unzClose(path.zip);
 		path.zip = NULL;
 	}
+#endif
 	free(path.name);
 	path.name = NULL;
 }
@@ -94,6 +104,7 @@ data_file_open(char *name)
 {
 	char *n;
 	FILE *fh;
+#ifdef WITH_ZLIB
 	zipped_t *z;
 
 	if (path.zip) {
@@ -107,25 +118,32 @@ data_file_open(char *name)
 		}
 	    return (data_file_t *)z;
 	} else {
+#endif
 		n = malloc(strlen(path.name) + strlen(name) + 2);
 		sprintf(n, "%s/%s", path.name, name);
 		str_slash(n);
 		fh = fopen(n, "rb");
 		return (data_file_t *)fh;
+#ifdef WITH_ZLIB
 	}
+#endif
 }
 
 int
 data_file_size(data_file_t *file)
 {
 	int s;
+#ifdef WITH_ZLIB
 	if (path.zip) {
 		/* not implemented */
 	} else {
+#endif
 		fseek((FILE *)file, 0, SEEK_END);
 		s = ftell((FILE *)file);
 		fseek((FILE *)file, 0, SEEK_SET);
+#ifdef WITH_ZLIB
 	}
+#endif
 	return s;
 }
 
@@ -135,12 +153,16 @@ data_file_size(data_file_t *file)
 int
 data_file_seek(data_file_t *file, long offset, int origin)
 {
+#ifdef WITH_ZLIB
 	if (path.zip) {
 		/* not implemented */
 		return -1;
 	} else {
+#endif
 		return fseek((FILE *)file, offset, origin);
+#ifdef WITH_ZLIB
 	}
+#endif
 }
 
 /*
@@ -149,12 +171,16 @@ data_file_seek(data_file_t *file, long offset, int origin)
 int
 data_file_tell(data_file_t *file)
 {
+#ifdef WITH_ZLIB
 	if (path.zip) {
 		/* not implemented */
 		return -1;
 	} else {
+#endif
 		return ftell((FILE *)file);
+#ifdef WITH_ZLIB
 	}
+#endif
 }
 
 /*
@@ -163,11 +189,16 @@ data_file_tell(data_file_t *file)
 int
 data_file_read(data_file_t *file, void *buf, size_t size, size_t count)
 {
+#ifdef WITH_ZLIB
 	if (path.zip) {
 		return unzReadCurrentFile(((zipped_t *)file)->zip, buf, size * count) / size;
 	} else {
+#endif
 		return fread(buf, size, count, (FILE *)file);
+
+#ifdef WITH_ZLIB
 	}
+#endif
 }
 
 /*
@@ -176,14 +207,18 @@ data_file_read(data_file_t *file, void *buf, size_t size, size_t count)
 void
 data_file_close(data_file_t *file)
 {
+#ifdef WITH_ZLIB
 	if (path.zip) {
 		unzClose(((zipped_t *)file)->zip);
 		((zipped_t *)file)->zip = NULL;
 		free(((zipped_t *)file)->name);
 		((zipped_t *)file)->name = NULL;
 	} else {
+#endif
 		fclose((FILE *)file);
+#ifdef WITH_ZLIB
 	}
+#endif
 }
 
 /*

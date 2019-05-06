@@ -20,6 +20,7 @@
 
 #include "system.h"
 #include "syskbd.h"
+#include "sysvid.h"
 #include "game.h"
 #include "debug.h"
 

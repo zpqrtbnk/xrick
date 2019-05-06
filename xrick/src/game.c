@@ -15,6 +15,8 @@
 
 #include "system.h"
 #include "sysarg.h"
+#include "sysvid.h"
+#include "sysevt.h"
 #include "env.h"
 
 #include "game.h"

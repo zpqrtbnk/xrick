@@ -38,6 +38,11 @@
 #undef ENABLE_DEVTOOLS
 #define DEBUG /* see include/debug.h */
 
+/* zlib */
+#ifndef NOZLIB
+#define WITH_ZLIB
+#endif
+
 #endif
 
 /* eof */

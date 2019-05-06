@@ -16,6 +16,7 @@
 #include "ents.h"
 #include "sounds.h"
 #include "e_bullet.h"
+#include "sysvid.h"
 
 #include "maps.h"
 

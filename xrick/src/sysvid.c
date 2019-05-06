@@ -129,7 +129,7 @@ void sysvid_setPaletteFromRGB(U8 *r, U8 *g, U8 *b, U16 n)
  *
  * sets (again) the display palette, useful when visibility has changed.
  */
-void sysvid_setDisplayPalette()
+void sysvid_setDisplayPalette(void)
 {
 	U16 i;
 
@@ -552,7 +552,7 @@ sysvid_zoom(S8 z)
  * toggles fullscreen.
  */
 void
-sysvid_toggleFullscreen()
+sysvid_toggleFullscreen(void)
 {
 	// FIXME HERE AND NOW
 	// - how to resize the window

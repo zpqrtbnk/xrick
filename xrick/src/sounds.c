@@ -35,7 +35,7 @@ sound_t* WAV_ENTITY[10];
 
 static sound_t* music_snd;
 
-void sounds_load()
+void sounds_load(void)
 {
 	/*
 	 * Cache sounds
@@ -67,7 +67,7 @@ void sounds_load()
 	WAV_ENTITY[8] = syssnd_load("sounds/ent8.wav");
 }
 
-void sounds_free()
+void sounds_free(void)
 {
 	syssnd_stopall();
 	syssnd_free(WAV_GAMEOVER);

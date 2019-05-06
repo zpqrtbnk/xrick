@@ -11,16 +11,17 @@
  * You must not remove this notice, or any other, from this software.
  */
 
-#include <SDL.h>
-#include <signal.h>
-#include <windows.h>
-
 #include "system.h"
 #include "sysarg.h"
 #include "sysvid.h"
 #include "game.h"
 #include "fb.h"
 
+#include <SDL.h>
+#include <signal.h>
+#ifdef __WIN32__
+#include <windows.h>
+#endif
 
 
 /*
@@ -31,6 +32,7 @@ static setConsole()
 	// NOTE: does not handle parent process console being redirected
 	// eg "./xrick > stdout.txt" still writes to the actual console
 
+#ifdef __WIN32__
 	// try to attach to parent process console
 	if (AttachConsole(-1))
 	{
@@ -40,6 +42,7 @@ static setConsole()
 		freopen("CONOUT$", "w", stderr);
 		printf("xrick\r\n");
 	}
+#endif
 }
 
 

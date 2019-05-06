@@ -18,6 +18,8 @@
 #include "env.h"
 
 #include "screens.h"
+#include "sysvid.h"
+#include "sounds.h"
 
 #include "game.h"
 #include "rects.h"

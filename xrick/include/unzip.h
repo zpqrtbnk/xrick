@@ -41,6 +41,8 @@
 #ifndef _unz_H
 #define _unz_H
 
+#ifdef WITH_ZLIB
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -273,5 +275,7 @@ extern int ZEXPORT unzGetLocalExtrafield OF((unzFile file,
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* WITH_ZLIB */
 
 #endif /* _unz_H */

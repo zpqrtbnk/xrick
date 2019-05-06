@@ -4,6 +4,7 @@
    Read unzip.h for more info
 */
 
+#ifdef WITH_ZLIB
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1318,3 +1319,5 @@ extern int ZEXPORT unzGetGlobalComment (file, szComment, uSizeBuf)
 		*(szComment+s->gi.size_comment)='\0';
 	return (int)uReadThis;
 }
+
+#endif /* WITH_ZLIB */

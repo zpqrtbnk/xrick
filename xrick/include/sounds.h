@@ -34,8 +34,8 @@ extern sound_t* WAV_SBONUS1;
 extern sound_t* WAV_DIE;
 extern sound_t* WAV_ENTITY[];
 
-extern void sounds_load();
-extern void sounds_free();
+extern void sounds_load(void);
+extern void sounds_free(void);
 extern void sounds_stopMusic(void);
 extern void sounds_setMusic(char* name, U8 loop);
 

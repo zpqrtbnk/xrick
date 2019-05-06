@@ -14,6 +14,8 @@
 #include "system.h"
 #include "game.h"
 #include "screens.h"
+#include "sysvid.h"
+#include "sounds.h"
 
 #include "draw.h"
 #include "control.h"
