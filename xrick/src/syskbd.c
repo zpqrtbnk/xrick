@@ -16,19 +16,20 @@
 #include "system.h"
 
 /*
- * Using the SDLK_xxx keysyms, which map to a QWERTY keyboard. We do *not*
- * rely on SDL_enableUNICODE() to get the true key mapping. So, LEFT on
- * an AZERTY keyboard will be 'w' instead of 'z'.
+ * Using the SDL_SCANCODE_xxx keysyms, which map to a QWERTY keyboard.
+ * We get them via SDL_KEYDOWN.
+ * We do *not* use SDL_TEXTINPUT nor SDLK_ to get true key mappings, so
+ * for instance left on an AZERTY keyboard will be 'w' instead of 'z'.
  */
 
-U8 syskbd_up = SDLK_o;
-U8 syskbd_down = SDLK_k;
-U8 syskbd_left = SDLK_z;
-U8 syskbd_right = SDLK_x;
-U8 syskbd_pause = SDLK_p;
-U8 syskbd_end = SDLK_e;
-U8 syskbd_xtra = SDLK_ESCAPE;
-U8 syskbd_fire = SDLK_SPACE;
+U8 syskbd_up = SDL_SCANCODE_O;
+U8 syskbd_down = SDL_SCANCODE_K;
+U8 syskbd_left = SDL_SCANCODE_Z;
+U8 syskbd_right = SDL_SCANCODE_X;
+U8 syskbd_pause = SDL_SCANCODE_P;
+U8 syskbd_end = SDL_SCANCODE_E;
+U8 syskbd_xtra = SDL_SCANCODE_ESCAPE;
+U8 syskbd_fire = SDL_SCANCODE_SPACE;
 
 /* eof */
 

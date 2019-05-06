@@ -42,13 +42,19 @@
 #undef BPP8
 #define BPP32
 
+//#define SDL_FULLSCREEN SDL_WINDOW_FULLSCREEN
+#define SDL_FULLSCREEN SDL_WINDOW_FULLSCREEN_DESKTOP
+
 
 
 rect_t SCREENRECT = {0, 0, FB_WIDTH, FB_HEIGHT, NULL}; /* whole fb */
 
 static U16 paln; /* palette size */
 static SDL_Color pals[256], pald[256]; /* fixme: explain */
-static SDL_Surface *screen;
+static U32* pixels;
+static SDL_Window *screen;
+static SDL_Renderer *renderer;
+static SDL_Texture* texture;
 static U32 videoFlags;
 static U8 gamma;
 static U16 fb_width, fb_height;
@@ -85,7 +91,7 @@ void sysvid_setPaletteFromImg(img_t *img)
 	sysvid_setDisplayPalette();
 
 #ifdef BPP8
-	SDL_SetColors(screen, (SDL_Color *)&pald, 0, paln);
+	//SDL_SetColors(screen, (SDL_Color *)&pald, 0, paln);
 #endif
 }
 
@@ -112,7 +118,7 @@ void sysvid_setPaletteFromRGB(U8 *r, U8 *g, U8 *b, U16 n)
 	sysvid_setDisplayPalette();
 
 #ifdef BPP8
-	SDL_SetColors(screen, (SDL_Color *)&pald, 0, paln);
+	//SDL_SetColors(screen, (SDL_Color *)&pald, 0, paln);
 #endif
 }
 
@@ -140,66 +146,6 @@ void sysvid_setDisplayPalette()
 
 
 /*
- * chkVideo
- *
- * check the video capabilities.
- * determines zoom values.
- */
-static void chkVideo()
-{
-	SDL_Rect **modes;
-	U8 i, mode = 0;
-	SDL_PixelFormat pxfmt;
-	U8 z, z1, z2;
-
-	SDL_VideoInfo *vinfo;
-
-	IFDEBUG_VIDEO(sys_printf("xrick/video: checking video modes\n"););
-
-#ifdef BPP8
-	pxfmt.BitsPerPixel = 8;
-	pxfmt.BytesPerPixel = 1;
-#endif
-#ifdef BPP32
-	pxfmt.BitsPerPixel = 32;
-	pxfmt.BytesPerPixel = 4;
-#endif
-
-	vinfo = SDL_GetVideoInfo();
-	IFDEBUG_VIDEO(sys_printf("xrick/video: default format is %d bits, %d bytes per pixel\n", vinfo->vfmt->BitsPerPixel, vinfo->vfmt->BytesPerPixel););
-	IFDEBUG_VIDEO(sys_printf("xrick/video: checking format %d bits, %d bytes per pixel\n", pxfmt.BitsPerPixel, pxfmt.BytesPerPixel););
-
-	modes = SDL_ListModes(&pxfmt, videoFlags|SDL_FULLSCREEN);
-
-	if (modes == (SDL_Rect **)0)
-		sys_panic("xrick/video: SDL can not find an appropriate video mode\n");
-
-	if (modes == (SDL_Rect **)-1)
-	{
-		/* can do what you want, everything is possible */
-		IFDEBUG_VIDEO(sys_printf("xrick/video: SDL says any video mode is OK\n"););
-	}
-	else
-	{
-		IFDEBUG_VIDEO(sys_printf("xrick/video: SDL says, use these modes:\n"););
-		for (i = 0; modes[i]; i++)
-		{
-			IFDEBUG_VIDEO(sys_printf("  %dx%d\n", modes[i]->w, modes[i]->h););
-
-			z1 = modes[i]->w / fb_width;
-			z2 = modes[i]->h / fb_height;
-			z = z1 < z2 ? z1 : z2;
-			if (z > mxzoom) mxzoom = z;
-		}
-IFDEBUG_VIDEO(
-		sys_printf("xrick/video: mxzoom = %d\n", mxzoom);
-);
-	}
-}
-
-
-
-/*
  * sysvid_init
  *
  * initialize the video layer.
@@ -216,19 +162,17 @@ void sysvid_init(U16 width, U16 height)
 	IFDEBUG_VIDEO(printf("xrick/video: start\n"););
 
 	/* various WM stuff */
-	SDL_WM_SetCaption("xrick", "xrick");
 	SDL_ShowCursor(SDL_DISABLE);
-	s = SDL_CreateRGBSurfaceFrom(IMG_ICON->pixels, IMG_ICON->w, IMG_ICON->h, 8, IMG_ICON->w, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff);
-	SDL_SetColors(s, (SDL_Color *)IMG_ICON->colors, 0, IMG_ICON->ncolors);
 
+	s = SDL_CreateRGBSurfaceFrom(IMG_ICON->pixels, IMG_ICON->w, IMG_ICON->h, 8, IMG_ICON->w, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff);
+	//SDL_SetColors(s, (SDL_Color *)IMG_ICON->colors, 0, IMG_ICON->ncolors);
 	tpix = *(IMG_ICON->pixels);
 IFDEBUG_VIDEO(
-	sys_printf("xrick/video: icon is %dx%d\n",
-	IMG_ICON->w, IMG_ICON->h);
+	sys_printf("xrick/video: icon is %dx%d\n", IMG_ICON->w, IMG_ICON->h);
 	sys_printf("xrick/video: icon transp. color is #%d (%d,%d,%d)\n", tpix,
-	IMG_ICON->colors[tpix].r,
-	IMG_ICON->colors[tpix].g,
-	IMG_ICON->colors[tpix].b);
+		IMG_ICON->colors[tpix].r,
+		IMG_ICON->colors[tpix].g,
+		IMG_ICON->colors[tpix].b);
 );
 	/*
 
@@ -248,18 +192,20 @@ IFDEBUG_VIDEO(
 	*/
 	/*SDL_WM_SetIcon(s, mask);*/
 
-	SDL_SetColorKey(s,
-		SDL_SRCCOLORKEY,
-		SDL_MapRGB(s->format,IMG_ICON->colors[tpix].r,IMG_ICON->colors[tpix].g,IMG_ICON->colors[tpix].b));
+	// fixme?
+	//SDL_SetColorKey(s,
+	//	SDL_SRCCOLORKEY,
+	//	SDL_MapRGB(s->format,IMG_ICON->colors[tpix].r,IMG_ICON->colors[tpix].g,IMG_ICON->colors[tpix].b));
 
-	SDL_WM_SetIcon(s, NULL);
+	// fixme - which window?!
+	//SDL_WM_SetIcon(s, NULL);
 
 	/* video modes and screen */
-	videoFlags = SDL_HWSURFACE;
+	videoFlags = 0;
 #ifdef BPP8
 	videoFlags |= SDL_HWPALETTE;
 #endif
-	chkVideo();  /* check video modes */
+	//chkVideo();  /* check video modes */
 
 	/* prepare for fullscreen, initialize zoom w/default values */
 	if (sysarg_args_fullscreen)
@@ -279,27 +225,59 @@ IFDEBUG_VIDEO(
 	}
 
 	/* initialize screen surface */
-#ifdef BPP8
-	screen = SDL_SetVideoMode(fb_width * zoom, fb_height * zoom,
-		8, videoFlags);
-#endif
-#ifdef BPP32
-	screen = SDL_SetVideoMode(fb_width * zoom, fb_height * zoom,
-		32, videoFlags);
-#endif
+//#ifdef BPP8
+//	screen = SDL_SetVideoMode(fb_width * zoom, fb_height * zoom,
+//		8, videoFlags);
+//#endif
+//#ifdef BPP32
+//	screen = SDL_SetVideoMode(fb_width * zoom, fb_height * zoom,
+//		32, videoFlags);
+//#endif
+
+	// create pixels
+	// FIXME free pixels!
+	pixels = (U32*)malloc(fb_width * fb_height * sizeof(U32));
+
+	// create window/screen
+	screen = SDL_CreateWindow("xrick", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, fb_width, fb_height, videoFlags);
+	SDL_SetWindowIcon(screen, s);
+
+	// create renderer
+	renderer = SDL_CreateRenderer(screen, -1, 0);
+
+	// needed for fullscreen-desktop mode?
+	SDL_RenderSetLogicalSize(renderer, fb_width, fb_height);
+
+	// clear
+	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+	SDL_RenderClear(renderer);
+	SDL_RenderPresent(renderer);
+
+	// fixme this is temp
+	// not using rects for now but we could ...
+	texture = SDL_CreateTexture(renderer,
+		SDL_PIXELFORMAT_ARGB8888,
+		SDL_TEXTUREACCESS_STREAMING,
+		fb_width, fb_height);
+
+	SDL_UpdateTexture(texture, NULL, pixels, fb_width * sizeof(U32));
+	SDL_RenderClear(renderer);
+	SDL_RenderCopy(renderer, texture, NULL, NULL);
+	SDL_RenderPresent(renderer);
 
 // http://www.linuxdevcenter.com/pub/a/linux/2003/08/07/sdl_anim.html
 // http://www.linuxdevcenter.com/linux/2003/08/07/examples/hardlines.cpp
 
-IFDEBUG_VIDEO2(
-	sys_printf("xrick/video: mode: %dx%d %dbpp pitch=%d %s\n",
-		screen->w, screen->h, screen->format->BitsPerPixel, screen->pitch,
-		videoFlags & SDL_FULLSCREEN ? "fullscreen" : "");
-	sys_printf("xrick/video: HWSURFACE: %s\n", screen->flags & SDL_HWSURFACE ? "Y" : "N");
-	sys_printf("xrick/video: DOUBLEBUF: %s\n", screen->flags & SDL_DOUBLEBUF ? "Y" : "N");
-	/* FIXME also report the REAL HW infos i.e. the actual screen resolution */
-	/* i.e. if we ask for 996x600 SDL says OK but then it maps <screen> to the actual screen */
-);
+	// fixme what shall we do with this?
+//IFDEBUG_VIDEO2(
+//	sys_printf("xrick/video: mode: %dx%d %dbpp pitch=%d %s\n",
+//		screen->w, screen->h, screen->format->BitsPerPixel, screen->pitch,
+//		videoFlags & SDL_FULLSCREEN ? "fullscreen" : "");
+//	sys_printf("xrick/video: HWSURFACE: %s\n", screen->flags & SDL_HWSURFACE ? "Y" : "N");
+//	sys_printf("xrick/video: DOUBLEBUF: %s\n", screen->flags & SDL_DOUBLEBUF ? "Y" : "N");
+//	/* FIXME also report the REAL HW infos i.e. the actual screen resolution */
+//	/* i.e. if we ask for 996x600 SDL says OK but then it maps <screen> to the actual screen */
+//);
 
 	IFDEBUG_VIDEO(sys_printf("xrick/video: ready\n"););
 }
@@ -314,7 +292,10 @@ IFDEBUG_VIDEO2(
 void
 sysvid_shutdown(void)
 {
-	// nothing to do, actually
+	free(pixels);
+	pixels = NULL;
+
+	SDL_DestroyWindow(screen);
 }
 
 
@@ -325,117 +306,6 @@ sysvid_shutdown(void)
  *
  * display the 8bit palettized frame buffer onto the screen. zoom, filter, whatever.
  */
-void
-sysvid_update_(rect_t *rects)
-{
-	SDL_Rect *sdlrects;
-	rect_t *rect;
-	U16 x, y, xx, yy;
-	U8 *src, *dst, *src0, *dst0;
-	U8 n;
-
-	if (rects == NULL)
-		return;
-
-	if (SDL_MUSTLOCK(screen))
-		if (SDL_LockSurface(screen) == -1)
-			sys_panic("xrick/panic: SDL_LockSurface failed\n");
-
-	/* better?
-	while (SDL_LockSurface(screen) < 0)
-		SDL_Delay(10);
-	*/
-
-	n = 0;
-	rect = rects;
-
-	/* for each rectangle that needs to be updated */
-	while (rect)
-	{
-		/* source pointer */
-		src0 = fb_at(rect->x, rect->y);
-
-		/* destination pointer */
-		dst0 = (U8 *)screen->pixels;
-		dst0 += (rect->x + rect->y * fb_width * zoom) * zoom;
-
-		/* zoom and blit rectangle */
-		for (y = rect->y; y < rect->y + rect->height; y++)
-		{
-			for (yy = 0; yy < zoom; yy++)
-			{
-				src = src0;
-				dst = dst0;
-				for (x = rect->x; x < rect->x + rect->width; x++)
-				{
-					for (xx = 0; xx < zoom; xx++)
-					{
-						*dst = *src;
-						dst++;
-					}
-					src++;
-				}
-				dst0 += fb_width * zoom;
-			}
-			src0 += fb_width;
-		}
-
-		/* draw a border around the rectangle */
-IFDEBUG_VIDEO2(
-
-		for (y = rect->y; y < rect->y + rect->height; y++)
-			for (yy = 0; yy < zoom; yy++)
-			{
-				dst = (U8 *)screen->pixels + rect->x * zoom + (y * zoom + yy) * fb_width * zoom;
-				*dst = 0x01;
-				dst += rect->width * zoom - 1;
-				*dst = 0x01;
-			}
-
-			for (x = rect->x; x < rect->x + rect->width; x++)
-			{
-				for (xx = 0; xx < zoom; xx++)
-				{
-					dst = (U8 *)screen->pixels + x * zoom + xx + rect->y * zoom * fb_width * zoom;
-					*dst = 0x01;
-					dst += ((rect->height * zoom - 1) * zoom) * fb_width;
-					*dst = 0x01;
-				}
-		}
-
-); /* IFDEBUG */
-
-		/* next */
-		rect = rect->next;
-		n++;
-	}
-
-	/* prepare sdl rectangles for UpdateRects */
-	sdlrects = (SDL_Rect *)malloc(n * sizeof(SDL_Rect));
-	n = 0;
-	rect = rects;
-
-	/* for each rectangle that needs to be updated */
-	while (rect)
-	{
-		/* init sdl rectangle */
-		sdlrects[n].x = rect->x * zoom;
-		sdlrects[n].y = rect->y * zoom;
-		sdlrects[n].h = rect->height * zoom;
-		sdlrects[n].w = rect->width * zoom;
-
-		/* next */
-		rect = rect->next;
-		n++;
-	}
-
-	if (SDL_MUSTLOCK(screen))
-		SDL_UnlockSurface(screen);
-	SDL_UpdateRects(screen, n, sdlrects);
-
-	free(sdlrects);
-}
-
 void
 sysvid_update(rect_t *rects)
 {
@@ -451,102 +321,130 @@ sysvid_update(rect_t *rects)
 	if (rects == NULL) /* nothing to do? */
 		return;
 
-	if (SDL_MUSTLOCK(screen))
-		if (SDL_LockSurface(screen) == -1)
-			sys_panic("xrick/panic: SDL_LockSurface failed\n");
+	//if (SDL_MUSTLOCK(screen))
+	//	if (SDL_LockSurface(screen) == -1)
+	//		sys_panic("xrick/panic: SDL_LockSurface failed\n");
 
 	n = 0;
 	rect = rects;
 
-	/* for each rectangle that needs to be updated */
-	while (rect)
+	// fixme ignore rectangles for now
+
+	// fixme need to write to pixels = apply palette
+	// fixme investigate whether SDL could do this for us
 	{
-		/* source pointer */
-		src0 = fb_at(rect->x, rect->y);
-
-		/* destination pointer */
-		dst0 = (U8 *)screen->pixels;
-#ifdef BPP8
-		dst0 += rect->x * zoom + rect->y * zoom * screen->pitch;
-#endif
-#ifdef BPP32
-		dst0 += 4 * rect->x * zoom + rect->y * zoom * screen->pitch;
-#endif
-
-		/* zoom and blit rectangle */
-		for (y = rect->y; y < rect->y + rect->height; y++)
+		U8 *srcx = fb_at(0, 0);
+		U8* dstx = pixels;
+		for (int i = 0; i < fb_height * fb_width; i++)
 		{
-			for (yy = 0; yy < zoom; yy++)
-			{
-				src = src0;
-				dst = dst0;
-				for (x = rect->x; x < rect->x + rect->width; x++)
-				{
-					for (xx = 0; xx < zoom; xx++)
-					{
-#ifdef BPP8
-						*dst = *src;
-						dst++;
-#endif
-#ifdef BPP32
-						*dst = pald[*src].b;
-						dst += 1;
-						*dst = pald[*src].g;
-						dst += 1;
-						*dst = pald[*src].r;
-						dst += 2;
-#endif
-					}
-					src++;
-				}
-				dst0 += screen->pitch;
-			}
-			src0 += fb_width;
+			*dstx = pald[*srcx].b;
+			dstx++;		
+			*dstx = pald[*srcx].g;
+			dstx++;
+			*dstx = pald[*srcx].r;
+			dstx++;
+			*dstx = pald[*srcx].a;
+			dstx++;
+			srcx++;
 		}
-
-IFDEBUG_VIDEO2(
-
-		// FIXME what about BPP8
-
-		/* draw a border around the rectangle */
-		for (y = rect->y; y < rect->y + rect->height; y++)
-		for (yy = 0; yy < zoom; yy++)
-		{
-			dst = (U8*)screen->pixels 
-				+ rect->x * zoom * 4 
-				+ (y * zoom + yy) * (fb_width * zoom * 4);
-			*(dst++) = 0; // blue
-			*(dst++) = 0; // green
-			*dst = 0xff; // red
-			dst -= 2;
-			dst += (rect->width * zoom -1) * 4;
-			*(dst++) = 0; // blue
-			*(dst++) = 0; // green
-			*dst = 0xff; // red
-		}
-
-		for (x = rect->x; x < rect->x + rect->width; x++)
-		for (xx = 0; xx < zoom; xx++)
-		{
-			dst = (U8*)screen->pixels 
-				+ (x * zoom + xx) * 4
-				+ (rect->y * zoom) * (fb_width * zoom * 4);
-			*(dst++) = 0; // blue
-			*(dst++) = 0; // green
-			*dst = 0xff; // red
-			dst -= 2;
-			dst += ((rect->height * zoom - 1) * zoom) * fb_width * 4;
-			*(dst++) = 0; // blue
-			*(dst++) = 0; // green
-			*dst = 0xff; // red
-		}
-
-); /* IFDEBUG */
-				
-	    /* next */
-		rect = rect->next;
-		n++;
 	}
+
+	//SDL_LockTexture(texture, NULL, &pixels, &pitch);
+	SDL_UpdateTexture(texture, NULL, pixels, fb_width * sizeof(U32));
+	//SDL_UnlockTexture(texture);
+	SDL_RenderClear(renderer);
+	SDL_RenderCopy(renderer, texture, NULL, NULL);
+	SDL_RenderPresent(renderer);
+
+	/* for each rectangle that needs to be updated */
+//	while (rect)
+//	{
+//		/* source pointer */
+//		src0 = fb_at(rect->x, rect->y);
+//
+//		/* destination pointer */
+//		dst0 = (U8 *)screen->pixels;
+//#ifdef BPP8
+//		dst0 += rect->x * zoom + rect->y * zoom * screen->pitch;
+//#endif
+//#ifdef BPP32
+//		dst0 += 4 * rect->x * zoom + rect->y * zoom * screen->pitch;
+//#endif
+//
+//		/* zoom and blit rectangle */
+//		for (y = rect->y; y < rect->y + rect->height; y++)
+//		{
+//			for (yy = 0; yy < zoom; yy++)
+//			{
+//				src = src0;
+//				dst = dst0;
+//				for (x = rect->x; x < rect->x + rect->width; x++)
+//				{
+//					for (xx = 0; xx < zoom; xx++)
+//					{
+//#ifdef BPP8
+//						*dst = *src;
+//						dst++;
+//#endif
+//#ifdef BPP32
+//						*dst = pald[*src].b;
+//						dst += 1;
+//						*dst = pald[*src].g;
+//						dst += 1;
+//						*dst = pald[*src].r;
+//						dst += 2;
+//#endif
+//					}
+//					src++;
+//				}
+//				dst0 += screen->pitch;
+//			}
+//			src0 += fb_width;
+//		}
+//
+//IFDEBUG_VIDEO2(
+//
+//		// FIXME what about BPP8
+//
+//		/* draw a border around the rectangle */
+//		for (y = rect->y; y < rect->y + rect->height; y++)
+//		for (yy = 0; yy < zoom; yy++)
+//		{
+//			dst = (U8*)screen->pixels 
+//				+ rect->x * zoom * 4 
+//				+ (y * zoom + yy) * (fb_width * zoom * 4);
+//			*(dst++) = 0; // blue
+//			*(dst++) = 0; // green
+//			*dst = 0xff; // red
+//			dst -= 2;
+//			dst += (rect->width * zoom -1) * 4;
+//			*(dst++) = 0; // blue
+//			*(dst++) = 0; // green
+//			*dst = 0xff; // red
+//		}
+//
+//		for (x = rect->x; x < rect->x + rect->width; x++)
+//		for (xx = 0; xx < zoom; xx++)
+//		{
+//			dst = (U8*)screen->pixels 
+//				+ (x * zoom + xx) * 4
+//				+ (rect->y * zoom) * (fb_width * zoom * 4);
+//			*(dst++) = 0; // blue
+//			*(dst++) = 0; // green
+//			*dst = 0xff; // red
+//			dst -= 2;
+//			dst += ((rect->height * zoom - 1) * zoom) * fb_width * 4;
+//			*(dst++) = 0; // blue
+//			*(dst++) = 0; // green
+//			*dst = 0xff; // red
+//		}
+//
+//); /* IFDEBUG */
+//				
+//	    /* next */
+//		rect = rect->next;
+//		n++;
+//	}
 
 	/* poor attempt at filtering... */
 	/* looks nice but so slooooow */
@@ -594,29 +492,29 @@ IFDEBUG_VIDEO2(
 	*/
 
 	/* prepare sdl rectangles for UpdateRects */
-	sdlrects = (SDL_Rect *)malloc(n * sizeof(SDL_Rect));
+	/*sdlrects = (SDL_Rect *)malloc(n * sizeof(SDL_Rect));
 	n = 0;
-	rect = rects;
+	rect = */rects;
 
 	/* for each rectangle that needs to be updated */
-	while (rect)
-	{
-		/* init sdl rectangle */
-		sdlrects[n].x = rect->x * zoom;
-		sdlrects[n].y = rect->y * zoom;
-		sdlrects[n].h = rect->height * zoom;
-		sdlrects[n].w = rect->width * zoom;
+	//while (rect)
+	//{
+	//	/* init sdl rectangle */
+	//	sdlrects[n].x = rect->x * zoom;
+	//	sdlrects[n].y = rect->y * zoom;
+	//	sdlrects[n].h = rect->height * zoom;
+	//	sdlrects[n].w = rect->width * zoom;
 
-		/* next */
-		rect = rect->next;
-		n++;
-	}
+	//	/* next */
+	//	rect = rect->next;
+	//	n++;
+	//}
 
-	if (SDL_MUSTLOCK(screen))
-		SDL_UnlockSurface(screen);
-	SDL_UpdateRects(screen, n, sdlrects);
+	//if (SDL_MUSTLOCK(screen))
+	//	SDL_UnlockSurface(screen);
+	//SDL_UpdateRects(screen, n, sdlrects);
 
-	free(sdlrects);
+	//free(sdlrects);
 }
 
 
@@ -632,15 +530,17 @@ sysvid_zoom(S8 z)
 	if ((z < 0 && zoom > 1) || (z > 0 && zoom < mxzoom))
 	{
 		zoom += z;
-		screen = SDL_SetVideoMode(fb_width * zoom, fb_height * zoom,
-			screen->format->BitsPerPixel, videoFlags);
+		SDL_SetWindowSize(screen, fb_width * zoom, fb_height * zoom);
+
 		sysvid_setDisplayPalette();
 		sysvid_update(&SCREENRECT); /* repaint all */ /* FIXME */
-IFDEBUG_VIDEO2(
-	sys_printf("xrick/video: mode: %dx%d %dbpp pitch=%d %s\n",
-		screen->w, screen->h, screen->format->BitsPerPixel, screen->pitch,
-		videoFlags & SDL_FULLSCREEN ? "fullscreen" : "");
-);
+
+		// fixme what shall we do with this?
+//IFDEBUG_VIDEO2(
+//	sys_printf("xrick/video: mode: %dx%d %dbpp pitch=%d %s\n",
+//		screen->w, screen->h, screen->format->BitsPerPixel, screen->pitch,
+//		videoFlags & SDL_FULLSCREEN ? "fullscreen" : "");
+//);
 	}
 }
 
@@ -654,28 +554,24 @@ IFDEBUG_VIDEO2(
 void
 sysvid_toggleFullscreen()
 {
-	videoFlags ^= SDL_FULLSCREEN;
+	// FIXME HERE AND NOW
+	// - how to resize the window
+	// - how to switch to/from fullscreen "desktop" mode
+	// - support HighDpi if we can?
+	// - can SDL directly manage the palette?
 
-	if (videoFlags & SDL_FULLSCREEN) /* go fullscreen */
-	{
-		wmzoom = zoom;
-		zoom = fszoom;
-	}
-	else /* go window */
-	{
-		fszoom = zoom;
-		zoom = wmzoom;
-	}
-	screen = SDL_SetVideoMode(fb_width * zoom, fb_height * zoom,
-		screen->format->BitsPerPixel, videoFlags);
-	//sysvid_restorePalette(); // FIXME what??
+	videoFlags ^= SDL_FULLSCREEN;
+	SDL_SetWindowFullscreen(screen, videoFlags & SDL_FULLSCREEN ? SDL_FULLSCREEN : 0);
+
+	sysvid_setDisplayPalette();
 	sysvid_update(&SCREENRECT); /* repaint all */ /* FIXME */
 
-IFDEBUG_VIDEO2(
-	sys_printf("xrick/video: mode: %dx%d %dbpp pitch=%d %s\n",
-		screen->w, screen->h, screen->format->BitsPerPixel, screen->pitch,
-		videoFlags & SDL_FULLSCREEN ? "fullscreen" : "");
-);
+	// fixme what shall we do with this
+//IFDEBUG_VIDEO2(
+//	sys_printf("xrick/video: mode: %dx%d %dbpp pitch=%d %s\n",
+//		screen->w, screen->h, screen->format->BitsPerPixel, screen->pitch,
+//		videoFlags & SDL_FULLSCREEN ? "fullscreen" : "");
+//);
 
 }
 
@@ -693,7 +589,7 @@ void sysvid_setGamma(U8 g)
 	sysvid_setDisplayPalette();
 
 #ifdef BPP8
-	SDL_SetColors(screen, (SDL_Color*)& pald, 0, paln);
+	//SDL_SetColors(screen, (SDL_Color*)& pald, 0, paln);
 #endif
 }
 

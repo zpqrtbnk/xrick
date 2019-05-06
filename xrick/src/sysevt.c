@@ -12,7 +12,7 @@
  */
 
 /*
- * 20021010 SDLK_n replaced by SDLK_Fn because some non-US keyboards
+ * 20021010 SDL_SCANCODE_n replaced by SDL_SCANCODE_Fn because some non-US keyboards
  *          requires that SHIFT be pressed to input numbers.
  */
 
@@ -44,86 +44,88 @@ processEvent()
 	SDL_ActiveEvent *aevent;
 #endif
 
-  switch (event.type) {
-  case SDL_KEYDOWN:
-    key = event.key.keysym.sym;
-    if (key == syskbd_up || key == SDLK_UP) {
-      SETBIT(control_status, CONTROL_UP);
-      control_last = CONTROL_UP;
-    }
-    else if (key == syskbd_down || key == SDLK_DOWN) {
-      SETBIT(control_status, CONTROL_DOWN);
-      control_last = CONTROL_DOWN;
-    }
-    else if (key == syskbd_left || key == SDLK_LEFT) {
-      SETBIT(control_status, CONTROL_LEFT);
-      control_last = CONTROL_LEFT;
-    }
-    else if (key == syskbd_right || key == SDLK_RIGHT) {
-      SETBIT(control_status, CONTROL_RIGHT);
-      control_last = CONTROL_RIGHT;
-    }
-    else if (key == syskbd_pause) {
-      SETBIT(control_status, CONTROL_PAUSE);
-      control_last = CONTROL_PAUSE;
-    }
-    else if (key == syskbd_end) {
-      SETBIT(control_status, CONTROL_END);
-      control_last = CONTROL_END;
-    }
-    else if (key == syskbd_xtra) {
-      SETBIT(control_status, CONTROL_EXIT);
-      control_last = CONTROL_EXIT;
-    }
-    else if (key == syskbd_fire) {
-      SETBIT(control_status, CONTROL_FIRE);
-      control_last = CONTROL_FIRE;
-    }
-    else if (key == SDLK_F1) {
-      sysvid_toggleFullscreen();
-    }
-    else if (key == SDLK_F2) {
-      sysvid_zoom(-1);
-    }
-    else if (key == SDLK_F3) {
-      sysvid_zoom(+1);
-    }
+	switch (event.type) {
+	case SDL_KEYDOWN:
+		key = event.key.keysym.scancode;
+		//key = event.key.keysym.sym;
+		if (key == syskbd_up || key == SDL_SCANCODE_UP) {
+			SETBIT(control_status, CONTROL_UP);
+			control_last = CONTROL_UP;
+		}
+		else if (key == syskbd_down || key == SDL_SCANCODE_DOWN) {
+			SETBIT(control_status, CONTROL_DOWN);
+			control_last = CONTROL_DOWN;
+		}
+		else if (key == syskbd_left || key == SDL_SCANCODE_LEFT) {
+			SETBIT(control_status, CONTROL_LEFT);
+			control_last = CONTROL_LEFT;
+		}
+		else if (key == syskbd_right || key == SDL_SCANCODE_RIGHT) {
+			SETBIT(control_status, CONTROL_RIGHT);
+			control_last = CONTROL_RIGHT;
+		}
+		else if (key == syskbd_pause) {
+			SETBIT(control_status, CONTROL_PAUSE);
+			control_last = CONTROL_PAUSE;
+		}
+		else if (key == syskbd_end) {
+			SETBIT(control_status, CONTROL_END);
+			control_last = CONTROL_END;
+		}
+		else if (key == syskbd_xtra) {
+			SETBIT(control_status, CONTROL_EXIT);
+			control_last = CONTROL_EXIT;
+		}
+		else if (key == syskbd_fire) {
+			SETBIT(control_status, CONTROL_FIRE);
+			control_last = CONTROL_FIRE;
+		}
+		else if (key == SDL_SCANCODE_F1) {
+			sysvid_toggleFullscreen();
+		}
+		else if (key == SDL_SCANCODE_F2) {
+			sysvid_zoom(-1);
+		}
+		else if (key == SDL_SCANCODE_F3) {
+			sysvid_zoom(+1);
+		}
 #ifdef ENABLE_SOUND
-    else if (key == SDLK_F4) {
-      syssnd_toggleMute();
-    }
-    else if (key == SDLK_F5) {
-      syssnd_vol(-1);
-    }
-    else if (key == SDLK_F6) {
-      syssnd_vol(+1);
-    }
+		else if (key == SDL_SCANCODE_F4) {
+			syssnd_toggleMute();
+		}
+		else if (key == SDL_SCANCODE_F5) {
+			syssnd_vol(-1);
+		}
+		else if (key == SDL_SCANCODE_F6) {
+			syssnd_vol(+1);
+		}
 #endif
-    else if (key == SDLK_F7) {
-      game_toggleCheat(1);
-    }
-    else if (key == SDLK_F8) {
-      game_toggleCheat(2);
-    }
-    else if (key == SDLK_F9) {
-      game_toggleCheat(3);
-    }
-    break;
-  case SDL_KEYUP:
-    key = event.key.keysym.sym;
-    if (key == syskbd_up || key == SDLK_UP) {
+		else if (key == SDL_SCANCODE_F7) {
+			game_toggleCheat(1);
+		}
+		else if (key == SDL_SCANCODE_F8) {
+			game_toggleCheat(2);
+		}
+		else if (key == SDL_SCANCODE_F9) {
+			game_toggleCheat(3);
+		}
+		break;
+	case SDL_KEYUP:
+		key = event.key.keysym.scancode;
+		//key = event.key.keysym.sym;
+		if (key == syskbd_up || key == SDL_SCANCODE_UP) {
       CLRBIT(control_status, CONTROL_UP);
       control_last = CONTROL_UP;
     }
-    else if (key == syskbd_down || key == SDLK_DOWN) {
+    else if (key == syskbd_down || key == SDL_SCANCODE_DOWN) {
       CLRBIT(control_status, CONTROL_DOWN);
       control_last = CONTROL_DOWN;
     }
-    else if (key == syskbd_left || key == SDLK_LEFT) {
+    else if (key == syskbd_left || key == SDL_SCANCODE_LEFT) {
       CLRBIT(control_status, CONTROL_LEFT);
       control_last = CONTROL_LEFT;
     }
-    else if (key == syskbd_right || key == SDLK_RIGHT) {
+    else if (key == syskbd_right || key == SDL_SCANCODE_RIGHT) {
       CLRBIT(control_status, CONTROL_RIGHT);
       control_last = CONTROL_RIGHT;
     }

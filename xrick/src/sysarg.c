@@ -37,7 +37,8 @@ typedef struct {
   int code;
 } sdlcodes_t;
 
-static sdlcodes_t sdlcodes[SDLK_LAST] = {
+// these codes are exported from SDL
+static sdlcodes_t sdlcodes[] = {
 #include "sdlcodes.e"
 };
 

@@ -34,6 +34,7 @@ static U8 sndVol = SDL_MIX_MAXVOLUME;  /* internal volume */
 static U8 sndUVol = SYSSND_MAXVOL;  /* user-selected volume */
 static U8 sndMute = FALSE;  /* mute flag */
 
+static SDL_AudioDeviceID device;
 static SDL_mutex *sndlock;
 
 /*
@@ -55,51 +56,64 @@ static void end_channel(U8);
  */
 void syssnd_callback(UNUSED(void *userdata), U8 *stream, int len)
 {
-  U8 c;
-  S16 s;
-  U32 i;
+	U8 c;
+	S16 s;
+	U32 i;
 
-  SDL_mutexP(sndlock);
+	SDL_mutexP(sndlock);
 
-  for (i = 0; i < (U32)len; i++) {
-    s = 0;
-    for (c = 0; c < SYSSND_MIXCHANNELS; c++) {
-      if (channel[c].loop != 0) {  /* channel is active */
-	if (channel[c].len > 0) {  /* not ending */
-	  s += ADJVOL(*channel[c].buf - 0x80);
-	  channel[c].buf++;
-	  channel[c].len--;
+	for (i = 0; i < (U32)len; i++) 
+	{
+		s = 0;
+		for (c = 0; c < SYSSND_MIXCHANNELS; c++) 
+		{
+			if (channel[c].loop != 0) /* channel is active */
+			{
+				if (channel[c].len > 0) /* not ending */
+				{
+					s += ADJVOL(*channel[c].buf - 0x80);
+					channel[c].buf++;
+					channel[c].len--;
+				}
+				else /* ending */
+				{
+					if (channel[c].loop > 0) channel[c].loop--;
+					if (channel[c].loop) /* just loop */
+					{
+						IFDEBUG_AUDIO2(sys_printf("xrick/audio: channel %d - loop\n", c););
+						channel[c].buf = channel[c].snd->buf;
+						channel[c].len = channel[c].snd->len;
+						s += ADJVOL(*channel[c].buf - 0x80);
+						channel[c].buf++;
+						channel[c].len--;
+					}
+					else /* end for real */
+					{
+						IFDEBUG_AUDIO2(sys_printf("xrick/audio: channel %d - end\n", c););
+						end_channel(c);
+					}
+				}
+			}
+		}
+
+		if (sndMute)
+		{
+			stream[i] = 0x80;
+		}
+		else 
+		{
+			s += 0x80;
+			if (s > 0xff) s = 0xff;
+			if (s < 0x00) s = 0x00;
+			stream[i] = (U8)s;
+		}
 	}
-	else {  /* ending */
-	  if (channel[c].loop > 0) channel[c].loop--;
-	  if (channel[c].loop) {  /* just loop */
-	    IFDEBUG_AUDIO2(sys_printf("xrick/audio: channel %d - loop\n", c););
-	    channel[c].buf = channel[c].snd->buf;
-	    channel[c].len = channel[c].snd->len;
-	    s += ADJVOL(*channel[c].buf - 0x80);
-	    channel[c].buf++;
-	    channel[c].len--;
-	  }
-	  else {  /* end for real */
-	    IFDEBUG_AUDIO2(sys_printf("xrick/audio: channel %d - end\n", c););
-	    end_channel(c);
-	  }
-	}
-      }
-    }
-    if (sndMute)
-      stream[i] = 0x80;
-    else {
-      s += 0x80;
-      if (s > 0xff) s = 0xff;
-      if (s < 0x00) s = 0x00;
-      stream[i] = (U8)s;
-    }
-  }
 
-  memcpy(stream, stream, len);
+	// fixme is that even needed?
+	//memcpy(stream, stream, len);
+	//SDL_MixAudioFormat(stream, stream, );
 
-  SDL_mutexV(sndlock);
+	SDL_mutexV(sndlock);
 }
 
 static void
@@ -131,7 +145,8 @@ syssnd_init(void)
   desired.callback = syssnd_callback;
   desired.userdata = NULL;
 
-  if (SDL_OpenAudio(&desired, &obtained) < 0) {
+  device = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0); //SDL_AUDIO_ALLOW_FORMAT_CHANGE);
+  if (device < 0) {
     IFDEBUG_AUDIO(
       sys_printf("xrick/audio: can not open audio (%s)\n", SDL_GetError());
       );
@@ -154,7 +169,7 @@ syssnd_init(void)
     channel[c].loop = 0;  /* deactivate */
 
 	isAudioActive = TRUE;
-	SDL_PauseAudio(0);
+	SDL_PauseAudioDevice(device, 0);
 }
 
 /*
@@ -165,7 +180,7 @@ syssnd_shutdown(void)
 {
   if (!isAudioActive) return;
 
-  SDL_CloseAudio();
+  SDL_CloseAudioDevice(device);
   SDL_DestroyMutex(sndlock);
   isAudioActive = FALSE;
 }

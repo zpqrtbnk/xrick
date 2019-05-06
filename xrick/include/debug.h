@@ -32,7 +32,7 @@
 #define DEBUG_MAPS
 #undef DEBUG_JOYSTICK
 #undef DEBUG_EVENTS
-#undef DEBUG_AUDIO
+#define DEBUG_AUDIO
 #undef DEBUG_AUDIO2
 #define  DEBUG_VIDEO
 #define DEBUG_VIDEO2
