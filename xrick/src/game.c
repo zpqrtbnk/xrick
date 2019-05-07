@@ -37,6 +37,10 @@
 #include "tiles.h"
 #include "draw.h"
 
+#ifdef EMSCRIPTEN
+#include "emscripten.h"
+#endif
+
 #ifdef ENABLE_DEVTOOLS
 #include "devtools.h"
 #endif
@@ -102,6 +106,7 @@ hscore_t game_hscores[8] = {
  */
 static U8 save_map_row;
 static game_state_t game_state;
+static U32 tm, tmx;
 
 
 /*
@@ -159,6 +164,9 @@ void game_toggleCheat(U8 nbr)
 #endif
 }
 
+/* prototype */
+static void game_loop(void);
+
 
 
 /*
@@ -169,7 +177,6 @@ void game_toggleCheat(U8 nbr)
 void
 game_run(char *path)
 {
-	U32 tm, tmx;
 
 	data_setpath(path);
 	loadData(); /* load cached data */
@@ -179,40 +186,48 @@ game_run(char *path)
 	game_state = XRICK;
 
 	/* main loop */
+#ifdef EMSCRIPTEN
+	emscripten_set_main_loop(game_loop, 0, 1);
+#else
 	while (game_state != EXIT)
 	{
-		/* timer */
-		tmx = tm; tm = sys_gettime(); tmx = tm - tmx;
-		if (tmx < game_period) sys_sleep(game_period - tmx);
-
-		/* video */
-		/*DEBUG*//*game_rects=&draw_SCREENRECT;*//*DEBUG*/
-		// FIXME:??
-		//sysvid_update(fb_updatedRects);
-		sysvid_update(game_rects);
-		draw_STATUSRECT.next = NULL;  /* FIXME freerects should handle this */
-
-		/* sound: nothing to do here, everything is managed via callbacks */
-
-		/* events */
-		if (game_waitevt)
-			sysevt_wait();  /* wait for an event, stop doing anything */
-		else
-			sysevt_poll();  /* process events (non-blocking) */
-
-		/*
-		 * game_cycle: depending on the game state
-		 * - process events
-		 * - run the game logic, AI, ...
-		 * - paints a new frame onto the frame buffer
-		 * - updates fb_updatedRects
-		 */
-		game_cycle();
-
+		game_loop();
 	}
+#endif
 
 	freeData(); /* free cached data */
 	data_closepath();
+}
+
+static void game_loop(void)
+{
+	/* timer */
+	tmx = tm; tm = sys_gettime(); tmx = tm - tmx;
+	if (tmx < game_period) sys_sleep(game_period - tmx);
+
+	/* video */
+	/*DEBUG*//*game_rects=&draw_SCREENRECT;*//*DEBUG*/
+	// FIXME:??
+	//sysvid_update(fb_updatedRects);
+	sysvid_update(game_rects);
+	draw_STATUSRECT.next = NULL;  /* FIXME freerects should handle this */
+
+	/* sound: nothing to do here, everything is managed via callbacks */
+
+	/* events */
+	if (game_waitevt)
+		sysevt_wait();  /* wait for an event, stop doing anything */
+	else
+		sysevt_poll();  /* process events (non-blocking) */
+
+	/*
+	 * game_cycle: depending on the game state
+	 * - process events
+	 * - run the game logic, AI, ...
+	 * - paints a new frame onto the frame buffer
+	 * - updates fb_updatedRects
+	 */
+	game_cycle();
 }
 
 

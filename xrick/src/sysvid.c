@@ -492,9 +492,9 @@ sysvid_update(rect_t *rects)
 	*/
 
 	/* prepare sdl rectangles for UpdateRects */
-	/*sdlrects = (SDL_Rect *)malloc(n * sizeof(SDL_Rect));
-	n = 0;
-	rect = */rects;
+	//sdlrects = (SDL_Rect *)malloc(n * sizeof(SDL_Rect));
+	//n = 0;
+	//rect = rects;
 
 	/* for each rectangle that needs to be updated */
 	//while (rect)
