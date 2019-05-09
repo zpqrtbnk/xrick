@@ -166,7 +166,7 @@ void game_toggleCheat(U8 nbr)
 
 /* prototype */
 static void game_loop(void);
-
+static void game_exit(void);
 
 
 /*
@@ -177,6 +177,7 @@ static void game_loop(void);
 void
 game_run(char *path)
 {
+	sys_printf("xrick/game: path='%s'\n", path ? path : "");
 
 	data_setpath(path);
 	loadData(); /* load cached data */
@@ -195,6 +196,11 @@ game_run(char *path)
 	}
 #endif
 
+	game_exit();
+}
+
+static void game_exit(void)
+{
 	freeData(); /* free cached data */
 	data_closepath();
 }
@@ -228,6 +234,15 @@ static void game_loop(void)
 	 * - updates fb_updatedRects
 	 */
 	game_cycle();
+
+#ifdef EMSCRIPTEN
+	if (game_state == EXIT)
+	{
+		game_exit();
+		sys_shutdown();
+		emscripten_cancel_main_loop();
+	}
+#endif
 }
 
 

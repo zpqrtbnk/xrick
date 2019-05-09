@@ -40,7 +40,6 @@ static setConsole()
 		freopen("CONIN$", "r", stdin);
 		freopen("CONOUT$", "w", stdout);
 		freopen("CONOUT$", "w", stderr);
-		sys_printf("xrick\n");
 	}
 #endif
 }
@@ -54,6 +53,7 @@ void
 sys_init(int argc, char** argv)
 {
 	setConsole();
+	sys_printf("xrick\n");
 
 	sysarg_init(argc, argv);
 
