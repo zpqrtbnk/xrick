@@ -52,6 +52,7 @@ sys_panic(char *err, ...)
 void
 sys_printf(char *msg, ...)
 {
+#ifdef ENABLE_LOG
 	va_list argptr;
 	char s[1024];
 
@@ -66,6 +67,7 @@ sys_printf(char *msg, ...)
 	vsprintf(s, msg, argptr);
 	va_end(argptr);
 	printf(s);
+#endif
 }
 
 /*

@@ -156,7 +156,7 @@ processEvent()
   case SDL_ACTIVEEVENT: {
     aevent = (SDL_ActiveEvent *)&event;
     IFDEBUG_EVENTS(
-      printf("xrick/events: active %x %x\n", aevent->gain, aevent->state);
+      sys_printf("xrick/events: active %x %x\n", aevent->gain, aevent->state);
       );
     if (aevent->gain == 1)
       control_active = TRUE;

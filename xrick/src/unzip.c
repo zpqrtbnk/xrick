@@ -4,6 +4,8 @@
    Read unzip.h for more info
 */
 
+#include "config.h"
+
 #ifdef WITH_ZLIB
 
 #include <stdio.h>

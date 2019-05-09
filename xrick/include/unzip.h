@@ -41,6 +41,8 @@
 #ifndef _unz_H
 #define _unz_H
 
+#include "config.h"
+
 #ifdef WITH_ZLIB
 
 #ifdef __cplusplus

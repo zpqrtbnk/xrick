@@ -246,7 +246,7 @@ static void game_cycle(void)
 
 		//if (game_state != game_state2)
 		//{
-		//	sprintf("xrick/game: state = %d", (U8) game_state);
+		//	sys_printf("xrick/game: state = %d", (U8) game_state);
 		//	game_state2 = game_state;
 		//}
 

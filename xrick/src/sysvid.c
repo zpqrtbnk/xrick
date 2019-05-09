@@ -60,9 +60,8 @@ static U8 gamma;
 static U16 fb_width, fb_height;
 
 static U8 zoom = 0; /* actual zoom level */
-static U8 fszoom = SYSVID_ZOOM;  /* fullscreen zoom level */
 static U8 wmzoom = SYSVID_ZOOM; /* window mode zoom level */
-static U8 mxzoom = SYSVID_ZOOM; /* max zoom level */
+static U8 mxzoom = SYSVID_ZOOM * 2; /* max zoom level */
 
 
 
@@ -159,7 +158,7 @@ void sysvid_init(U16 width, U16 height)
 	fb_width = width;
 	fb_height = height;
 
-	IFDEBUG_VIDEO(printf("xrick/video: start\n"););
+	IFDEBUG_VIDEO(sys_printf("xrick/video: start\n"););
 
 	/* various WM stuff */
 	SDL_ShowCursor(SDL_DISABLE);
@@ -207,21 +206,21 @@ IFDEBUG_VIDEO(
 #endif
 	//chkVideo();  /* check video modes */
 
+	/* if a zoom was specified, use it -- but check it is ok */
+	if (sysarg_args_zoom)
+	{
+		zoom = sysarg_args_zoom > 0 && sysarg_args_zoom <= mxzoom ? sysarg_args_zoom : mxzoom;
+	}
+
 	/* prepare for fullscreen, initialize zoom w/default values */
 	if (sysarg_args_fullscreen)
 	{
 		videoFlags |= SDL_FULLSCREEN;
-		zoom = fszoom;
+		zoom = 1;
 	}
 	else
 	{
 		zoom = wmzoom;
-	}
-
-	/* if a zoom was specified, use it -- but check it is not above max */
-	if (sysarg_args_zoom)
-	{
-		zoom = sysarg_args_zoom <= mxzoom ? sysarg_args_zoom : mxzoom;
 	}
 
 	/* initialize screen surface */
@@ -239,7 +238,7 @@ IFDEBUG_VIDEO(
 	pixels = (U32*)malloc(fb_width * fb_height * sizeof(U32));
 
 	// create window/screen
-	screen = SDL_CreateWindow("xrick", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, fb_width, fb_height, videoFlags);
+	screen = SDL_CreateWindow("xrick", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, fb_width * zoom, fb_height * zoom, videoFlags);
 	SDL_SetWindowIcon(screen, s);
 
 	// create renderer
@@ -527,9 +526,17 @@ sysvid_update(rect_t *rects)
 void
 sysvid_zoom(S8 z)
 {
-	if ((z < 0 && zoom > 1) || (z > 0 && zoom < mxzoom))
+	// FIXME fullscreen
+
+	if ((z < 0 && zoom + z > 0) || (z > 0 && zoom + z <= mxzoom))
 	{
 		zoom += z;
+		wmzoom = zoom;
+
+		IFDEBUG_VIDEO(
+			sys_printf("xrick/video: zoom=%d window=%dx%d\n", zoom, fb_width * zoom, fb_height * zoom);
+		);
+
 		SDL_SetWindowSize(screen, fb_width * zoom, fb_height * zoom);
 
 		sysvid_setDisplayPalette();
@@ -554,14 +561,10 @@ sysvid_zoom(S8 z)
 void
 sysvid_toggleFullscreen(void)
 {
-	// FIXME HERE AND NOW
-	// - how to resize the window
-	// - how to switch to/from fullscreen "desktop" mode
-	// - support HighDpi if we can?
-	// - can SDL directly manage the palette?
-
 	videoFlags ^= SDL_FULLSCREEN;
 	SDL_SetWindowFullscreen(screen, videoFlags & SDL_FULLSCREEN ? SDL_FULLSCREEN : 0);
+
+	zoom = videoFlags & SDL_FULLSCREEN ? 1 : wmzoom;
 
 	sysvid_setDisplayPalette();
 	sysvid_update(&SCREENRECT); /* repaint all */ /* FIXME */

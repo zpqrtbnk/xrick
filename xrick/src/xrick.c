@@ -40,7 +40,7 @@ static setConsole()
 		freopen("CONIN$", "r", stdin);
 		freopen("CONOUT$", "w", stdout);
 		freopen("CONOUT$", "w", stderr);
-		printf("xrick\r\n");
+		sys_printf("xrick\n");
 	}
 #endif
 }
