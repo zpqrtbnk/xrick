@@ -46,8 +46,9 @@ extern void syssnd_free(sound_t*);
 #define SYSSND_MAXVOL 10
 #define SYSSND_MIXCHANNELS 8
 /* MIXSAMPLES: 256 is too low on Windows. 512 means ~20 mix per second at 11025Hz */
-/* MIXSAMPLES: ?? at 22050Hz */
-#define SYSSND_MIXSAMPLES 1024
+/* MIXSAMPLES: 1024 at 22050Hz is fine on Windows, FF but not Chrome */
+/* MIXSAMPLES: 2048 seems OK on Chrome too ~10 mix per second? */
+#define SYSSND_MIXSAMPLES 2048
 
 typedef struct {
 	sound_t *snd;
