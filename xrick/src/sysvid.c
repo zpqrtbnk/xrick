@@ -252,6 +252,9 @@ IFDEBUG_VIDEO(
 	SDL_RenderClear(renderer);
 	SDL_RenderPresent(renderer);
 
+	// scaling hint - before texture creation
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+
 	// fixme this is temp
 	// not using rects for now but we could ...
 	texture = SDL_CreateTexture(renderer,
@@ -314,206 +317,51 @@ sysvid_update(rect_t *rects)
 	U8 *src, *dst, *src0, *dst0;
 	U8 n;
 
-	//U8 *w1, *w2, *w3, *w1z, *w2z, *w3z;
-	//U16 r, g, b;
-
 	if (rects == NULL) /* nothing to do? */
 		return;
 
-	//if (SDL_MUSTLOCK(screen))
-	//	if (SDL_LockSurface(screen) == -1)
-	//		sys_panic("xrick/panic: SDL_LockSurface failed\n");
+	int pitch;
+	U32* pixelx;
+
+	SDL_LockTexture(texture, NULL, &pixelx, &pitch);
 
 	n = 0;
 	rect = rects;
-
-	// fixme ignore rectangles for now
-
-	// fixme need to write to pixels = apply palette
-	// fixme investigate whether SDL could do this for us
+	while (rect)
 	{
-		U8 *srcx = fb_at(0, 0);
-		U8* dstx = pixels;
-		for (int i = 0; i < fb_height * fb_width; i++)
+		U16 o = rect->x + rect->y * fb_width;
+		U8* src0 = ((U8*)& fb) + o;
+		U8* dst0 = pixelx + o;
+		for (int y = rect->y; y < rect->y + rect->height; y++)
 		{
-			*dstx = pald[*srcx].b;
-			dstx++;		
-			*dstx = pald[*srcx].g;
-			dstx++;
-			*dstx = pald[*srcx].r;
-			dstx++;
-			*dstx = pald[*srcx].a;
-			dstx++;
-			srcx++;
+			U8* srcx = src0;
+			U8* dstx = dst0;
+
+			for (int x = rect->x; x < rect->x + rect->width; x++)
+			{
+				*dstx = pald[*srcx].b;
+				dstx++;
+				*dstx = pald[*srcx].g;
+				dstx++;
+				*dstx = pald[*srcx].r;
+				dstx++;
+				*dstx = pald[*srcx].a;
+				dstx++;
+				srcx++;
+			}
+
+			src0 += fb_width;
+			dst0 += fb_width * 4;
 		}
+		rect = rect->next;
+		n++;
 	}
 
-	//SDL_LockTexture(texture, NULL, &pixels, &pitch);
-	SDL_UpdateTexture(texture, NULL, pixels, fb_width * sizeof(U32));
-	//SDL_UnlockTexture(texture);
-	SDL_RenderClear(renderer);
+	SDL_UnlockTexture(texture);
+
+	// rects?
 	SDL_RenderCopy(renderer, texture, NULL, NULL);
 	SDL_RenderPresent(renderer);
-
-	/* for each rectangle that needs to be updated */
-//	while (rect)
-//	{
-//		/* source pointer */
-//		src0 = fb_at(rect->x, rect->y);
-//
-//		/* destination pointer */
-//		dst0 = (U8 *)screen->pixels;
-//#ifdef BPP8
-//		dst0 += rect->x * zoom + rect->y * zoom * screen->pitch;
-//#endif
-//#ifdef BPP32
-//		dst0 += 4 * rect->x * zoom + rect->y * zoom * screen->pitch;
-//#endif
-//
-//		/* zoom and blit rectangle */
-//		for (y = rect->y; y < rect->y + rect->height; y++)
-//		{
-//			for (yy = 0; yy < zoom; yy++)
-//			{
-//				src = src0;
-//				dst = dst0;
-//				for (x = rect->x; x < rect->x + rect->width; x++)
-//				{
-//					for (xx = 0; xx < zoom; xx++)
-//					{
-//#ifdef BPP8
-//						*dst = *src;
-//						dst++;
-//#endif
-//#ifdef BPP32
-//						*dst = pald[*src].b;
-//						dst += 1;
-//						*dst = pald[*src].g;
-//						dst += 1;
-//						*dst = pald[*src].r;
-//						dst += 2;
-//#endif
-//					}
-//					src++;
-//				}
-//				dst0 += screen->pitch;
-//			}
-//			src0 += fb_width;
-//		}
-//
-//IFDEBUG_VIDEO2(
-//
-//		// FIXME what about BPP8
-//
-//		/* draw a border around the rectangle */
-//		for (y = rect->y; y < rect->y + rect->height; y++)
-//		for (yy = 0; yy < zoom; yy++)
-//		{
-//			dst = (U8*)screen->pixels 
-//				+ rect->x * zoom * 4 
-//				+ (y * zoom + yy) * (fb_width * zoom * 4);
-//			*(dst++) = 0; // blue
-//			*(dst++) = 0; // green
-//			*dst = 0xff; // red
-//			dst -= 2;
-//			dst += (rect->width * zoom -1) * 4;
-//			*(dst++) = 0; // blue
-//			*(dst++) = 0; // green
-//			*dst = 0xff; // red
-//		}
-//
-//		for (x = rect->x; x < rect->x + rect->width; x++)
-//		for (xx = 0; xx < zoom; xx++)
-//		{
-//			dst = (U8*)screen->pixels 
-//				+ (x * zoom + xx) * 4
-//				+ (rect->y * zoom) * (fb_width * zoom * 4);
-//			*(dst++) = 0; // blue
-//			*(dst++) = 0; // green
-//			*dst = 0xff; // red
-//			dst -= 2;
-//			dst += ((rect->height * zoom - 1) * zoom) * fb_width * 4;
-//			*(dst++) = 0; // blue
-//			*(dst++) = 0; // green
-//			*dst = 0xff; // red
-//		}
-//
-//); /* IFDEBUG */
-//				
-//	    /* next */
-//		rect = rect->next;
-//		n++;
-//	}
-
-	/* poor attempt at filtering... */
-	/* looks nice but so slooooow */
-	/*
-	if (zoom > 1)
-	{
-		rect = rects;
-
-		while (rect)
-		{
-			w1 = w1z = (U8 *)screen->pixels + (rect->y+1)*screen->pitch + (rect->x+1)*4;
-			w2 = w2z = w1 + screen->pitch;
-			w3 = w3z = w2 + screen->pitch;
-			for (y = rect->y+1; y < rect->height*zoom-1; y++)
-			{
-				for (x = rect->x+1; x < rect->width*zoom-1; x++)
-				{
-					b = *(w1-4)+*w1+*(w1+4) + *(w2-4)+*(w2+4) + *(w3-4)+*w3+*(w3+4);
-					w1++; w2++; w3++;
-					g = *(w1-4)+*w1+*(w1+4) + *(w2-4)+*(w2+4) + *(w3-4)+*w3+*(w3+4);
-					w1++; w2++; w3++;
-					r = *(w1-4)+*w1+*(w1+4) + *(w2-4)+*(w2+4) + *(w3-4)+*w3+*(w3+4);
-					w1-=2; w2-=2; w3-=2;
-					b = b + 8* *w2;
-					g = g + 8* *(w2+1);
-					r = r + 8* *(w2+2);
-					b /= 16;
-					g /= 16;
-					r /= 16;
-					*w2 = b;
-					*(w2+1) = g;
-					*(w2+2) = r;
-
-					w1 += 4;
-					w2 += 4;
-					w3 += 4;
-				}
-				w1 = w1z = w2z;
-				w2 = w2z = w3z;
-				w3 = w3z = w2z + screen->pitch;
-			}
-			rect = rect->next;
-		}
-	}
-	*/
-
-	/* prepare sdl rectangles for UpdateRects */
-	//sdlrects = (SDL_Rect *)malloc(n * sizeof(SDL_Rect));
-	//n = 0;
-	//rect = rects;
-
-	/* for each rectangle that needs to be updated */
-	//while (rect)
-	//{
-	//	/* init sdl rectangle */
-	//	sdlrects[n].x = rect->x * zoom;
-	//	sdlrects[n].y = rect->y * zoom;
-	//	sdlrects[n].h = rect->height * zoom;
-	//	sdlrects[n].w = rect->width * zoom;
-
-	//	/* next */
-	//	rect = rect->next;
-	//	n++;
-	//}
-
-	//if (SDL_MUSTLOCK(screen))
-	//	SDL_UnlockSurface(screen);
-	//SDL_UpdateRects(screen, n, sdlrects);
-
-	//free(sdlrects);
 }
 
 
