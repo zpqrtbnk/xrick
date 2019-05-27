@@ -1,6 +1,7 @@
 # xrick emscripten build script
+# runs in build.tmp
 
-# configure paths
+# configure pathsg
 PATH_PYTHON=/c/python27-x64
 PATH_EMSDK="/d/d/EmSdk"
 PATH_XRICK="/d/d/Rick Dangerous/wip/xrick-vs19"
@@ -38,5 +39,8 @@ emcc *.bc -o xrick.js \
   -O2 \
   --preload-file "$DATA@/data"
 echo
+
+echo Copy files...
+cp "$PATH_XRICK/build/emsdk/player.js" player.js
 
 echo Done.
