@@ -43,4 +43,18 @@ echo
 echo Copy files...
 cp "$PATH_XRICK/build/emsdk/player.js" player.js
 
+echo Compress...
+rm -rf  gz
+mkdir gz
+gzip -c -9 xrick.data > gz/xrick.data
+gzip -c -9 xrick.wasm > gz/xrick.wasm
+gzip -c -9 xrick.js > gz/xrick.js
+gzip -c -9 player.js > gz/player.js
+
+echo Remember to:
+echo Upload the files
+echo Set the WASM Content-Type HTTP header to application/wasm
+echo Set the DATA Content-Type HTTP header to application/octet-stream
+echo Set the compressed Content-Encoding to gzip
+
 echo Done.
