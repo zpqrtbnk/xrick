@@ -188,7 +188,20 @@ game_run(char *path)
 
 	/* main loop */
 #ifdef EMSCRIPTEN
-	emscripten_set_main_loop(game_loop, 0, 1);
+	// callback, fps, simulate_infinite_loop
+	//
+	// "If called on the main browser thread, setting 0 or a negative value as the fps will
+	// use the browser’s requestAnimationFrame mechanism to call the main loop function."
+	// "This is HIGHLY recommended if you are doing rendering, as the browser’s
+	// requestAnimationFrame will make sure you render at a proper smooth rate that lines
+	// up properly with the browser and monitor."
+	//
+	// if fps == -1 then it uses the browser requestAnimatedFrame() period - what if I want
+	// to be slower? is it better to pass a fps here, or to just do nothing (NOT wait!) in
+	// game_loop?
+	// 
+	int fps = (24 * GAME_PERIOD) / game_period;
+	emscripten_set_main_loop(game_loop, fps, 1);
 #else
 	while (game_state != EXIT)
 	{
@@ -208,8 +221,15 @@ static void game_exit(void)
 static void game_loop(void)
 {
 	/* timer */
+#ifdef EMSCRIPTEN
+	// nothing - emscripten should invoke the loop every game_period
+	// and we should not sys_sleep in emscripten apps
+	// (see game_run above)
+#else
+	// sys_gettime() and sys_sleep() use milliseconds
 	tmx = tm; tm = sys_gettime(); tmx = tm - tmx;
 	if (tmx < game_period) sys_sleep(game_period - tmx);
+#endif
 
 	/* video */
 	/*DEBUG*//*game_rects=&draw_SCREENRECT;*//*DEBUG*/

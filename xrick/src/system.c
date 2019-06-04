@@ -71,7 +71,7 @@ sys_printf(char *msg, ...)
 }
 
 /*
- * Return number of microseconds elapsed since first call
+ * Return number of milliseconds elapsed since first call
  */
 U32
 sys_gettime(void)
@@ -88,7 +88,7 @@ sys_gettime(void)
 }
 
 /*
- * Sleep a number of microseconds
+ * Sleep a number of milliseconds
  */
 void
 sys_sleep(int s)
