@@ -114,9 +114,28 @@ main(int argc, char *argv[])
 
 	char* path;
 	if (sysarg_args_data)
+	{
 		path = sysarg_args_data;
+	}
 	else
+	{
+		#ifdef __WIN32__
+		/* Make sure data.zip can be found if launched with a different working directory */
+		#ifdef UNICODE
+		WCHAR buf[MAX_PATH];
+		#else
+		char buf[MAX_PATH];
+		#endif
+		DWORD len = GetModuleFileName(NULL, buf, MAX_PATH);
+		while (len)
+			if (buf[--len] == '\\')
+				break;
+		buf[len] = '\0';
+		if (len)
+			SetCurrentDirectory(buf);
+		#endif
 		path = "data.zip";
+	}
 
 	game_run(path);
 
