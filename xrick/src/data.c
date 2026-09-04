@@ -14,6 +14,12 @@
 #include <stdlib.h>  /* malloc */
 #include <string.h>
 
+/* review-plan.md R0.1: _strdup is the MSVC spelling; POSIX is strdup. Build-portability
+   shim only -- no behaviour change. */
+#ifndef _MSC_VER
+#define _strdup strdup
+#endif
+
 #include "system.h"
 #include "data.h"
 

@@ -46,9 +46,12 @@ static SDL_mutex *sndlock;
  * prototypes
  */
 static int sdlRWops_open(SDL_RWops *context, char *name);
-static int sdlRWops_seek(SDL_RWops *context, int offset, int whence);
-static int sdlRWops_read(SDL_RWops *context, void *ptr, int size, int maxnum);
-static int sdlRWops_write(SDL_RWops *context, const void *ptr, int size, int num);
+/* review-plan.md R0.1: SDL_RWops callback signatures widened after SDL 2.0.9 (the
+   version this tree targeted) -- seek returns Sint64, read/write return size_t. Build
+   portability only; the bodies are unchanged and still delegate to data_file_*. */
+static Sint64 sdlRWops_seek(SDL_RWops *context, Sint64 offset, int whence);
+static size_t sdlRWops_read(SDL_RWops *context, void *ptr, size_t size, size_t maxnum);
+static size_t sdlRWops_write(SDL_RWops *context, const void *ptr, size_t size, size_t num);
 static int sdlRWops_close(SDL_RWops *context);
 static void end_channel(U8);
 
@@ -420,20 +423,20 @@ sdlRWops_open(SDL_RWops *context, char *name)
 	return 0;
 }
 
-static int
-sdlRWops_seek(SDL_RWops *context, int offset, int whence)
+static Sint64
+sdlRWops_seek(SDL_RWops *context, Sint64 offset, int whence)
 {
 	return data_file_seek((data_file_t *)(context->hidden.unknown.data1), offset, whence);
 }
 
-static int
-sdlRWops_read(SDL_RWops *context, void *ptr, int size, int maxnum)
+static size_t
+sdlRWops_read(SDL_RWops *context, void *ptr, size_t size, size_t maxnum)
 {
 	return data_file_read((data_file_t *)(context->hidden.unknown.data1), ptr, size, maxnum);
 }
 
-static int
-sdlRWops_write(SDL_RWops *context, const void *ptr, int size, int num)
+static size_t
+sdlRWops_write(SDL_RWops *context, const void *ptr, size_t size, size_t num)
 {
 	/* not implemented */
 	return -1;

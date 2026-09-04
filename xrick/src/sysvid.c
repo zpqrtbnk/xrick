@@ -56,7 +56,9 @@ static SDL_Window *screen;
 static SDL_Renderer *renderer;
 static SDL_Texture* texture;
 static U32 videoFlags;
-static U8 gamma;
+/* review-plan.md R0.1: renamed from 'gamma', which collides with libm's gamma().
+   File-static, build portability only. */
+static U8 vid_gamma;
 static U16 fb_width, fb_height;
 
 static U8 zoom = 0; /* actual zoom level */
@@ -136,9 +138,9 @@ void sysvid_setDisplayPalette(void)
 
 	for (i = 0; i < paln; i++)
 	{
-		pald[i].r = pals[i].r * gamma / 255;
-		pald[i].g = pals[i].g * gamma / 255;
-		pald[i].b = pals[i].b * gamma / 255;
+		pald[i].r = pals[i].r * vid_gamma / 255;
+		pald[i].g = pals[i].g * vid_gamma / 255;
+		pald[i].b = pals[i].b * vid_gamma / 255;
 	}
 }
 
@@ -323,7 +325,7 @@ sysvid_update(rect_t *rects)
 	int pitch;
 	U32* pixelx;
 
-	SDL_LockTexture(texture, NULL, &pixelx, &pitch);
+	SDL_LockTexture(texture, NULL, (void **)&pixelx, &pitch);
 
 	n = 0;
 	rect = rects;
@@ -331,7 +333,7 @@ sysvid_update(rect_t *rects)
 	{
 		U16 o = rect->x + rect->y * fb_width;
 		U8* src0 = ((U8*)& fb) + o;
-		U8* dst0 = pixelx + o;
+		U8* dst0 = (U8 *)(pixelx + o);
 		for (int y = rect->y; y < rect->y + rect->height; y++)
 		{
 			U8* srcx = src0;
@@ -436,7 +438,7 @@ sysvid_toggleFullscreen(void)
 void sysvid_setGamma(U8 g)
 {
 	// FIXME changing the GAMMA without changing the PALETTE just CANNOT WORK if GAMMA is not HARDWARE?
-	gamma = g;
+	vid_gamma = g;
 	sysvid_setDisplayPalette();
 
 #ifdef BPP8

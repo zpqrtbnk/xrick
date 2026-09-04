@@ -27,7 +27,9 @@
 /*
  * Sets a console, if possible
  */
-static setConsole()
+/* review-plan.md R0.1: implicit int return is a hard error in modern C. Windows-only
+   body; build portability only. */
+static void setConsole(void)
 {
 	// NOTE: does not handle parent process console being redirected
 	// eg "./xrick > stdout.txt" still writes to the actual console

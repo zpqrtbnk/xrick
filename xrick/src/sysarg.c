@@ -29,7 +29,10 @@
 
 /* handle Microsoft Visual C (must come after system.h!) */
 #ifdef __MSVC__
+/* review-plan.md R0.1: _stricmp is MSVC-only; POSIX already has strcasecmp. */
+#ifdef _MSC_VER
 #define strcasecmp _stricmp
+#endif
 #endif
 
 typedef struct {
