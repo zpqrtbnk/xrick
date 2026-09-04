@@ -13,11 +13,34 @@
 
 #include "ents.h"
 
+/*
+ * review-log.md D3 -- ent_entdata vs the ST object_type_defs[75] at 0x47D34.
+ *
+ * trig_w, trig_h and snd agree on all 74 entries. w/h differ on exactly three rows --
+ * 3, 22 and 23 -- where the ST entry is blank and the port has 0x18/0x15.
+ *
+ * Switching these to the ST values is provably INERT, which is why it is done here
+ * rather than deferred to the code pass:
+ *   [3]      the bomb. Type 3 is never placed (0 of 523 placement records) and
+ *            e_bomb_init sets the entity directly, so this row is never read.
+ *   [22][23] invisible trigger zones (re/entities.md: "Invisible trigger points
+ *            (gfx=0)"). The port reaches the same behaviour in code: e_sbonus_start
+ *            and e_sbonus_stop both set ent.sprite = 0, and test contact with
+ *            u_trigbox(), which reads only trig_x/trig_y/trig_w/trig_h -- never w/h.
+ *            trig_w/trig_h agree 74/74 between the two builds.
+ *
+ * The ST rows also carry a null anim_frame_table, which is what makes those entities
+ * invisible on that side; the port encodes the same intent at runtime instead.
+ */
 entdata_t ent_entdata[ENT_NBR_ENTDATA] = {
   {0000, 0000, 000000, 000000, 0000, 0000, 0x00},
   {0x18, 0x15, 000000, 000000, 0000, 0000, 0x00},
   {0000, 0000, 000000, 000000, 0000, 0000, 0x00},
+#ifdef PLATFORM_ST
+  {0000, 0000, 000000, 000000, 0000, 0000, 0x00},  /* [3] bomb: ST row is blank */
+#else
   {0x18, 0x15, 000000, 000000, 0000, 0000, 0x00},
+#endif
   {0x18, 0x15, 0x002f, 0x008e, 0000, 0000, 0x00},
   {0x18, 0x15, 0x002f, 0x008e, 0000, 0000, 0x00},
   {0x18, 0x15, 0x002f, 0x008e, 0000, 0000, 0x00},
@@ -36,8 +59,16 @@ entdata_t ent_entdata[ENT_NBR_ENTDATA] = {
   {0x18, 0x15, 0x002c, 0x002c, 0000, 0000, 0x00},
   {0x18, 0x15, 0x002e, 0x002e, 0000, 0000, 0x00},
   {0x18, 0x15, 0x002d, 0x002d, 0000, 0000, 0x00},
+#ifdef PLATFORM_ST
+  {0000, 0000, 0x001e, 0x001e, 0x04, 0x04, 0x00},  /* [22] invisible trigger zone */
+#else
   {0x18, 0x15, 0x001e, 0x001e, 0x04, 0x04, 0x00},
+#endif
+#ifdef PLATFORM_ST
+  {0000, 0000, 0x001f, 0x001f, 0x04, 0x04, 0x00},  /* [23] invisible trigger zone */
+#else
   {0x18, 0x15, 0x001f, 0x001f, 0x04, 0x04, 0x00},
+#endif
   {0x18, 0x10, 0x000c, 000000, 0x03, 0x03, 0x14},
   {0x18, 0x06, 0x000e, 0x0005, 0x04, 0x04, 0x14},
   {0x18, 0x06, 0x000e, 0x0007, 0x10, 0x04, 0x14},

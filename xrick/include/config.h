@@ -21,6 +21,31 @@
 #define GFXST
 #undef GFXPC
 
+/*
+ * Target platform (choose exactly one) -- see ../../review-plan.md
+ *
+ * This selects GAME BEHAVIOUR and GAME DATA, and is INDEPENDENT of GFXST/GFXPC above,
+ * which select artwork only. The stock xrick build was ST artwork driving PC logic;
+ * PLATFORM_ST makes it an Atari ST clone throughout.
+ *
+ * Where the two versions genuinely differ, both values are kept and switched here --
+ * neither is deleted. Every switched site cites its xrick/re/xref.md row or its
+ * review-log.md id.
+ */
+/* The default is ST. Either may be forced from the build with -DPLATFORM_ST or
+   -DPLATFORM_PC, so both configurations can be built and compared (review-plan.md
+   R4.2) without editing this file: `make PLATFORM=PC`. */
+#if !defined(PLATFORM_ST) && !defined(PLATFORM_PC)
+#define PLATFORM_ST
+#endif
+
+#if defined(PLATFORM_ST) && defined(PLATFORM_PC)
+#error "define exactly one of PLATFORM_ST / PLATFORM_PC, not both"
+#endif
+#if !defined(PLATFORM_ST) && !defined(PLATFORM_PC)
+#error "define exactly one of PLATFORM_ST / PLATFORM_PC"
+#endif
+
 /* logging (write to console) */
 #define ENABLE_LOG
 #ifdef EMSCRIPTEN

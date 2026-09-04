@@ -14,12 +14,34 @@
 #include "maps.h"
 #include "tiles.h"
 
+/*
+ * Per-map start state. review-log.md D5a/D5b.
+ *
+ * Compared against the ST LevelStartInfo[5] at 0x4B522 (20 bytes/entry: +4 wStartX,
+ * +6 wStartY, +8 wStartWorldRow, +0xA pRoomHeader). The submap/room index matches on
+ * all four real maps (0, 9, 20, 38), so the rows correspond exactly.
+ *
+ *   maps 0, 1  identical on every field.
+ *   maps 2, 3  Rick's START X differs: PC 0x10, ST 0x08. Everything else matches.
+ *
+ * Map 4 is NOT a fifth level on either side, and the two builds use the slot
+ * differently: on the ST its position fields are dead (a duplicate of map 0's) and the
+ * entry exists to carry the game-ending text pointer, with level_index == 4 meaning
+ * "game complete". The port treats it as a real map with its own start and tune.
+ * Left as the port has it under BOTH platforms -- changing it would alter the ending
+ * sequence, and the question is still open (review-log.md D5b).
+ */
 map_t map_maps[MAP_NBR_MAPS] = {
   {0x0008, 0x008b, 0x0008, 000000, "sounds/tune0.wav"},
   {0x0008, 0x008b, 0x0068, 0x0009, "sounds/tune1.wav"},
+#ifdef PLATFORM_ST
+  {0x0008, 0x008b, 0x0010, 0x0014, "sounds/tune2.wav"},   /* start X 0x08, not 0x10 */
+  {0x0008, 0x008b, 0x0010, 0x0026, "sounds/tune3.wav"},   /* start X 0x08, not 0x10 */
+#else /* PLATFORM_PC */
   {0x0010, 0x008b, 0x0010, 0x0014, "sounds/tune2.wav"},
   {0x0010, 0x008b, 0x0010, 0x0026, "sounds/tune3.wav"},
-  {0x0074, 0x00c8, 0x0008, 0x0026, "sounds/tune4.wav"},
+#endif
+  {0x0074, 0x00c8, 0x0008, 0x0026, "sounds/tune4.wav"},   /* see note above: unresolved */
 };
 
 submap_t map_submaps[MAP_NBR_SUBMAPS] = {
@@ -2350,12 +2372,41 @@ mark_t map_marks[MAP_NBR_MARKS] = {
   {0xff, 0000, 0000, 0000, 0000},
 };
 
+/*
+ * Tile environment flags, run-length encoded as {count, value} pairs -- eight runs per
+ * bank, expanded into map_eflg[0x100] by map_eflg_expand().
+ *
+ * review-log.md D6a/D6b/D6c. The two versions have IDENTICAL run lengths
+ * (77, 14, 4, 87, 8, 3, 59, 4 and 55, 4, 4, 144, 9, 1, 33, 6); only three bits differ:
+ *
+ *   0x01  set on background tiles by the ST, clear on the PC. Inert on BOTH sides --
+ *         no consumer tests it (ST: union of effective bits is 0xF6).
+ *   0x08  MAP_EFLG_FGND. A PC-ONLY feature: the PC/port hides entities behind
+ *         foreground tiles (sprites.c:147, :240); on the ST the bit is computed and
+ *         then read by nothing.
+ *   0x02  MAP_EFLG_CLIMB. LIVE DIFFERENCE: the ST marks tiles 250-253 as 0x82
+ *         (VERT|CLIMB), the PC as 0x80 (VERT only). Those tiles are referenced 40
+ *         times by map_blocks, and 0x02 is consumed (btst #1 at 0x4C300 / 0x4C7A4),
+ *         so this changes behaviour.
+ *
+ * The ST values below are extracted from atari_ram.bin: the tile-attribute LUTs at
+ * 0x49F1E (bank 0) and 0x4A01E (bank 1), 256 bytes each, re-encoded to this format.
+ */
+#ifdef PLATFORM_ST
+U8 map_eflg_c[MAP_NBR_EFLGC] = {
+  0x4d, 0x01, 0x0e, 0x02, 0x04, 0x04, 0x57, 0x08,
+  0x08, 0x10, 0x03, 0x60, 0x3b, 0x40, 0x04, 0x82,
+  0x37, 0x01, 0x04, 0x02, 0x04, 0x04, 0x90, 0x08,
+  0x09, 0x10, 0x01, 0x60, 0x21, 0x40, 0x06, 0x82,
+};
+#else /* PLATFORM_PC */
 U8 map_eflg_c[MAP_NBR_EFLGC] = {
   0x4d, 0000, 0x0e, 0x02, 0x04, 0x04, 0x57, 0x08,
   0x08, 0x18, 0x03, 0x68, 0x3b, 0x48, 0x04, 0x80,
   0x37, 0000, 0x04, 0x02, 0x04, 0x04, 0x90, 0x08,
   0x09, 0x18, 0x01, 0x68, 0x21, 0x48, 0x06, 0x80,
 };
+#endif
 
 maps_intros_t maps_intros[] =
 {
