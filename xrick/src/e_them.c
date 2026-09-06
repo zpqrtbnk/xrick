@@ -74,7 +74,13 @@ e_them_gozombie(U8 e)
 #define offsx c1
   ent_ents[e].n = 0x47;  /* zombie entity */
   ent_ents[e].front = TRUE;
+  /* review-log.md R3.12 / xref.md: death launch. PC -0x400; ST kill_enemy @0x4D886
+     does move.w #-0x300,(0x8,A0). */
+#ifdef PLATFORM_ST
+  ent_ents[e].offsy = -0x0300;
+#else
   ent_ents[e].offsy = -0x0400;
+#endif
 #ifdef ENABLE_SOUND
   syssnd_play(WAV_DIE, 1);
 #endif
@@ -114,7 +120,7 @@ e_them_t1_action2(U8 e, U8 type)
   /* deactivate if outside vertical boundaries */
   /* no need to test zero since e_them _t1a/b don't go up */
   /* FIXME what if they got scrolled out ? */
-  if (y > 0x140) {
+  if (y > ENT_YMAX) {
     ent_ents[e].n = 0;
     return;
   }
@@ -237,6 +243,17 @@ e_them_t1_action(U8 e, U8 type)
 
   /* bomb kills them */
   if (e_bomb_lethal && e_bomb_hit(e)) {
+#ifdef PLATFORM_ST
+    /* review-log.md R2.3b: the ST awards 50 HERE, on the explosion path, IN ADDITION to
+       the 50 that kill_enemy awards itself -- so a dynamite kill scores 100, other kills
+       50. ST: enemy_ai_update 0x4D542 tests explosion_overlaps_entity, adds 0x50 at
+       0x4D54E, then calls kill_enemy (0x4D87C) which adds a second 0x50 at 0x4D892.
+       The PC has exactly ONE score add on this path -- all four CALL 0x0292 sites in
+       ibmpc_cs.bin are accounted for (level bonus 0x0DEE, super bonus 0x22BB, enemy kill
+       0x24D6 inside gozombie, pickup 0x2585) and none is a second add here. Genuine
+       PC-vs-ST difference; the port was faithful to the PC. */
+    env_score += 50;
+#endif
     e_them_gozombie(e);
     return;
   }
@@ -244,7 +261,7 @@ e_them_t1_action(U8 e, U8 type)
   /* rick stops them */
   if (E_RICK_STTST(E_RICK_STSTOP) &&
       u_fboxtest(e, e_rick_stop_x, e_rick_stop_y))
-    ent_ents[e].latency = 0x14;
+    ent_ents[e].latency = ENT_STUN;
 
   /* they kill rick */
   if (e_rick_boxtest(e))
@@ -295,18 +312,44 @@ e_them_z_action(U8 e)
   i = (ent_ents[e].y << 8) + ent_ents[e].offsy + ent_ents[e].ylow;
 
   /* deactivate if out of vertical boundaries */
-  if (ent_ents[e].y < 0 || ent_ents[e].y > 0x0140) {
+  if (ent_ents[e].y < 0 || ent_ents[e].y > ENT_YMAX) {
     ent_ents[e].n = 0;
     return;
   }
 
   /* save */
+  /* review-log.md R3.12: DYING gravity. The ST uses a different constant for a dying
+     entity than for a living one -- addi.w #0xC4,(0x8,A0) @ 0x4D532, with NO terminal
+     clamp; the living paths use +0x80 clamped at 0x800 (@0x4D684/0x4D68A) and those
+     agree with the port already. */
+#ifdef PLATFORM_ST
+  ent_ents[e].offsy += 0x00C4;
+#else
   ent_ents[e].offsy += 0x0080;
+#endif
   ent_ents[e].ylow = i;
   ent_ents[e].y = i >> 8;
 
   /* calc new x */
+  /*
+   * xref.md 'Enemy corpse drift'. The two builds drift a dying entity differently:
+   *   PC/port : x += offsx (+/-2 on X only), then clamp to [0, 0xE8]
+   *   ST      : tst.w (0x2,A0) @0x4D4FC -- if nDirection != 0 then addi.w #1,(0x6,A0)
+   *             (y += 1), ELSE subi.w #1,(0x4,A0) (x -= 1). One pixel, on ONE axis,
+   *             chosen by facing; the clamps do not exist on that path.
+   */
+#ifdef PLATFORM_ST
+  /* The ST tests nDirection (0x02), set to 0xFF when moving left (move.w #0xff,(0x2,A0)
+     @0x4D604) and cleared when moving right (clr.w @0x4D618). The port has no separate
+     direction field for enemies -- it carries the sign of offsx (c1) instead, so
+     offsx < 0 is the same condition. */
+  if (ent_ents[e].offsx < 0)
+    ent_ents[e].y += 1;
+  else
+    ent_ents[e].x -= 1;
+#else
   ent_ents[e].x += ent_ents[e].offsx;
+#endif
 
   /* must stay within horizontal boundaries */
   if (ent_ents[e].x < 0)
@@ -330,7 +373,10 @@ e_them_t2_action2(U8 e)
 #define flgclmb c1
 #define offsx c2
   U32 i;
-  U16 x, y;
+  /* review-log.md R3.1: signed, same reason as e_rick_action2 -- `y = ent.y + yd`
+     with yd = -2 goes negative at the top edge, and `if (y < 0 ...)` at :403 is dead
+     while y is U16. The guard returns before y is used, so S16 is safe. */
+  S16 x, y;
   S16 yd;
   U8 env0, env1;
 
@@ -389,7 +435,7 @@ e_them_t2_action2(U8 e)
     /* calc new y and test environment */
     yd = ent_ents[e].y < E_RICK_ENT.y ? 0x02 : -0x02;
     y = ent_ents[e].y + yd;
-    if (y < 0 || y > 0x0140) {
+    if (y < 0 || y > ENT_YMAX) {
       ent_ents[e].n = 0;
       return;
     }
@@ -423,7 +469,7 @@ e_them_t2_action2(U8 e)
 	e_them_gozombie(e);
 	return;
       }
-      if (y > 0x0140) {  /* deactivate if outside */
+      if (y > ENT_YMAX) {  /* deactivate if outside */
 	ent_ents[e].n = 0;
 	return;
       }
@@ -540,6 +586,17 @@ e_them_t2_action(U8 e)
 
   /* bomb kills them */
   if (e_bomb_lethal && e_bomb_hit(e)) {
+#ifdef PLATFORM_ST
+    /* review-log.md R2.3b: the ST awards 50 HERE, on the explosion path, IN ADDITION to
+       the 50 that kill_enemy awards itself -- so a dynamite kill scores 100, other kills
+       50. ST: enemy_ai_update 0x4D542 tests explosion_overlaps_entity, adds 0x50 at
+       0x4D54E, then calls kill_enemy (0x4D87C) which adds a second 0x50 at 0x4D892.
+       The PC has exactly ONE score add on this path -- all four CALL 0x0292 sites in
+       ibmpc_cs.bin are accounted for (level bonus 0x0DEE, super bonus 0x22BB, enemy kill
+       0x24D6 inside gozombie, pickup 0x2585) and none is a second add here. Genuine
+       PC-vs-ST difference; the port was faithful to the PC. */
+    env_score += 50;
+#endif
     e_them_gozombie(e);
     return;
   }
@@ -547,7 +604,7 @@ e_them_t2_action(U8 e)
   /* rick stops them */
   if (E_RICK_STTST(E_RICK_STSTOP) &&
       u_fboxtest(e, e_rick_stop_x, e_rick_stop_y))
-    ent_ents[e].latency = 0x14;
+    ent_ents[e].latency = ENT_STUN;
 }
 
 
@@ -608,7 +665,7 @@ e_them_t3_action2(U8 e)
 	  y += ent_ents[e].y;
 	  */
 	  y = ent_ents[e].y + ent_mvstep[ent_ents[e].step_no].dy;
-	  if (y > 0 && y < 0x0140) {
+	  if (y > 0 && y < ENT_YMAX) {
 	    ent_ents[e].y = y;
 	    return;
 	  }
@@ -635,7 +692,7 @@ e_them_t3_action2(U8 e)
 	    ent_ents[e].n |= ENT_LETHAL;
 	  ent_ents[e].x = ent_ents[e].xsave;
 	  ent_ents[e].y = ent_ents[e].ysave;
-	  if (ent_ents[e].y < 0 || ent_ents[e].y > 0x140) {
+	  if (ent_ents[e].y < 0 || ent_ents[e].y > ENT_YMAX) {
 	    ent_ents[e].n = 0;
 	    return;
 	  }
@@ -693,7 +750,11 @@ e_them_t3_action2(U8 e)
 		* FIXME is it 8 of them, not 10?
 		* FIXME testing below...
 		*/
-		syssnd_play(WAV_ENTITY[(ent_ents[e].trigsnd & 0x1F) - 0x14], 1);
+		/* review-log.md R3.12: base was 0x14, but the port's OWN ent_entdata contains
+		   snd = 0x13, which gives index -1 -- an out-of-bounds read. The ten distinct
+		   values 0x13..0x1C map exactly onto WAV_ENTITY[0..9] with base 0x13. Defect,
+		   corrected on both platforms. */
+		syssnd_play(WAV_ENTITY[(ent_ents[e].trigsnd & 0x1F) - 0x13], 1);
 		/*syssnd_play(WAV_ENTITY[0], 1);*/
 #endif
       ent_ents[e].n &= ~ENT_LETHAL;

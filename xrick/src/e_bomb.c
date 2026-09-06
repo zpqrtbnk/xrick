@@ -47,6 +47,30 @@ U8 e_bomb_ticker;
  */
 U8 e_bomb_hit(U8 e)
 {
+	/*
+	 * review-log.md R3.8. ST explosion_overlaps_entity @ 0x4CC92 works from the blast
+	 * CENTRE (explosion_x/y at 0x4BF2A/0x4BF2C = bomb.x+0x0C, bomb.y+0x0A):
+	 *   D0 = ex-0x10-w ; cmp.w (0x4,A0),D0w ; bge  -> FALSE if ex-0x10   >= e.x+w
+	 *   D0 += 0x1F + w (= ex+0x0F) ;         blt  -> FALSE if ex+0x0F   <  e.x
+	 *   D1 = ey-0x0E-h ;                     bge  -> FALSE if ey-0x0E   >= e.y+h
+	 *   D1 += 0x1C + h (= ey+0x0E) ;         blt  -> FALSE if ey+0x0E   <  e.y
+	 * In bomb-entity coordinates that is x in [bx-4, bx+0x1B], y in [by-4, by+0x18];
+	 * the PC's box is x in [bx-4, bx+0x20], y in [by-4, by+0x1D] -- five wider on both
+	 * upper edges. The ST also has NO 0xFF clamp and no clamp-at-zero: it works in
+	 * signed words throughout, where the PC's byte arithmetic needs both.
+	 * The lower edges also differ in sense: ST `>=` (excludes equality), PC `<`.
+	 */
+#ifdef PLATFORM_ST
+	if (ent_ents[e].x > E_BOMB_ENT.x + 0x1B)
+			return FALSE;
+	if (ent_ents[e].x + ent_ents[e].w <= E_BOMB_ENT.x - 0x04)
+			return FALSE;
+	if (ent_ents[e].y > E_BOMB_ENT.y + 0x18)
+			return FALSE;
+	if (ent_ents[e].y + ent_ents[e].h <= E_BOMB_ENT.y - 0x04)
+			return FALSE;
+	return TRUE;
+#else /* PLATFORM_PC */
 	if (ent_ents[e].x > (E_BOMB_ENT.x >= 0xE0 ? 0xFF : E_BOMB_ENT.x + 0x20))
 			return FALSE;
 	if (ent_ents[e].x + ent_ents[e].w < (E_BOMB_ENT.x > 0x04 ? E_BOMB_ENT.x - 0x04 : 0))
@@ -56,6 +80,7 @@ U8 e_bomb_hit(U8 e)
 	if (ent_ents[e].y + ent_ents[e].h < (E_BOMB_ENT.y > 0x0004 ? E_BOMB_ENT.y - 0x0004 : 0))
 			return FALSE;
 	return TRUE;
+#endif
 }
 
 /*

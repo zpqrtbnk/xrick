@@ -561,7 +561,13 @@ static void game_cycle(void)
 					game_state = SCROLL_UP;
 				}
 				else
+				/* xref.md 'Scroll trigger, low threshold'. PC 0x60 (CMP AL,0x60 @0x018B);
+				   ST 0x5F -- main loop @0x4DD0E tests player.nPosY <= 0x5F. */
+#ifdef PLATFORM_ST
+				if (ent_ents[1].y <= 0x5f)
+#else
 				if (ent_ents[1].y <= 0x60)
+#endif
 				{
 					game_state = SCROLL_DOWN;
 				}

@@ -29,6 +29,60 @@ extern void ents_paintAll();
 #define ENT_ENTSNUM 0x0c
 
 /*
+ * Vertical bound for entity despawn / out-of-range tests. review-log.md R3.2.
+ *
+ * ST  0x142 -- render_sprites `cmp.w #0x142,D2w` @ 0x4B0C8, and the identical test in
+ *              scripted_trap_update @ 0x4D352.
+ * PC  0x140 -- `CMP AX,0x140` @ 0x10E3 and @ 0x2742; no 0x142 compare exists anywhere in
+ *              ibmpc_cs.bin.
+ *
+ * A genuine two-unit divergence. Note the ARCHITECTURE also differs: the ST despawns
+ * centrally in render_sprites for every entity, while the PC and the port test per entity
+ * inside each action handler. Only the constant is switched here.
+ */
+/*
+ * Submap re-entry X. xref.md 'Submap re-entry X'.
+ * PC  0xE2 (enter from the right) / 0x04 (enter from the left)
+ *     MOV word[SI+2],0x00E2 @0x19B9 ; MOV word[SI+2],0x0004 @0x19C9
+ * ST  0xE6 / 0x02  -- process_level_transition_point, algo-level.md reposition
+ */
+#ifdef PLATFORM_ST
+#define SUBMAP_REENTRY_RIGHT 0xE6
+#define SUBMAP_REENTRY_LEFT  0x02
+#else
+#define SUBMAP_REENTRY_RIGHT 0xE2
+#define SUBMAP_REENTRY_LEFT  0x04
+#endif
+
+/*
+ * Player trigger-box probe, X offset. xref.md 'Player trigger-box probe X'.
+ * PC  0x0C -- ADD AL,0x0C @ 0x1536 / 0x229B / 0x22CF / 0x27B1
+ * ST  0x0B -- nPosX + 0x0B @ 0x4D19A
+ */
+#ifdef PLATFORM_ST
+#define RICK_PROBE_DX 0x0B
+#else
+#define RICK_PROBE_DX 0x0C
+#endif
+
+/*
+ * Stick-jab stun, in frames. review-log.md R3.12 / xref.md.
+ * ST  0x19 (25) -- move.b #0x19,(0x4a,A0) @ 0x4D574
+ * PC  0x14 (20) -- MOV byte[SI+0x2E],0x14 @ 0x237E and 0x28D6
+ */
+#ifdef PLATFORM_ST
+#define ENT_STUN 0x19
+#else
+#define ENT_STUN 0x14
+#endif
+
+#ifdef PLATFORM_ST
+#define ENT_YMAX 0x0142
+#else
+#define ENT_YMAX 0x0140
+#endif
+
+/*
  * flags for ent_ents[e].n  ("yes" when set)
  *
  * ENT_LETHAL: is entity lethal?
@@ -59,8 +113,14 @@ extern void ents_paintAll();
 typedef struct {
   U8 n;          /* b00 */
   /*U8 b01;*/    /* b01 in ASM code but never used */
-  U16 x;         /* b02 - position */
-  U16 y;         /* w04 - position */
+  /* review-log.md R3.1: SIGNED. The ST holds position as a signed word -- render_sprites
+     despawns on `cmp.w #-0x8,D1w / bge` (a signed compare against -8), the main loop
+     transitions on `player.nPosX <= 0` (0x4DD2E), and the velocity is sign-extended
+     (`ext.l D7`). Declared U16 these fields make six `< 0` tests dead code. The `b02`/`w04`
+     comments are the port authors' own PC notes and are NOT evidence (see
+     xrick/re/provenance.md) -- the ST accesses both as words at every site. */
+  S16 x;         /* position */
+  S16 y;         /* position */
   U8 sprite;     /* b08 - sprite number */
   /*U16 w0C;*/   /* w0C in ASM code but never used */
   U8 w;          /* b0E - width */

@@ -36,13 +36,41 @@
 U8
 u_fboxtest(U8 e, U16 x, U16 y)
 {
+  /*
+   * review-log.md R3.6c. Verified against both originals instruction by instruction.
+   *
+   * PC u_fboxtest @ 0x1317          ST entity_contains_point @ 0x4CC4C
+   *   MOV AL,[SI+2]/CMP AL,BL/JNC     move.w (0x4,A0),D0w / cmp.w D1w,D0w / bgt
+   *     -> FALSE if ent.x >= x          -> FALSE if ent.x >  x     (ST includes x==ent.x)
+   *   ADD AL,[SI+0xE]/CMP AL,BL/JC    subi.w #1 / add.w (0x10,A0) / cmp.w D1w,D0w / blt
+   *     -> FALSE if ent.x+w   <  x      -> FALSE if ent.x+w-1 <  x  (ST upper is one less)
+   *   MOV AX,[SI+4]/CMP DX,AX/JC      move.w (0x6,A0),D0w / cmp.w D2w,D0w / bgt
+   *     -> FALSE if y < ent.y           -> FALSE if ent.y > y   -- BOTH INCLUSIVE
+   *   ADD AX,CX/CMP AX,DX/JC          subi.w #1 / add.w (0x12,A0) / blt
+   *     -> FALSE if ent.y+h   <  y      -> FALSE if ent.y+h-1 <  y
+   *
+   * NOTE the vertical lower bound: BOTH originals accept y == ent.y. The port wrote
+   * `ent.y >= y`, which rejects it -- a one-pixel PORT DEFECT, corrected below on both
+   * platforms. The horizontal lower bound and both upper bounds are genuine PC-vs-ST
+   * divergences and are switched.
+   */
+#ifdef PLATFORM_ST
+  if (ent_ents[e].x > x ||
+      ent_ents[e].x + ent_ents[e].w - 1 < x ||
+      ent_ents[e].y > y ||
+      ent_ents[e].y + ent_ents[e].h - 1 < y)
+    return FALSE;
+  else
+    return TRUE;
+#else /* PLATFORM_PC */
   if (ent_ents[e].x >= x ||
       ent_ents[e].x + ent_ents[e].w < x ||
-      ent_ents[e].y >= y ||
+      ent_ents[e].y > y ||
       ent_ents[e].y + ent_ents[e].h < y)
     return FALSE;
   else
     return TRUE;
+#endif
 }
 
 
@@ -196,6 +224,30 @@ u_trigbox(U8 e, U16 x, U16 y)
   xmax = ent_ents[e].trig_x + (ent_entdata[ent_ents[e].n & 0x7F].trig_w << 3);
   ymax = ent_ents[e].trig_y + (ent_entdata[ent_ents[e].n & 0x7F].trig_h << 3);
 
+  /*
+   * review-log.md R3.6b. Two differences, both verified at instruction level.
+   *
+   * PC  u_trigbox @ 0x13ED:
+   *   MOV AL,[SI+0x16] / CMP AL,BL / JNC fail   -> FALSE if trig_x >= x  (EXCLUSIVE low)
+   *   ... AH = trig_x + trig_w*8 ; JNC / MOV AH,0xFF   -> saturating byte CLAMP
+   *   CMP AH,CH / JC fail                        -> FALSE if xmax  <  x  (inclusive high)
+   * ST  trigger_box_contains_point @ 0x4D986:
+   *   cmp.w (0x3c,A0),D0w / blt fail             -> FALSE if x < XMin    (INCLUSIVE low)
+   *   cmp.w (0x40,A0),D0w / bgt fail             -> FALSE if x > XMax    (inclusive high)
+   *   no clamp -- XMax is a precomputed word field (0x40/0x42), set at spawn by
+   *   init_entity_from_placement without saturation, and it CAN exceed 0xFF
+   *   (trig_x up to 0xF8 plus trig_w*8).
+   *
+   * So the ST box includes its left/top edge where the PC's excludes it, and the ST box
+   * is not truncated at 0xFF near the right edge.
+   */
+#ifdef PLATFORM_ST
+  if (x < ent_ents[e].trig_x || x > xmax ||
+      y < ent_ents[e].trig_y || y > ymax)
+    return FALSE;
+  else
+    return TRUE;
+#else /* PLATFORM_PC */
   if (xmax > 0xFF) xmax = 0xFF;
 
   if (x <= ent_ents[e].trig_x || x > xmax ||
@@ -203,6 +255,7 @@ u_trigbox(U8 e, U16 x, U16 y)
     return FALSE;
   else
     return TRUE;
+#endif
 }
 
 

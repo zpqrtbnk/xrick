@@ -69,11 +69,35 @@ e_rick_boxtest(U8 e)
 	 * entity: x to x+w, y to y+h
 	 */
 
+	/*
+	 * review-log.md R3.6. TWO differences here, both verified at instruction level.
+	 *
+	 * PC  u_boxtest @ 0x12BC:
+	 *     MOV AL,[DI+2] / ADD AL,0x11 / CMP AL,AH / JC   -> FALSE if x+0x11 <  e.x
+	 *     SUB AL,0x0C   (= x+5) / ADD AH,[SI+0xE] / CMP AH,AL / JC
+	 *                                               -> FALSE if e.x+e.w <  x+5
+	 * ST  entity_overlaps_player @ 0x4D9AA:
+	 *     px+5-w vs e.x, BGE  -> FALSE if x+5     >= e.x+e.w   (>= , not >)
+	 *     px+5+0xD (= px+0x12) vs e.x, BLT -> FALSE if x+0x12 <  e.x
+	 *
+	 * So the ST's box reaches one pixel further right (0x12 vs 0x11) and is one pixel
+	 * tighter on the left (>= vs >). The two vertical tests are equivalent on both
+	 * sides -- note the ST adds 8 for crawling and then subtracts it again before the
+	 * bottom compare, which is why the port's bottom test correctly has no crawl term.
+	 */
+#ifdef PLATFORM_ST
+	if (E_RICK_ENT.x + 0x12 < ent_ents[e].x ||
+		E_RICK_ENT.x + 0x05 >= ent_ents[e].x + ent_ents[e].w ||
+		E_RICK_ENT.y + 0x14 < ent_ents[e].y ||
+		E_RICK_ENT.y + (E_RICK_STTST(E_RICK_STCRAWL) ? 0x08 : 0x00) > ent_ents[e].y + ent_ents[e].h - 1)
+		return FALSE;
+#else /* PLATFORM_PC */
 	if (E_RICK_ENT.x + 0x11 < ent_ents[e].x ||
 		E_RICK_ENT.x + 0x05 > ent_ents[e].x + ent_ents[e].w ||
 		E_RICK_ENT.y + 0x14 < ent_ents[e].y ||
 		E_RICK_ENT.y + (E_RICK_STTST(E_RICK_STCRAWL) ? 0x08 : 0x00) > ent_ents[e].y + ent_ents[e].h - 1)
 		return FALSE;
+#endif
 	else
 		return TRUE;
 }
@@ -129,7 +153,7 @@ e_rick_z_action(void)
 	ylow = i;
 
 	/* dead when out of screen */
-	if (E_RICK_ENT.y < 0 || E_RICK_ENT.y > 0x0140)
+	if (E_RICK_ENT.y < 0 || E_RICK_ENT.y > ENT_YMAX)
 		E_RICK_STSET(E_RICK_STDEAD);
 }
 
@@ -143,7 +167,13 @@ void
 e_rick_action2(void)
 {
 	U8 env0, env1;
-	U16 x, y;
+	/* review-log.md R3.1: x and y must be SIGNED. Both the PC and the ST detect the
+	   left-edge submap exit by the position going negative -- the PC as a byte underflow
+	   (ADD AL,0xFE / JC @ 0x1906), the ST as a signed word test in the main loop
+	   (player.nPosX <= 0 @ 0x4DD2E, nPosX being signed: cmp.w #-0x8 / bge). Declared U16,
+	   `if (x < 0)` at :217 and :411 is dead and Rick can never leave a submap leftward.
+	   Both sites return before the value is used as an index, so S16 is safe here. */
+	S16 x, y;
 	U32 i;
 
 	E_RICK_STRST(E_RICK_STSTOP|E_RICK_STSHOOT);
@@ -216,7 +246,9 @@ e_rick_action2(void)
 		game_dir = LEFT;
 		if (x < 0) {  /* prev submap */
 			e_rick_atExit = TRUE;
-			E_RICK_ENT.x = 0xe2;
+			/* xref.md 'Submap re-entry X'. PC 0xE2 / 0x04 -- MOV word[SI+2],0x00E2 @0x19B9 and
+			   MOV word[SI+2],0x0004 @0x19C9; ST 0xE6 / 0x02 -- algo-level.md reposition. */
+			E_RICK_ENT.x = SUBMAP_REENTRY_RIGHT;
 			return;
 		}
 	} else {  /* move right */
@@ -224,7 +256,7 @@ e_rick_action2(void)
 		game_dir = RIGHT;
 		if (x >= 0xe8) {  /* next submap */
 			e_rick_atExit = TRUE;
-			E_RICK_ENT.x = 0x04;
+			E_RICK_ENT.x = SUBMAP_REENTRY_LEFT;
 			return;
 		}
 	}
@@ -249,7 +281,14 @@ e_rick_action2(void)
     /* not climbing + trying to go _up_ not possible -> hit the roof */
     E_RICK_STSET(E_RICK_STJUMP);  /* fall back to the ground */
     E_RICK_ENT.y &= 0xF8;
+    /* xref.md 'Ceiling-bonk velocity' (the difference found during T8 that nobody had
+       noticed). PC zeroes it -- MOV word[0x7D70],0 @0x16AC; ST sets 0x80, so Rick begins
+       falling a frame sooner. */
+#ifdef PLATFORM_ST
+    offsy = 0x80;
+#else
     offsy = 0;
+#endif
     ylow = 0;
     goto horiz;
   }
@@ -411,7 +450,7 @@ e_rick_action2(void)
       if (x < 0) {  /* (i.e. negative) prev submap */
 	e_rick_atExit = TRUE;
 	/*6dbd = 0x00;*/
-	E_RICK_ENT.x = 0xe2;
+	E_RICK_ENT.x = SUBMAP_REENTRY_RIGHT;
 	return;
       }
     }
@@ -420,7 +459,7 @@ e_rick_action2(void)
       if (x >= 0xe8) {  /* next submap */
 	e_rick_atExit = TRUE;
 	/*6dbd = 0x01;*/
-	E_RICK_ENT.x = 0x04;
+	E_RICK_ENT.x = SUBMAP_REENTRY_LEFT;
 	return;
       }
     }
@@ -435,7 +474,13 @@ e_rick_action2(void)
     if (env1 & (MAP_EFLG_VERT|MAP_EFLG_CLIMB)) return;
     E_RICK_STRST(E_RICK_STCLIMB);
     if (control_status & CONTROL_UP)
+      /* xref.md 'Ladder-exit upward velocity'. PC -0x300 (MOV word[0x7D70],0xFD00
+         @0x1953); ST -0x200. */
+#ifdef PLATFORM_ST
+      offsy = -0x0200;
+#else
       offsy = -0x0300;
+#endif
   }
 }
 

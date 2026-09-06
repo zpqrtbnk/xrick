@@ -50,7 +50,23 @@ static void explode(U8);
 void
 e_box_action(U8 e)
 {
-	static U8 sp[] = {0x24, 0x25, 0x26, 0x27, 0x28};  /* explosion sprites sequence */
+	/*
+	 * review-log.md R3.9: SIX entries, not five -- the fifth index IS reached.
+	 * explode() sets cnt = SEQ_INIT = 0x0A, and the next call does sp[cnt >> 1] = sp[5]
+	 * BEFORE the decrement, so a 5-element array is read one past its end. The PC does
+	 * exactly the same indexing and its table must therefore hold six:
+	 *   25AB  MOV BL,[SI+0x26]        ; cnt
+	 *   25AE  SHR BL,1                ; cnt >> 1   (= 5 on the first frame)
+	 *   25B2  ADD BX,0x8138 / MOV AL,[BX] / MOV [SI+8],AL
+	 *   25BB  DEC byte[SI+0x26] / JNZ ; decrement AFTER using the index
+	 * Indices walked: 5,4,4,3,3,2,2,1,1,0 -- ten ticks, six distinct sprites.
+	 *
+	 * ⚠️ The sixth value 0x29 is INFERRED from the ascending run 0x24..0x28, not read:
+	 * the PC's sprite table at 0x8138 lives in its DATA segment, which we do not hold
+	 * (review-plan.md §10). An inferred sprite is still strictly better than the
+	 * out-of-bounds read it replaces, which returned whatever followed the array.
+	 */
+	static U8 sp[] = {0x24, 0x25, 0x26, 0x27, 0x28, 0x29};  /* explosion sprites sequence */
 
 	if (ent_ents[e].n & ENT_LETHAL) {
 		/*

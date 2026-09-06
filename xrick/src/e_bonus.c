@@ -33,6 +33,24 @@ e_bonus_action(U8 e)
 {
 #define seq c1
 
+  /*
+   * review-log.md R3.11. The two originals differ fundamentally here.
+   *
+   * PC (@0x2575): CALL 0x12AE (box test) / JZ skip / MOV byte[SI],0 / score / sound /
+   *   OR byte[BX],0x80 (mark NACT).  The bonus is deactivated IMMEDIATELY -- there is no
+   *   rise animation of any kind.
+   * ST treasure_pickup_update (@0x4D102):
+   *   collect: entity_overlaps_player -> add_score(0x500) / mark_placement_dead /
+   *            move.w #0xC,(0x2c,A0) / play_music(0x11)
+   *   each later frame: subi.w #1,(0x2c,A0) ; bne -> gfx = sparkle, subi.w #2,(0x6,A0)
+   *                                          ; beq -> despawn
+   *   Counter 12 therefore yields ELEVEN animated frames of y -= 2, a 22px rise.
+   *
+   * The port had a rise of its own -- seq 1..9 with an initial y -= 8, i.e. 26px over
+   * ten frames, and an ST sprite number (0xad) used unconditionally. That matched
+   * neither original. Each platform now gets its own.
+   */
+#ifdef PLATFORM_ST
   if (ent_ents[e].seq == 0) {
     if (e_rick_boxtest(e)) {
       env_score += 500;
@@ -40,21 +58,27 @@ e_bonus_action(U8 e)
       syssnd_play(WAV_BONUS, 1);
 #endif
       map_marks[ent_ents[e].mark].ent |= MAP_MARK_NACT;
-      ent_ents[e].seq = 1;
+      ent_ents[e].seq = 12;            /* move.w #0xC,(0x2c,A0) */
       ent_ents[e].sprite = 0xad;
       ent_ents[e].front = TRUE;
-      ent_ents[e].y -= 0x08;
     }
   }
-
-  else if (ent_ents[e].seq > 0 && ent_ents[e].seq < 10) {
-    ent_ents[e].seq++;
-    ent_ents[e].y -= 2;
-  }
-
-  else {
+  else if (--ent_ents[e].seq == 0) {   /* subi.w #1 ; beq -> despawn */
     ent_ents[e].n = 0;
   }
+  else {
+    ent_ents[e].y -= 2;                /* subi.w #2,(0x6,A0) */
+  }
+#else /* PLATFORM_PC */
+  if (e_rick_boxtest(e)) {
+    ent_ents[e].n = 0;                 /* MOV byte[SI],0 -- instant, no animation */
+    env_score += 500;
+#ifdef ENABLE_SOUND
+    syssnd_play(WAV_BONUS, 1);
+#endif
+    map_marks[ent_ents[e].mark].ent |= MAP_MARK_NACT;
+  }
+#endif
 }
 
 

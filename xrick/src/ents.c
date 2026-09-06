@@ -235,8 +235,16 @@ ent_actvis(U8 frow, U8 lrow)
 
     y = (map_marks[m].xy & 0x07) + (map_marks[m].row & 0xf8) - map_frow;
     y <<= 3;
-    if (!(ent_ents[e].flags & ENT_FLG_STOPRICK))
+    /* xref.md 'Placement bit that suppresses the spawn Y +3 nudge'.
+       PC bit 0x02 (TEST byte[DI+2],0x2 / JNZ around ADD DX,0x3 @0x212D);
+       ST bit 0x04 (btst.b #0x2,(0x3,A0) @0x497B8). */
+#ifdef PLATFORM_ST
+    if (!(ent_ents[e].flags & ENT_FLG_LETHALR))   /* 0x04 */
       y += 3;
+#else
+    if (!(ent_ents[e].flags & ENT_FLG_STOPRICK))  /* 0x02 */
+      y += 3;
+#endif
     ent_ents[e].y = y;
 
     ent_ents[e].xsave = ent_ents[e].x;
@@ -269,7 +277,13 @@ ent_actvis(U8 frow, U8 lrow)
 #undef ENT_FLG_TRIGGERS
 
     ent_ents[e].trig_x = map_marks[m].lt & 0xf8;
+    /* xref.md 'Spawn latency seed'. PC x32 (AND DL,7 then five ADD AL,AL @0x21A5-0x21B4);
+       ST x25 (mulu.w #0x19,D2 @0x497FE). */
+#ifdef PLATFORM_ST
+    ent_ents[e].latency = (U8)((map_marks[m].lt & 0x07) * 25);
+#else
     ent_ents[e].latency = (map_marks[m].lt & 0x07) << 5;  /* <<5 eq *32 */
+#endif
 
     ent_ents[e].trig_y = 3 + 8 * ((map_marks[m].row & 0xf8) - map_frow +
 				  (map_marks[m].lt & 0x07));

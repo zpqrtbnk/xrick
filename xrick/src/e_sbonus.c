@@ -41,11 +41,17 @@ void
 e_sbonus_start(U8 e)
 {
 	ent_ents[e].sprite = 0; /* invisible */
-	if (u_trigbox(e, ENT_XRICK.x + 0x0C, ENT_XRICK.y + 0x0A)) {
+	if (u_trigbox(e, ENT_XRICK.x + RICK_PROBE_DX, ENT_XRICK.y + 0x0A)) {
 		/* rick is within trigger box */
 		ent_ents[e].n = 0;
 		e_sbonus_counting = TRUE;  /* 6DD5 */
+		/* xref.md 'Super-bonus tick divider'. PC 0x1E (30) -- MOV byte[0x7D95],0x1E
+		   @0x22EE; ST 0x19 (25) -- @0x4BE3C / 0x4BE84. */
+#ifdef PLATFORM_ST
+		e_sbonus_counter = 0x19;
+#else
 		e_sbonus_counter = 0x1e;  /* 6DDB */
+#endif
 		e_sbonus_bonus = 2000;    /* 291A-291D */
 #ifdef ENABLE_SOUND
 		syssnd_play(WAV_SBONUS1, 1);
@@ -67,7 +73,7 @@ e_sbonus_stop(U8 e)
 	if (!e_sbonus_counting)
 		return;
 
-	if (u_trigbox(e, ENT_XRICK.x + 0x0C, ENT_XRICK.y + 0x0A)) {
+	if (u_trigbox(e, ENT_XRICK.x + RICK_PROBE_DX, ENT_XRICK.y + 0x0A)) {
 		/* rick is within trigger box */
 		e_sbonus_counting = FALSE;  /* stop counting */
 		ent_ents[e].n = 0;  /* deactivate entity */
