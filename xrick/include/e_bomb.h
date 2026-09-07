@@ -27,9 +27,11 @@
  *     flag and applies x -= 4 / y -= 5. 34 + 9 = 43 = 0x2B.
  */
 #ifdef PLATFORM_ST
-#define E_BOMB_TICKER (0x2B)
+#define E_BOMB_TICKER (0x37)   /* 34 fuse (17 frames x2) + 20 explosion (10 frames x2) */
+#define E_BOMB_BOOM   (0x14)   /* ticker value at detonation: 20 explosion ticks follow */
 #else
 #define E_BOMB_TICKER (0x2D)
+#define E_BOMB_BOOM   (0x09)   /* PC: detonation tick, 9 explosion ticks follow */
 #endif
 
 extern U8 e_bomb_lethal;

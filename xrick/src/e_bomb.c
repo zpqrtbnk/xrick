@@ -111,6 +111,27 @@ void e_bomb_init(U16 x, U16 y)
  *
  * ASM 18CA
  */
+#ifdef PLATFORM_ST
+/*
+ * ST explosion frames -- review-log.md R4.1. The bomb reuses the BOX's ten-frame table:
+ *   4CB82  lea (0x46c3e).l,A0        <- the very table e_box.c uses
+ *   4CB8E  cmp.w #7,D0 / blt         <- index >= 7 CLEARS the lethal flag (0x4BF28)
+ *   4CB9A  bclr #0,D0 / add.w D0,D0  <- entry = index >> 1, two ticks per frame
+ * So: 20 explosion ticks, ten frames, and the blast stops being lethal after seven --
+ * where the port had five frames of its own (0xa8..0xac), lethal throughout.
+ */
+static void
+e_bomb_setExplosionSprite(void)
+{
+	static const U8 expl[10] = {0x90, 0x24, 0x91, 0x25, 0x92, 0x26, 0x93, 0x27, 0x94, 0x28};
+	U8 idx = (U8)(E_BOMB_BOOM - e_bomb_ticker);   /* counts UP, 0..19 */
+
+	E_BOMB_ENT.sprite = expl[idx >> 1];
+	e_bomb_lethal = (idx < 7) ? TRUE : FALSE;
+}
+#endif
+
+
 void
 e_bomb_action(UNUSED(U8 e))
 {
@@ -125,7 +146,7 @@ e_bomb_action(UNUSED(U8 e))
 		E_BOMB_ENT.n = 0;
 		e_bomb_lethal = FALSE;
 	}
-	else if (e_bomb_ticker >= 0x0A)
+	else if (e_bomb_ticker > E_BOMB_BOOM)
 	{
 		/*
 		 * ticking
@@ -152,7 +173,7 @@ e_bomb_action(UNUSED(U8 e))
 				0x22, 0x23, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
 				0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F
 			};
-			U8 elapsed = (U8)(E_BOMB_TICKER - e_bomb_ticker);   /* counts UP, 0..33 */
+			U8 elapsed = (U8)(E_BOMB_TICKER - 1 - e_bomb_ticker);   /* counts UP, 0..33 */
 			E_BOMB_ENT.sprite = fuse[elapsed >> 1];
 		}
 #else
@@ -165,7 +186,7 @@ e_bomb_action(UNUSED(U8 e))
 		E_BOMB_ENT.sprite = (e_bomb_ticker & 0x01) ? 0x23 : 0x22;
 #endif
 	}
-	else if (e_bomb_ticker == 0x09)
+	else if (e_bomb_ticker == E_BOMB_BOOM)
 	{
 		/*
 		 * explode
@@ -173,14 +194,18 @@ e_bomb_action(UNUSED(U8 e))
 #ifdef ENABLE_SOUND
 		syssnd_play(WAV_EXPLODE, 1);
 #endif
-#ifdef GFXPC
-		E_BOMB_ENT.sprite = 0x24 + 4 - (e_bomb_ticker >> 1);
-#endif
-#ifdef GFXST
-		/* See above: fixing alignment */
+#ifdef PLATFORM_ST
+		/*
+		 * ST detonation -- review-log.md R4.1. 0x4CB06 onward: set the lethal flag,
+		 * x -= 4 / y -= 5, clr.w (0x4A810) to restart the animation, then track 10
+		 * twice. The blast centre at 0x4CB60/0x4CB70 is x + 0x0C, y + 0x0A -- exactly
+		 * what the port already had.
+		 */
 		E_BOMB_ENT.x -= 4;
 		E_BOMB_ENT.y -= 5;
-		E_BOMB_ENT.sprite = 0xa8 + 4 - (e_bomb_ticker >> 1);
+		e_bomb_setExplosionSprite();
+#else
+		E_BOMB_ENT.sprite = 0x24 + 4 - (e_bomb_ticker >> 1);
 #endif
 		e_bomb_xc = E_BOMB_ENT.x + 0x0C;
 		e_bomb_yc = E_BOMB_ENT.y + 0x000A;
@@ -193,13 +218,12 @@ e_bomb_action(UNUSED(U8 e))
 		/*
 		 * exploding
 		 */
-#ifdef GFXPC
+#ifdef PLATFORM_ST
+		e_bomb_setExplosionSprite();
+#else
 		E_BOMB_ENT.sprite = 0x24 + 4 - (e_bomb_ticker >> 1);
 #endif
-#ifdef GFXST
-		E_BOMB_ENT.sprite = 0xa8 + 4 - (e_bomb_ticker >> 1);
-#endif
-		/* exploding, hence lethal */
+		/* exploding, hence lethal (ST: only while the index is below 7 -- see above) */
 		if (e_bomb_hit(E_RICK_NO))
 			e_rick_gozombie();
 	}

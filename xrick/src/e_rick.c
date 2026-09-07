@@ -451,8 +451,23 @@ e_rick_action2(void)
     if (E_BULLET_ENT.n)
       return;
     /* else use a bullet, if any available */
-    if (!env_bullets)
+    if (!env_bullets) {
+#if defined(PLATFORM_ST) && defined(ENABLE_SOUND)
+      /*
+       * ST only: firing with an empty gun CLICKS -- review-log.md R3.1 / defect #21.
+       *   4C524  tst.b (0x0004b32a).l      ; bBullets
+       *   4C52A  bne  -> fire normally
+       *   4C530  move.w #0x9,D0 / moveq #1,D1 / jsr play_music(0x44CCE) / return
+       * Track 9 is the same track the dynamite fuse uses (assets-manifest.md track map:
+       * "player_controller (fire path when bBullets == 0); player_dynamite_update fuse"),
+       * so it is WAV_BOMBSHHT here as well.
+       * The PC is silent on this path -- 0x1776 `mov al,[0x7e45] / and al,al / jnz / ret`
+       * with no speaker call -- so this is ST-only, not a port omission on both sides.
+       */
+      syssnd_play(WAV_BOMBSHHT, 1);
+#endif
       return;
+    }
     if (!env_trainer)
       env_bullets--;
 
