@@ -134,6 +134,28 @@ e_bomb_action(UNUSED(U8 e))
 		if ((e_bomb_ticker & 0x03) == 0x02)
 			syssnd_play(WAV_BOMBSHHT, 1);
 #endif
+#ifdef PLATFORM_ST
+		/*
+		 * ST fuse -- review-log.md A1/A6. The 17 frame pointers at 0x46BF2 resolve
+		 * through (p - 0x2BE9E) / 0x150 to:
+		 *   0x22 0x23 0x81 0x82 0x83 0x84 0x85 0x86 0x87 0x88 0x89 0x8A 0x8B 0x8C
+		 *   0x8D 0x8E 0x8F
+		 * each held TWO ticks (0x4CAC8 `bclr #0,D0 / add.w D0,D0`). The port had the
+		 * right shape -- two frames then fifteen -- but the wrong second range, 0x99..
+		 * 0xA7 instead of 0x81..0x8F. The same mapping reproduces the port's own
+		 * numbers for the climb (0x0C/0x18), crawl (0x07/0x08), walk (0x02..0x06),
+		 * tumble (0x19/0x1A) and box explosion (0x24..0x28) tables, which is what
+		 * establishes it.
+		 */
+		{
+			static const U8 fuse[17] = {
+				0x22, 0x23, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+				0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F
+			};
+			U8 elapsed = (U8)(E_BOMB_TICKER - e_bomb_ticker);   /* counts UP, 0..33 */
+			E_BOMB_ENT.sprite = fuse[elapsed >> 1];
+		}
+#else
 #ifdef GFXST
 		/* ST bomb sprites sequence is longer */
 		if (e_bomb_ticker < 40)
@@ -141,6 +163,7 @@ e_bomb_action(UNUSED(U8 e))
 		else
 #endif
 		E_BOMB_ENT.sprite = (e_bomb_ticker & 0x01) ? 0x23 : 0x22;
+#endif
 	}
 	else if (e_bomb_ticker == 0x09)
 	{

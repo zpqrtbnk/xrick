@@ -60,7 +60,19 @@ scroll_up(void)
       ent_ents[i].ysave -= 8;
       ent_ents[i].trig_y -= 8;
       ent_ents[i].y -= 8;
-      if (ent_ents[i].y & 0x8000) {  /* map coord. from 0x0000 to 0x0140 */
+      /*
+       * ENT_YDEAD, not `y & 0x8000` -- review-log.md R2.1 / defect #20.
+       * The PC translates entities in ONE shared routine (0x10B2) used by both scroll
+       * directions, and it applies BOTH bounds every time:
+       *   10D5  test ah,0x80 / jz     -> y < 0      -> mov byte[si],0
+       *   10E3  cmp ax,0x140 / jc     -> y >= 0x140 -> mov byte[si],0
+       * The port split them, keeping only `y < 0` here and only `y > 0x140` in
+       * scroll_down -- and `>` where the PC uses `>=`, so an entity sitting exactly on
+       * 0x140 survived a scroll the PC would have removed.
+       * The ST bound is 0x142, not 0x140 (0x4B0C8 `cmp.w #0x142,D2 / ble`, and 0x4D352),
+       * which is what ENT_YDEAD already encodes per platform.
+       */
+      if (ENT_YDEAD(ent_ents[i].y)) {
 	IFDEBUG_SCROLLER(
 	  sys_printf("xrick/scroller: entity %#04X is gone\n", i);
 	  );
@@ -128,7 +140,8 @@ scroll_down(void)
       ent_ents[i].ysave += 8;
       ent_ents[i].trig_y += 8;
       ent_ents[i].y += 8;
-      if (ent_ents[i].y > 0x0140) {  /* map coord. from 0x0000 to 0x0140 */
+      /* both bounds, per-platform -- see scroll_up above (defect #20). */
+      if (ENT_YDEAD(ent_ents[i].y)) {
 	IFDEBUG_SCROLLER(
 	  sys_printf("xrick/scroller: entity %#04X is gone\n", i);
 	  );

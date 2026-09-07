@@ -33,6 +33,37 @@ U8 env_bombs = 0;
 U8 env_bullets = 0;
 U32 env_score = 0;
 
+/*
+ * env_addscore -- add to the score, wrapping at 1,000,000.
+ *
+ * BOTH originals keep a SIX-DIGIT score and both discard the carry out of the top
+ * digit; neither clamps:
+ *
+ *   ST  add_score (0x4B3E4): three bytes of PACKED BCD at 0x4B326-0x4B328, added with
+ *       `abcd -(A1),-(A0)` three times. The third abcd's carry-out is simply not used,
+ *       so the score rolls over 999999 -> 000000.
+ *   PC  the adder at 0x0292: six ASCII digits added with ADC and manual decimal carry
+ *       (CMP AL,0x3A / SUB AL,0x0A). Five digits are range-adjusted in the loop; the
+ *       sixth gets only `ADC AL,0x0` with no adjustment, so on overflow it becomes
+ *       ':' (0x3A) and the HUD draws a non-digit.
+ *
+ * Applied to BOTH platforms at the user's request, using the ST's clean wrap.
+ *
+ * WHY A U32 AND NOT A DIGIT ARRAY. An earlier note in review-log.md claimed matching the
+ * originals meant replacing env_score with an array of digits. That was wrong, and only
+ * true if you wanted to reproduce the PC's *corruption* (which needs real ASCII digits)
+ * or BCD nibble artifacts. For the ST's behaviour the two representations are exactly
+ * equivalent: `abcd` cannot produce an invalid nibble, so the ST score is always a
+ * well-formed decimal in 0..999999, and adding a delta while discarding the carry is by
+ * definition (score + delta) mod 1000000 -- precisely what the modulo below computes.
+ * The rendering already agrees: env_paintGame() emits exactly six digits.
+ */
+void
+env_addscore(U32 delta)
+{
+	env_score = (env_score + delta) % 1000000;
+}
+
 U16 env_map = 0;
 U16 env_submap = 0;
 U8 env_changeSubmap = FALSE;

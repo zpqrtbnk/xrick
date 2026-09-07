@@ -83,6 +83,29 @@ extern void ents_paintAll();
 #endif
 
 /*
+ * Entity Y despawn test -- review-log.md R4.7.
+ *
+ *   ST 0x4D34A  cmp.w #0,D1 / bge / cmp.w #0x142,D1 / ble ok
+ *                 -> dead when  y < 0 || y > 0x142
+ *   PC 0x2976    cmp bh,0 / jz ok / cmp bh,1 / jnz dead / cmp bl,0x40 / jnc dead
+ *                 -> dead when  y >= 0x140  (a negative y has bh = 0xff, so it is
+ *                    caught by the same test; this is exact for all 16-bit y)
+ *
+ * Note the port used `y > ENT_YMAX` with ENT_YMAX = 0x140 on the PC side, which kept
+ * y == 0x140 alive where the PC kills it -- off by one.
+ *
+ * Deliberately NOT applied to the other six ENT_YMAX sites: `CMP r8,0x40` occurs at
+ * exactly TWO addresses in the whole PC segment (0x298B, 0x2A0E), i.e. only the two
+ * sites below, so the PC encodes its other bound checks differently and those remain
+ * unverified.
+ */
+#ifdef PLATFORM_ST
+#define ENT_YDEAD(y) ((y) < 0 || (y) > 0x0142)
+#else
+#define ENT_YDEAD(y) ((y) < 0 || (y) >= 0x0140)
+#endif
+
+/*
  * flags for ent_ents[e].n  ("yes" when set)
  *
  * ENT_LETHAL: is entity lethal?

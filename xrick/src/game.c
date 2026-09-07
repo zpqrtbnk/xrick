@@ -390,6 +390,40 @@ static void game_cycle(void)
 
 			if (env_map >= 0x04) /* reached end of game */
 			{
+				/*
+				 * End-of-game bonus for unspent lives. Both originals award it at
+				 * exactly this point -- once the map counter has reached 4, before the
+				 * completion transition:
+				 *
+				 *   ST 0x49AD2  cmpi.w #4,level_index / blt / moveq #0,d1 /
+				 *               move.b lives,d1 / L: move.l #$00100000,d0 /
+				 *               bsr add_score / dbra d1,L
+				 *   PC 0x0DD8   inc [0x7D90] / cmp al,4 / jnz / mov al,[0x7E46] /
+				 *               inc al / mov [0x4916],al / mov si,0x4916 / call 0x0292
+				 *
+				 * Same mechanism, tenfold different value. `dbra` runs the ST body
+				 * lives+1 times at 100000 a turn (its delta byte 0x10 is packed BCD
+				 * landing on the 10^5 nibble). The PC instead writes lives+1 into ONE
+				 * digit of the 5-digit delta buffer at 0x4916; its adder does
+				 * `add si,4` then walks down against score digits 0x4913..0x490F, so
+				 * buffer[0] pairs with 0x490F -- the 10^4 place, not 10^5. The rest of
+				 * that buffer (0x4917..0x491A) is referenced by no instruction in the
+				 * segment, so it is static zero. Hence the PC awards a tenth.
+				 *
+				 * env_lives never exceeds 6 (set at game.c:144/749, only ever
+				 * decremented at game.c:524 -- neither the port nor either original
+				 * awards extra lives), so lives+1 <= 7 and the PC's single digit
+				 * cannot overflow.
+				 *
+				 * Written as one add rather than the ST's loop: env_addscore() wraps
+				 * mod 1000000 on every call, and repeated addition mod m equals the
+				 * summed product mod m, so the two are exactly equivalent.
+				 */
+#ifdef PLATFORM_ST
+				env_addscore((U32)(env_lives + 1) * 100000);
+#else
+				env_addscore((U32)(env_lives + 1) * 10000);
+#endif
 				sysarg_args_map = 0; // FIXME game completed, start all over. fine, but... ack...
 				sysarg_args_submap = 0;
 				game_state = FADEOUT__GAMEOVER;
@@ -561,13 +595,18 @@ static void game_cycle(void)
 					game_state = SCROLL_UP;
 				}
 				else
-				/* xref.md 'Scroll trigger, low threshold'. PC 0x60 (CMP AL,0x60 @0x018B);
-				   ST 0x5F -- main loop @0x4DD0E tests player.nPosY <= 0x5F. */
-#ifdef PLATFORM_ST
+				/*
+				 * PORT DEFECT, fixed -- review-log.md G1 / defect #19. Was `<= 0x60`
+				 * on the PC branch, and platform-switched. It is NOT a platform
+				 * difference: the two originals express the same test differently.
+				 *   PC 0x018B  cmp al,0x60 / jnc skip   -> scrolls when y <  0x60
+				 *   ST 0x4DD0E cmpi.w #0x5f / bgt skip  -> scrolls when y <= 0x5F
+				 * Those are the same condition. The port's `<= 0x60` scrolled one row
+				 * early, at exactly y == 0x60, where neither original does.
+				 * The high threshold needs no switch either: PC 0x017E `cmp al,0xcc /
+				 * jc` and ST 0x4DD1E `cmpi.w #0xcc / blt` both scroll up at y >= 0xCC.
+				 */
 				if (ent_ents[1].y <= 0x5f)
-#else
-				if (ent_ents[1].y <= 0x60)
-#endif
 				{
 					game_state = SCROLL_DOWN;
 				}

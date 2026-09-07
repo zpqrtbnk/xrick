@@ -35,6 +35,12 @@ extern U8 env_bullets;
 /* game score */
 extern U32 env_score;
 
+/*
+ * Add to the score, wrapping at 1,000,000 as the originals do.
+ * See env_addscore() in env.c for why this is a plain U32 and not a digit array.
+ */
+extern void env_addscore(U32);
+
 /* current map and submap */
 extern U16 env_map;
 extern U16 env_submap;

@@ -18,7 +18,19 @@
 
 #define E_BOMB_NO 3
 #define E_BOMB_ENT ent_ents[E_BOMB_NO]
+/*
+ * Fuse length -- review-log.md A1.
+ * PC: 45 ticks total (0x2D), fuse while ticker >= 0x0A, explosion 9..1.
+ * ST: the fuse is a 17-entry POINTER table at 0x46BF2 driven by
+ *     0x4CAC2 `move.w (0x4A810),D0 / bclr #0,D0 / add.w D0,D0` -- entry k for ticks 2k
+ *     and 2k+1, so 17 x 2 = 34 fuse ticks, then the sentinel at 0x4CB06 sets the lethal
+ *     flag and applies x -= 4 / y -= 5. 34 + 9 = 43 = 0x2B.
+ */
+#ifdef PLATFORM_ST
+#define E_BOMB_TICKER (0x2B)
+#else
 #define E_BOMB_TICKER (0x2D)
+#endif
 
 extern U8 e_bomb_lethal;
 extern U8 e_bomb_ticker;

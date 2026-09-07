@@ -30,7 +30,22 @@ extern U8 maps_clip(U16 *, U16 *, U16 *, U16 *);
 #define MAPS_VISHEIGHT_PX 0xc0
 #define MAPS_BOTHEIGHT_PX 0x40
 #define MAPS_TOPHEIGHT_TL 0x08
-#define MAPS_VISHEIGHT_TL 0x20
+/*
+ * 0x18, not 0x20 -- review-log.md B6 / defect #17.
+ *
+ * Used ONLY by map_init's three ent_actvis bands. The PC (map_init 0x0E82-0x0EA0, three
+ * CALLs to 0x2089 with DH = first row, DL = row count) scans:
+ *     DH = frow+8,    DL = 0x18   -> frow+0x08 .. frow+0x1F
+ *     DH = frow,      DL = 0x08   -> frow+0x00 .. frow+0x07
+ *     DH = frow+0x20, DL = 0x08   -> frow+0x20 .. frow+0x27
+ * i.e. frow+0x00..frow+0x27, which is also what the ST covers with its five 8-row
+ * lookahead bands (0x00/0x08/0x10/0x18/0x20 -- review-log.md R3.13).
+ *
+ * With 0x20 here the port scanned frow+0x00..frow+0x2F, activating entities EIGHT ROWS
+ * below anything either original reaches. The port's own MAP_ROW_* constants already say
+ * so: SCRTOP 0x08 .. SCRBOT 0x1F is 0x18 rows, and HBTOP is 0x20.
+ */
+#define MAPS_VISHEIGHT_TL 0x18
 #define MAPS_BOTHEIGHT_TL 0x08
 
 /* position of the fb origin, expressed in map/px */

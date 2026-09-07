@@ -37,6 +37,11 @@ U32 e_them_rndseed = 0;
  * local vars
  */
 static U16 e_them_rndnbr = 0;
+#ifdef PLATFORM_ST
+/* ST PRNG state, 0x495C0 / 0x495C4; seeds are the values held in atari_ram.bin */
+static U32 st_rnd_a = 0x121901F9u;
+static U32 st_rnd_b = 0x160566F9u;
+#endif
 
 /*
  * Check if entity boxtests with a lethal e_them i.e. something lethal
@@ -84,7 +89,7 @@ e_them_gozombie(U8 e)
 #ifdef ENABLE_SOUND
   syssnd_play(WAV_DIE, 1);
 #endif
-  env_score += 50;
+  env_addscore(50);
   if (ent_ents[e].flags & ENT_FLG_ONCE) {
     /* make sure entity won't be activated again */
     map_marks[ent_ents[e].mark].ent |= MAP_MARK_NACT;
@@ -153,7 +158,7 @@ e_them_t1_action2(U8 e, U8 type)
   ent_ents[e].offsy = 0x0080;
 
   /* align to ground */
-  ent_ents[e].y &= 0xfff8;
+  ent_ents[e].y &= ~0x07;   /* R4.16: was 0xfff8, wrong for negative y */
   ent_ents[e].y |= 0x0003;
 
   /* latency: if not zero then decrease and return */
@@ -252,7 +257,7 @@ e_them_t1_action(U8 e, U8 type)
        ibmpc_cs.bin are accounted for (level bonus 0x0DEE, super bonus 0x22BB, enemy kill
        0x24D6 inside gozombie, pickup 0x2585) and none is a second add here. Genuine
        PC-vs-ST difference; the port was faithful to the PC. */
-    env_score += 50;
+    env_addscore(50);
 #endif
     e_them_gozombie(e);
     return;
@@ -380,6 +385,7 @@ e_them_t2_action2(U8 e)
   S16 yd;
   U8 env0, env1;
 
+#ifndef PLATFORM_ST   /* the PC generator only; the ST uses st_rnd_a/b (A3) */
   /*
    * vars required by the Black Magic (tm) performance at the
    * end of this function.
@@ -391,7 +397,21 @@ e_them_t2_action2(U8 e)
   static U8 *cl = (U8 *)&cx;
   static U8 *ch = (U8 *)&cx + 1;
   static U16 *sl = (U16 *)&e_them_rndseed;
-  static U16 *sh = (U16 *)&e_them_rndseed + 2;
+  /*
+   * PORT DEFECT, fixed -- review-log.md R4.8.  Was `+ 2`.
+   *
+   * e_them_rndseed is a U32, so pointer arithmetic on U16* means `+ 2` lands FOUR bytes
+   * in -- one U16 past the end of the variable.  Every read of *sh was out of bounds.
+   * The PC's two operands are 2 bytes apart:
+   *
+   *   0x0250  add bx,[0x7e4a]      <- *sl, the low half
+   *   0x0257  mov cx,[0x7e4c]      <- *sh, the high half
+   *
+   * and 0x7e4e (what `+ 2` would correspond to) is an unrelated variable with 10
+   * references elsewhere in the segment.  `+ 1` is the high half.
+   */
+  static U16 *sh = (U16 *)&e_them_rndseed + 1;
+#endif
 
   /*sys_printf("e_them_t2 ------------------------------\n");*/
 
@@ -413,7 +433,22 @@ e_them_t2_action2(U8 e)
     (((ent_ents[e].x ^ ent_ents[e].y) & 0x04) ? 1 : 0);
 
   /* reached rick's level? */
-  if ((ent_ents[e].y & 0xfe) != (E_RICK_ENT.y & 0xfe)) goto ymove;
+  /*
+   * Reached Rick's level?  PORT DEFECT, fixed -- review-log.md R4.4.
+   *
+   * The port masked with 0x00fe, which drops bits 8-15; `y` reaches 0x142, so an enemy
+   * 256 px from Rick compared equal and the enemy switched to xmove as if it had
+   * arrived. BOTH originals compare the full 16-bit y with only bit 0 cleared:
+   *
+   *   ST 0x4D5AE  bclr #0 on WORDS
+   *   PC 0x2913   mov ax,[0x7e82] / and al,0xfe / mov bx,[si+4] / and bl,0xfe /
+   *               cmp ax,bx      -- 16-bit loads, 16-bit compare; `and al/bl` touches
+   *                                 only the low byte, leaving ah/bh intact, so this
+   *                                 is y & 0xfffe, not y & 0x00fe.
+   *
+   * Not platform-switched: the two originals agree, the port alone was wrong.
+   */
+  if ((ent_ents[e].y & ~1) != (E_RICK_ENT.y & ~1)) goto ymove;
 
   xmove:
     /* calc new x and test environment */
@@ -435,7 +470,7 @@ e_them_t2_action2(U8 e)
     /* calc new y and test environment */
     yd = ent_ents[e].y < E_RICK_ENT.y ? 0x02 : -0x02;
     y = ent_ents[e].y + yd;
-    if (y < 0 || y > ENT_YMAX) {
+    if (ENT_YDEAD(y)) {          /* ST 0x4D34A / PC 0x2976 -- R4.7 */
       ent_ents[e].n = 0;
       return;
     }
@@ -448,6 +483,18 @@ e_them_t2_action2(U8 e)
     }
     /* can move */
     ent_ents[e].y = y;
+#ifdef PLATFORM_ST
+    /*
+     * ST only: climbing UP resets the vertical velocity (review-log.md R4.5).
+     *   0x4D5C4  subi.w #2,D7 / bsr envtest / bcs -> xmove
+     *   0x4D5CE  move.w #-0x200,(0x8,A0)      <- nVelY, only on the up path
+     *   0x4D5D6  addi.w #2,D7 ...             <- down path, no write
+     * The PC's ymove (0x2968-0x29B5) writes [SI+0x2c] nowhere, so it leaves offsy
+     * untouched in both directions.
+     */
+    if (yd < 0)
+      ent_ents[e].offsy = -0x0200;
+#endif
     if (env1 & (MAP_EFLG_VERT|MAP_EFLG_CLIMB))  /* still climbing */
       return;
 
@@ -469,7 +516,17 @@ e_them_t2_action2(U8 e)
 	e_them_gozombie(e);
 	return;
       }
+      /*
+       * R4.7. PC 0x2A06 is `cmp dh,0 / jz ok / cmp dl,0x40 / jc ok / kill` -- dead at
+       * y >= 0x140. (It omits the `dh == 1` arm that 0x2976 has, so a y >= 0x200 would
+       * slip through on the PC; unreachable here, and not reproduced.) The ST's
+       * equivalent is cmp.w #0x142 / ble, so `>` there and `>=` here.
+       */
+#ifdef PLATFORM_ST
       if (y > ENT_YMAX) {  /* deactivate if outside */
+#else
+      if (y >= 0x0140) {   /* deactivate if outside */
+#endif
 	ent_ents[e].n = 0;
 	return;
       }
@@ -482,20 +539,61 @@ e_them_t2_action2(U8 e)
 	  ent_ents[e].offsy = 0x0800;
 	return;
       }
+#ifdef PLATFORM_ST
+      /*
+       * ST climb gate 1 -- review-log.md A2. 0x4D69C onward:
+       *   4D6AC  cmp.w (0x0004a754).l,D7 / bgt reject      -> enemy.y <= rick.y (INCLUSIVE)
+       *   4D6B4  btst #3,D6 / beq accept                   -> (x & 8) == 0
+       *   4D6BA  move.b D6,D5 / andi.b #7,D5 / bne reject  -> or (x & 7) == 0
+       *   4D6C2  andi.b #-0x10,D6 / ori.b #4,D6            -> x = (x & ~0x0F) | 4
+       *   4D6CE  move.b (0x7,A0),D7 / andi.b #-8 / ori.b #5 -> y = (y & ~7) | 5
+       *   4D6DE  clr.w (0xa,A0)  ; 4D6E2 move.b #-1,(0x48,A0)
+       * The ST reaches this from its BLOCKED branch, but the flows converge: its carry is
+       * `(env & 0xD0) != 0` (0x4DC0E `andi.b #-0x30,D0 / bne`) = VERT|SOLID|WAYUP, so a
+       * VERT tile sets it and the explicit VERT test re-selects the case the port reaches
+       * via `!(env1 & 0x70)` then `env1 & VERT`.
+       */
+      if ((((ent_ents[e].x & 0x08) == 0) || ((ent_ents[e].x & 0x07) == 0)) &&
+	  (y <= E_RICK_ENT.y)) {
+	ent_ents[e].x = (ent_ents[e].x & ~0x0F) | 0x04;
+	ent_ents[e].y = (y & ~0x07) | 0x05;
+	ent_ents[e].ylow = 0;
+	ent_ents[e].flgclmb = TRUE;
+	return;
+      }
+#else
       if (((ent_ents[e].x & 0x07) == 0x04) && (y < E_RICK_ENT.y)) {
 	/*sys_printf("e_them_t2 climbing00\n");*/
 	ent_ents[e].flgclmb = TRUE;  /* climbing */
 	return;
       }
+#endif
     }
 
     /*sys_printf("e_them_t2 ymove nok or ...\n");*/
     /* can't go there, or ... */
-    ent_ents[e].y = (ent_ents[e].y & 0xf8) | 0x03;  /* align to ground */
+    ent_ents[e].y = (ent_ents[e].y & ~0x07) | 0x03;  /* align to ground -- R4.16 */
     ent_ents[e].offsy = 0x0100;
     if (ent_ents[e].latency != 00)
       return;
 
+#ifdef PLATFORM_ST
+    /*
+     * ST climb gate 2 -- same mask and x snap, no y snap. 0x4D71A onward:
+     *   4D71A  btst #1,(0x0004dc29).l / beq   -> CLIMB flag
+     *   4D724  cmp.w (0x0004a754).l,D7 / ble  -> enemy.y > rick.y
+     *   4D72C  btst #3,D6 / beq / andi.b #7,D5 / bne
+     *   4D73A  andi.b #-0x10 / ori.b #4 ; 4D74A clr.w (0xa,A0)
+     */
+    if ((env1 & MAP_EFLG_CLIMB) &&
+	(((ent_ents[e].x & 0x08) == 0) || ((ent_ents[e].x & 0x07) == 0)) &&
+	(ent_ents[e].y > E_RICK_ENT.y)) {
+      ent_ents[e].x = (ent_ents[e].x & ~0x0F) | 0x04;
+      ent_ents[e].ylow = 0;
+      ent_ents[e].flgclmb = TRUE;
+      return;
+    }
+#else
     if ((env1 & MAP_EFLG_CLIMB) &&
 	((ent_ents[e].x & 0x0e) == 0x04) &&
 	(ent_ents[e].y > E_RICK_ENT.y)) {
@@ -503,6 +601,7 @@ e_them_t2_action2(U8 e)
       ent_ents[e].flgclmb = TRUE;  /* climbing */
       return;
     }
+#endif
 
     /* calc new sprite */
     ent_ents[e].sprite = ent_ents[e].sprbase +
@@ -530,6 +629,35 @@ e_them_t2_action2(U8 e)
 	 * for the entity. it is an exact copy of what the assembler code
 	 * does but I can't explain.
 	 */
+#ifdef PLATFORM_ST
+	/*
+	 * ST random turn -- review-log.md A3. A DIFFERENT generator and a different rule.
+	 *
+	 *   generator 0x49596: two 32-bit words at 0x495C0/0x495C4 --
+	 *       move.l (0x495C0),D6 / move.l (0x495C4),D7 / exg D6,D7
+	 *       rol.l #3,D7 / subq.w #7,D7 / eor.w D6,D7
+	 *       move.l D6,(0x495C0) / move.l D7,(0x495C4)
+	 *     output byte = 0x495C7 = D7 & 0xFF.
+	 *   decision  0x4D7A8: andi.b #3,D5 / bne skip  -> turn on 1 in 4,
+	 *     and the turn (0x4D7DE) FLIPS nDirection between 0 and 0xFF; it does not pick
+	 *     a direction. The PC instead SETS the direction from one random bit (0x2B13
+	 *     `and al,0x1`), i.e. 50/50, so it often re-picks the same way.
+	 *
+	 * The ST's gate is its frame counter (`cmpi.w #8,(0x2a,A0)` @ 0x4D790) where the
+	 * port's is the position (`(x & 0x1e) == 0x08`); both fire every 8 steps, so the
+	 * gate is left as the port has it and only the generator and rule are switched.
+	 */
+	{
+		U32 d6 = st_rnd_a, d7 = st_rnd_b, t;
+		t = d6; d6 = d7; d7 = t;                 /* exg d6,d7 */
+		d7 = ((d7 << 3) | (d7 >> 29)) & 0xFFFFFFFFu;   /* rol.l #3 */
+		d7 = (d7 & 0xFFFF0000u) | ((d7 - 7) & 0xFFFFu);        /* subq.w #7 */
+		d7 = (d7 & 0xFFFF0000u) | ((d7 ^ d6) & 0xFFFFu);       /* eor.w d6,d7 */
+		st_rnd_a = d6; st_rnd_b = d7;
+		if (((d7 & 0xFF) & 0x03) == 0)
+			ent_ents[e].offsx = (S16)-ent_ents[e].offsx;
+	}
+#else
 	bx = e_them_rndnbr + *sh + *sl + 0x0d;
 	cx = *sh;
 	*bl ^= *ch;
@@ -538,6 +666,7 @@ e_them_t2_action2(U8 e)
 	e_them_rndnbr = bx;
 
 	ent_ents[e].offsx = (*bl & 0x01) ? -0x02 : 0x02;
+#endif
 
 	/* back to normal */
 
@@ -595,7 +724,7 @@ e_them_t2_action(U8 e)
        ibmpc_cs.bin are accounted for (level bonus 0x0DEE, super bonus 0x22BB, enemy kill
        0x24D6 inside gozombie, pickup 0x2585) and none is a second add here. Genuine
        PC-vs-ST difference; the port was faithful to the PC. */
-    env_score += 50;
+    env_addscore(50);
 #endif
     e_them_gozombie(e);
     return;

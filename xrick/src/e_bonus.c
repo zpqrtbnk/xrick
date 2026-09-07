@@ -53,7 +53,7 @@ e_bonus_action(U8 e)
 #ifdef PLATFORM_ST
   if (ent_ents[e].seq == 0) {
     if (e_rick_boxtest(e)) {
-      env_score += 500;
+      env_addscore(500);
 #ifdef ENABLE_SOUND
       syssnd_play(WAV_BONUS, 1);
 #endif
@@ -72,7 +72,7 @@ e_bonus_action(U8 e)
 #else /* PLATFORM_PC */
   if (e_rick_boxtest(e)) {
     ent_ents[e].n = 0;                 /* MOV byte[SI],0 -- instant, no animation */
-    env_score += 500;
+    env_addscore(500);
 #ifdef ENABLE_SOUND
     syssnd_play(WAV_BONUS, 1);
 #endif

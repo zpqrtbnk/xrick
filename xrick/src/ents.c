@@ -311,6 +311,23 @@ ent_addrect(U16 x, U16 y, U16 width, U16 height)
 
   /*sys_printf("rect %#04x,%#04x %#04x %#04x ", x, y, width, height);*/
 
+  /*
+   * review-log.md R2.2. `x` is declared U16 but every caller passes `ent_ents[i].x`,
+   * an S16 that goes negative as an entity leaves the left edge (see below). A negative
+   * value arrives here as 0xFFxx, survives the tile alignment, and then trips
+   * `*x > MAPS_WIDTH_PX` inside maps_clip -- so the whole rectangle was DROPPED and the
+   * entity's erase rectangle never queued, smearing it off the left edge.
+   *
+   * Clamped here rather than in maps_clip, which is shared with sprites_paint2 and
+   * cannot take a signed x (see the comment there).
+   */
+  if ((S16)x < 0) {
+    if ((S16)x + (S16)width <= 0)
+      return;                       /* wholly off the left edge: nothing to repaint */
+    width = (U16)((S16)x + (S16)width);
+    x = 0;
+  }
+
   /* align to tiles */
   x0 = x & 0xfff8;
   y0 = y & 0xfff8;

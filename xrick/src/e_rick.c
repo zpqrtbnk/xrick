@@ -47,6 +47,9 @@ static U8 ylow;
 static S16 offsy;
 
 static U8 seq;
+#ifdef PLATFORM_ST
+static U8 tumble_seq;   /* ST only: the player's nAnimFrameIdx (0x4A778), wraps at 4 */
+#endif
 
 static U8 save_crawl;
 static U16 save_x, save_y;
@@ -123,8 +126,27 @@ e_rick_gozombie(void)
 #endif
 
 	E_RICK_STSET(E_RICK_STZOMBIE);
+#ifdef PLATFORM_ST
+	tumble_seq = 0;
+#endif
+	/*
+	 * Death launch velocity -- review-log.md R4.11. Genuine ST/PC difference:
+	 *   ST 0x4C822  move.w #-0x300,(0x0004a756).l    <- nVelY
+	 *   PC 0x19E5   mov word[0x7d70],0xfc00          <- -0x400
+	 */
+#ifdef PLATFORM_ST
+	offsy = -0x0300;
+#else
 	offsy = -0x0400;
-	offsx = (E_RICK_ENT.x > 0x80 ? -3 : +3);
+#endif
+	/*
+	 * PORT DEFECT, fixed -- review-log.md R4.11. Was `x > 0x80`. BOTH originals use
+	 * >=, so at exactly x == 0x80 the port drifted the corpse the wrong way:
+	 *   ST 0x4C832  cmpi.w #0x80,(0x0004a752).l / bge -> neg.w (0x0004a750).l
+	 *   PC 0x19EE   cmp al,0x80 / jnc -> mov byte[0x7d7a],0xfd
+	 * (the ST carries the drift in nDirection, the PC and the port in offsx).
+	 */
+	offsx = (E_RICK_ENT.x >= 0x80 ? -3 : +3);
 	ylow = 0;
 	E_RICK_ENT.front = TRUE;
 }
@@ -140,11 +162,43 @@ e_rick_z_action(void)
 {
 	U32 i;
 
+#ifdef PLATFORM_ST
+	/*
+	 * ST death tumble -- review-log.md A5/A6. Two differences from the PC, both real.
+	 *
+	 * (a) SPRITE is tick-driven, not x-driven. 0x4C8CA increments the player's
+	 *     nAnimFrameIdx (0x4A778), wraps it at 4, then indexes the frame table at
+	 *     0x46BE6 with `bclr #0,D4 / add.w D4,D4` -- entry D4>>1, so the counter runs
+	 *     0,1,2,3 and the frames come out 0,0,1,1: each held TWO ticks. Those two
+	 *     pointers, 0x2DF6E and 0x2E0BE, resolve through the A6 mapping
+	 *     ((p - 0x2BE9E) / 0x150) to sprites 0x19 and 0x1A -- exactly the pair the port
+	 *     already uses, which is what anchored the mapping in the first place.
+	 *
+	 * (b) The corpse BOUNCES off both edges instead of drifting through them:
+	 *     0x4C86E  cmpi.w #0,(0x0004a750).l / bgt -> right check
+	 *     0x4C878  (left)  cmp.w #0,D2    / bgt store / neg.w (drift)
+	 *     0x4C886  (right) cmp.w #0xE8,D2 / blt store / neg.w (drift)
+	 *     On a bounce the drift is negated and the x store is SKIPPED that frame.
+	 */
+	tumble_seq++;
+	if (tumble_seq >= 4)
+		tumble_seq = 0;
+	E_RICK_ENT.sprite = (tumble_seq & 0x02) ? 0x1A : 0x19;
+
+	{
+		S16 nx = E_RICK_ENT.x + offsx;
+		if ((offsx > 0) ? (nx >= 0xE8) : (nx <= 0))
+			offsx = (S8)-offsx;
+		else
+			E_RICK_ENT.x = nx;
+	}
+#else
 	/* sprite */
 	E_RICK_ENT.sprite = (E_RICK_ENT.x & 0x04) ? 0x1A : 0x19;
 
 	/* x */
 	E_RICK_ENT.x += offsx;
+#endif
 
 	/* y */
 	i = (E_RICK_ENT.y << 8) + offsy + ylow;
@@ -152,9 +206,28 @@ e_rick_z_action(void)
 	offsy += 0x80;
 	ylow = i;
 
-	/* dead when out of screen */
-	if (E_RICK_ENT.y < 0 || E_RICK_ENT.y > ENT_YMAX)
+	/*
+	 * Death-tumble end -- review-log.md R4.12.
+	 *
+	 * PC 0x19A1: `cmp bl,0x1 / jnz ret` on y's HIGH BYTE, then
+	 *            0x19A9 `mov byte[0x7d92],0xff`.
+	 * [0x7d92] is zeroed at 0x00C7 and polled by the main loop at 0x0129, and this is
+	 * its only setter -- so it is STDEAD. The PC therefore ends the tumble as soon as
+	 * y reaches 0x100, some 0x40 px earlier than the port did, and never ends it when
+	 * the corpse flies off the TOP (a negative y has high byte 0xff, not 1).
+	 *
+	 * The ST branch is left as the port had it: the ST does not end the tumble on y at
+	 * all here -- its dead-player path is counter-driven (0x4C8CA, a 4-tick wrap into a
+	 * 2-frame pointer table at 0x46BE6) and exits via 0x4CA54, which is not yet read.
+	 * Flagged rather than guessed.
+	 */
+#ifdef PLATFORM_ST
+	if (E_RICK_ENT.y < 0 || E_RICK_ENT.y > ENT_YMAX)   /* UNVERIFIED for ST */
 		E_RICK_STSET(E_RICK_STDEAD);
+#else
+	if ((E_RICK_ENT.y >> 8) == 1)
+		E_RICK_STSET(E_RICK_STDEAD);
+#endif
 }
 
 
@@ -227,10 +300,30 @@ e_rick_action2(void)
 	}
 	/* fall */
 	offsy += 0x0080;
-	if (offsy > 0x0800) {
+	/*
+	 * Terminal-velocity clamp -- review-log.md R4.15. The port held a MIX of the two
+	 * originals: the ST's edge with the PC's ylow reset, matching NEITHER.
+	 *
+	 *   ST 0x4C150  cmpi.w #0x800,(0x0004a756).l / ble  -> clamp only when offsy > 0x800,
+	 *               and the clamp branch (0x4C15C) sets offsy ALONE. ylow was already
+	 *               stored at 0x4C142 and is left as computed.
+	 *   PC 0x160A   cmp dh,0x8 / jc                     -> clamp when offsy >= 0x800,
+	 *               and the clamp branch ZEROES ylow (0x1612 mov byte[0x7d72],0) before
+	 *               setting offsy.
+	 *
+	 * The edge is not academic: offsy steps 0x100, 0x180, ... so it lands exactly on
+	 * 0x800 (0x100 + 0x80*14) on every long fall. On that frame the PC zeroes ylow and
+	 * the ST does not.
+	 */
+#ifdef PLATFORM_ST
+	if (offsy > 0x0800)
 		offsy = 0x0800;
+#else
+	if (offsy >= 0x0800) {
 		ylow = 0;
+		offsy = 0x0800;
 	}
+#endif
 
 	/*
 	* HORIZONTAL MOVE
@@ -280,7 +373,15 @@ e_rick_action2(void)
   if (offsy < 0) {
     /* not climbing + trying to go _up_ not possible -> hit the roof */
     E_RICK_STSET(E_RICK_STJUMP);  /* fall back to the ground */
-    E_RICK_ENT.y &= 0xF8;
+    /*
+	 * Tile-grid snap. `& ~0x07`, NOT `& 0xf8` -- review-log.md R4.16.
+	 * Both originals mask the LOW BYTE ONLY and keep the high byte:
+	 *   PC 0x16A2 / 0x16B8 / 0x2A5B  `and al,0xf8` (+ `or al,0x3`) on AL
+	 *   ST 0x4D6F0                   `move.b (0x7,A0),D7 / andi.b #-8 / ori.b #3`
+	 * y is S16 and reaches 0x142, so a 16-bit `& 0xf8` also cleared bits 8-15 and
+	 * teleported the entity to the top of the world (0x108 -> 0x08).
+	 */
+    E_RICK_ENT.y &= ~0x07;
     /* xref.md 'Ceiling-bonk velocity' (the difference found during T8 that nobody had
        noticed). PC zeroes it -- MOV word[0x7D70],0 @0x16AC; ST sets 0x80, so Rick begins
        falling a frame sooner. */
@@ -294,7 +395,7 @@ e_rick_action2(void)
   }
   /* else: not climbing + trying to go _down_ not possible -> standing */
   /* align to ground */
-  E_RICK_ENT.y &= 0xF8;
+  E_RICK_ENT.y &= ~0x07;   /* R4.16 */
   E_RICK_ENT.y |= 0x03;
   ylow = 0;
 
@@ -330,7 +431,16 @@ e_rick_action2(void)
 		return;
 	}
 
-  if (control_status == (CONTROL_FIRE|CONTROL_UP)) {  /* bullet */
+  /*
+   * Masked, not an equality -- review-log.md B5 / defect #16.
+   * PC 0x174B: `mov al,dh / and al,0xc / cmp al,0x8 / jnz` -- UP set and DOWN clear,
+   * every other bit IGNORED. FIRE was already required at 0x1713 and LEFT|RIGHT
+   * consumed by the stop path at 0x171B, which is exactly this function's flow, so the
+   * mask is the whole condition. The port's `== (FIRE|UP)` additionally demanded
+   * PAUSE/END/EXIT (0x80/0x40/0x20) be clear, and refused to fire on UP+DOWN where the
+   * PC bombs.
+   */
+  if ((control_status & (CONTROL_UP|CONTROL_DOWN)) == CONTROL_UP) {  /* bullet */
     E_RICK_STSET(E_RICK_STSHOOT);
     /* not an automatic gun: shoot once only */
     if (trigger)
@@ -354,7 +464,8 @@ e_rick_action2(void)
   trigger = FALSE; /* not shooting means trigger is released */
   seq = 0; /* reset */
 
-  if (control_status == (CONTROL_FIRE|CONTROL_DOWN)) {  /* bomb */
+  /* PC 0x17CD: `test dh,0x4 / jnz` -- DOWN alone; UP+DOWN reaches here and bombs. */
+  if (control_status & CONTROL_DOWN) {  /* bomb */
     /* already a bomb ticking ... that's enough */
     if (E_BOMB_ENT.n)
       return;
@@ -416,7 +527,19 @@ e_rick_action2(void)
 		if (control_status & (CONTROL_UP|CONTROL_DOWN)) {
 			/* up-down: calc new y and test environment */
 			y = E_RICK_ENT.y + ((control_status & CONTROL_UP) ? -0x02 : 0x02);
-			u_envtest(E_RICK_ENT.x, y, E_RICK_STTST(E_RICK_STCRAWL), &env0, &env1);
+			/*
+			 * FALSE, not STCRAWL -- review-log.md B4 / defect #15.
+			 * The PC calls the PLAIN probe unconditionally in BOTH climbing
+			 * env tests (0x18A2 and 0x191E). Its crawl-dependent pairs are
+			 * only the non-climbing vertical (0x1596 crawl / 0x15AB plain)
+			 * and horizontal (0x166D / 0x1673) moves. The ST has no crawl
+			 * parameter to this probe at all: (0x4DC28) is a result MASK
+			 * (`and.b (0x4DC28).l,D0` @ 0x4DBFC) written only from
+			 * enemy_ai_update. Both originals agree; the port alone passed
+			 * the crawl flag, shortening the probe by one row whenever
+			 * STCRAWL and STCLIMB were both set.
+			 */
+			u_envtest(E_RICK_ENT.x, y, FALSE, &env0, &env1);
 			if (env1 & (MAP_EFLG_SOLID|MAP_EFLG_SPAD|MAP_EFLG_WAYUP) &&
 					!(control_status & CONTROL_UP)) {
 				/* FIXME what? */
@@ -463,7 +586,8 @@ e_rick_action2(void)
 	return;
       }
     }
-    u_envtest(x, E_RICK_ENT.y, E_RICK_STTST(E_RICK_STCRAWL), &env0, &env1);
+    /* FALSE, not STCRAWL -- the PC's second climbing probe, 0x191E, is also plain. See above. */
+    u_envtest(x, E_RICK_ENT.y, FALSE, &env0, &env1);
     if (env1 & (MAP_EFLG_SOLID|MAP_EFLG_SPAD)) return;
     E_RICK_ENT.x = x;
     if (env1 & MAP_EFLG_LETHAL) {

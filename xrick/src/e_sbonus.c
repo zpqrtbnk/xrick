@@ -77,7 +77,7 @@ e_sbonus_stop(U8 e)
 		/* rick is within trigger box */
 		e_sbonus_counting = FALSE;  /* stop counting */
 		ent_ents[e].n = 0;  /* deactivate entity */
-		env_score += e_sbonus_bonus;  /* add bonus to score */
+		env_addscore(e_sbonus_bonus);  /* add bonus to score */
 #ifdef ENABLE_SOUND
 		syssnd_play(WAV_SBONUS2, 1);
 #endif

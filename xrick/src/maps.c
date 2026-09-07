@@ -346,6 +346,22 @@ void maps_alignRect(U16 *x, U16 *y, U16 *width, U16 *height)
  */
 U8 maps_clip(U16 *x, U16 *y, U16 *width, U16 *height)
 {
+	/*
+	 * DEAD BRANCH, deliberately left dead -- review-log.md R2.2 (supersedes B7/#18).
+	 *
+	 * `*x < 0` on a `U16 *` never fires. It is tempting to make it live by reading the
+	 * value back as S16, since callers really do pass negative entity coordinates
+	 * (`ent_addrect` declares `U16 x` but is called with `ent_ents[i].x`, an S16). I did
+	 * exactly that and it was WRONG: `maps_clip` is shared with `sprites_paint2`, whose
+	 * column loop guards with `x + c < x0` on a `U16 x`. A negative x arrives there as
+	 * 0xFFxx, so that guard cannot fire and the left-hand columns would be drawn at
+	 * wrapped coordinates instead of skipped.
+	 *
+	 * Making partial left-clipping work needs the sprite path to carry a signed x --
+	 * a real refactor of `sprites_paint2`, `maps_paintRect` and their callers. Until
+	 * then this stays dead and the clamp lives in `ent_addrect`, where a dirty rectangle
+	 * only has to cover the visible part.
+	 */
 	if (*x < 0)
 	{
 		if (*x + *width < 0)
