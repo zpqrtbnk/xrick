@@ -122,10 +122,13 @@ e_them_t1_action2(U8 e, U8 type)
   i = (ent_ents[e].y << 8) + ent_ents[e].offsy + ent_ents[e].ylow;
   y = i >> 8;
 
-  /* deactivate if outside vertical boundaries */
-  /* no need to test zero since e_them _t1a/b don't go up */
-  /* FIXME what if they got scrolled out ? */
-  if (y > ENT_YMAX) {
+  /*
+   * deactivate if outside vertical boundaries -- review-log.md I3 / defect #22.
+   * PC 0x23AD `cmp dx,0x140 / jc` after the 16.16 integration: dead at y >= 0x140.
+   * Being an UNSIGNED compare it catches a negative y too, so the port's "no need to
+   * test zero" note holds either way. Was `y > ENT_YMAX`, one row too high.
+   */
+  if (ENT_YDEAD(y)) {
     ent_ents[e].n = 0;
     return;
   }
@@ -316,8 +319,23 @@ e_them_z_action(U8 e)
   /* calc new y */
   i = (ent_ents[e].y << 8) + ent_ents[e].offsy + ent_ents[e].ylow;
 
-  /* deactivate if out of vertical boundaries */
-  if (ent_ents[e].y < 0 || ent_ents[e].y > ENT_YMAX) {
+  /*
+   * deactivate if out of vertical boundaries -- review-log.md I3.
+   *
+   * NOTE: this test has NO counterpart in the PC. Its entity bound checks number
+   * exactly six, all now located and mapped: 0x10E3 (scroll translate), 0x2976 (t2
+   * ymove), 0x2A06 (t2 fall), 0x23AD (t1 fall), 0x2742 (restore from xsave/ysave),
+   * 0x278B (scripted move). The DYING-enemy update has none -- a dying enemy leaves the
+   * world through the general mechanisms instead (the PC's scroll translate; on the ST
+   * render_sprites' `y < 0 || y > 0x142` despawn at 0x4B0BE/0x4B0C8).
+   *
+   * It also tests the PRE-integration y: `i` is computed above from the old y, this
+   * reads the old y, and the new one is stored below regardless -- so it fires a frame
+   * late. Left in place (deleting a despawn on no evidence is the riskier change) but
+   * switched to ENT_YDEAD so its edge matches every other bound in the tree instead of
+   * sitting one row higher on the PC side.
+   */
+  if (ENT_YDEAD(ent_ents[e].y)) {
     ent_ents[e].n = 0;
     return;
   }
@@ -794,7 +812,15 @@ e_them_t3_action2(U8 e)
 	  y += ent_ents[e].y;
 	  */
 	  y = ent_ents[e].y + ent_mvstep[ent_ents[e].step_no].dy;
-	  if (y > 0 && y < ENT_YMAX) {
+	  /*
+	   * review-log.md I3 / defect #23. PC 0x278B:
+	   *   add ax,cx / and ah,ah / jz store       ; y high == 0 -> store
+	   *   cmp ah,0x1 / jnz reject
+	   *   cmp al,0x40 / jc store                 ; y < 0x140   -> store
+	   * Store iff y is in range -- the exact complement of the despawn predicate. It
+	   * ACCEPTS y == 0, which the port's `y > 0` rejected.
+	   */
+	  if (!ENT_YDEAD(y)) {
 	    ent_ents[e].y = y;
 	    return;
 	  }
@@ -821,7 +847,13 @@ e_them_t3_action2(U8 e)
 	    ent_ents[e].n |= ENT_LETHAL;
 	  ent_ents[e].x = ent_ents[e].xsave;
 	  ent_ents[e].y = ent_ents[e].ysave;
-	  if (ent_ents[e].y < 0 || ent_ents[e].y > ENT_YMAX) {
+	  /*
+	   * review-log.md I3 / defect #22. PC 0x2739:
+	   *   mov al,[si+0x1c] / mov [si+0x2],al     ; x = xsave  (+0x1C = xsave)
+	   *   mov ax,[si+0x1e] / cmp ax,0x140 / jnc  ; y = ysave  (+0x1E = ysave)
+	   * dead at y >= 0x140; the port had `> ENT_YMAX`, one row too high.
+	   */
+	  if (ENT_YDEAD(ent_ents[e].y)) {
 	    ent_ents[e].n = 0;
 	    return;
 	  }

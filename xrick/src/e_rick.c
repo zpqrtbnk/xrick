@@ -216,13 +216,18 @@ e_rick_z_action(void)
 	 * y reaches 0x100, some 0x40 px earlier than the port did, and never ends it when
 	 * the corpse flies off the TOP (a negative y has high byte 0xff, not 1).
 	 *
-	 * The ST branch is left as the port had it: the ST does not end the tumble on y at
-	 * all here -- its dead-player path is counter-driven (0x4C8CA, a 4-tick wrap into a
-	 * 2-frame pointer table at 0x46BE6) and exits via 0x4CA54, which is not yet read.
-	 * Flagged rather than guessed.
+	 * ST branch VERIFIED -- review-log.md I2 (was marked UNVERIFIED). The ST really
+	 * does not end the tumble inside the player update: 0x4C846-0x4C8A8 integrates y and
+	 * applies gravity with no bound test at all, and 0x4CA54 is just `movem.l (SP)+ /
+	 * rts`. The corpse leaves the world through render_sprites instead:
+	 *   4B0B4  moveq #0,D2 / move.w (0x6,A0),D2
+	 *   4B0BA  cmp.w #0,D2 / bge   -> else bsr 0x4AC3E (despawn)
+	 *   4B0C8  cmp.w #0x142,D2 / ble -> else bsr 0x4AC3E (despawn)
+	 * i.e. exactly `y < 0 || y > 0x142`, which is what this branch already expresses
+	 * with ENT_YMAX = 0x142. Same condition, different home.
 	 */
 #ifdef PLATFORM_ST
-	if (E_RICK_ENT.y < 0 || E_RICK_ENT.y > ENT_YMAX)   /* UNVERIFIED for ST */
+	if (E_RICK_ENT.y < 0 || E_RICK_ENT.y > ENT_YMAX)
 		E_RICK_STSET(E_RICK_STDEAD);
 #else
 	if ((E_RICK_ENT.y >> 8) == 1)
