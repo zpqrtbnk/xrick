@@ -132,6 +132,7 @@
     <ClInclude Include="include\control.h" />
     <ClInclude Include="include\data.h" />
     <ClInclude Include="include\debug.h" />
+    <ClInclude Include="include\demo.h" />
     <ClInclude Include="include\devtools.h" />
     <ClInclude Include="include\draw.h" />
     <ClInclude Include="include\ents.h" />
@@ -168,6 +169,7 @@
   <ItemGroup>
     <ClCompile Include="src\control.c" />
     <ClCompile Include="src\data.c" />
+    <ClCompile Include="src\dat_demo.c" />
     <ClCompile Include="src\dat_ents.c" />
     <ClCompile Include="src\dat_maps.c" />
     <ClCompile Include="src\dat_picsPC.c" />
@@ -178,6 +180,7 @@
     <ClCompile Include="src\dat_spritesST.c" />
     <ClCompile Include="src\dat_tilesPC.c" />
     <ClCompile Include="src\dat_tilesST.c" />
+    <ClCompile Include="src\demo.c" />
     <ClCompile Include="src\devtools.c" />
     <ClCompile Include="src\draw.c" />
     <ClCompile Include="src\ents.c" />

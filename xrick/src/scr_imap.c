@@ -30,6 +30,10 @@
 #include "sprites.h"
 #include "fb.h"
 
+#ifdef ENABLE_DEMO
+#include "demo.h"
+#endif
+
 /*
  * local vars
  */
@@ -42,6 +46,9 @@ static U16 spx, spdx;         /* sprite x position and delta */
 static U16 spy, spdy;         /* sprite y position and delta */
 static U16 spbase, spoffs;    /* base, offset for sprite numbers table */
 static U8 seq = 0;            /* anim sequence */
+#ifdef ENABLE_DEMO
+static U16 introloops = 0;    /* demo mode: anim loops run so far */
+#endif
 
 static rect_t anim_rect = { 120, 16, 64, 64, NULL }; /* anim rectangle */
 
@@ -94,6 +101,9 @@ U8 screen_introMap(void)
 			drawlr();
 			drawsprite();
 			control_last = 0;
+#ifdef ENABLE_DEMO
+			introloops = 0;
+#endif
 
 			//game_rects = &draw_SCREENRECT;
 
@@ -110,6 +120,17 @@ U8 screen_introMap(void)
 			break;
 
 		case 10:  /* top and bottom borders */
+#ifdef ENABLE_DEMO
+			/*
+			 * this screen otherwise waits for FIRE forever, which would stall a
+			 * demo. seq 20 waits for FIRE to be released, which it already is.
+			 */
+			if (demo_active && ++introloops > DEMO_INTRO_LOOPS)
+			{
+				seq = 20;
+				break;
+			}
+#endif
 			if (control_status & CONTROL_FIRE)
 			{
 				seq = 20;

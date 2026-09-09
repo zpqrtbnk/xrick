@@ -27,6 +27,9 @@
     <ClInclude Include="include\debug.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\demo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="include\devtools.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -128,6 +131,9 @@
     <ClCompile Include="src\control.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\dat_demo.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\dat_ents.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -159,6 +165,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\data.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\demo.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\devtools.c">

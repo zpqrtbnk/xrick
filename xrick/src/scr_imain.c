@@ -26,6 +26,10 @@
 
 #include "tiles.h"
 
+#ifdef ENABLE_DEMO
+#include "demo.h"
+#endif
+
 #define IMAIN_PERIOD 50;
 
 /*
@@ -166,6 +170,21 @@ screen_introMain(void)
 			else if (sys_gettime() - tm > SCREEN_TIMEOUT)
 			{
 				seen++;
+#ifdef ENABLE_DEMO
+				/*
+				 * this screen only ever reaches SCREEN_DONE through seq 28, and
+				 * seq 28 is only ever reached from a FIRE press: on timeout,
+				 * seq 18 loops back to the splash forever. so a demo has to
+				 * start the game itself, after one pass over splash and hall of
+				 * fame.
+				 */
+				if (demo_active)
+				{
+					game_period = period/2;
+					seq = 28;
+					break;
+				}
+#endif
 				seq = 18;
 			}
 			break;

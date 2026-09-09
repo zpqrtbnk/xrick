@@ -25,6 +25,10 @@ extern int sysarg_args_zoom;
 extern int sysarg_args_nosound;
 extern int sysarg_args_vol;
 #endif
+#ifdef ENABLE_DEMO
+extern int sysarg_args_demo;
+extern char* sysarg_args_record;
+#endif
 extern char* sysarg_args_data;
 
 extern void sysarg_init(int, char**);

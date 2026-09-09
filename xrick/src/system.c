@@ -54,7 +54,17 @@ sys_printf(char *msg, ...)
 {
 #ifdef ENABLE_LOG
 	va_list argptr;
-	char s[1024];
+	/*
+	 * 4096, and vsnprintf rather than vsprintf -- see ../../demo.md §5.
+	 *
+	 * The longest caller is sysarg_fail's usage text: 1108 characters of literal
+	 * before its %d/%s are expanded, into what used to be a 1024 byte buffer.
+	 * `xrick -h` was already writing past the end of the stack frame and merely
+	 * getting away with it; adding the -demo / -record lines pushed it far
+	 * enough to crash with no output at all. vsnprintf cannot overrun whatever
+	 * the size is, and 4096 is enough for the usage text to be printed in full.
+	 */
+	char s[4096];
 
 	/* FIXME what is this? */
 	/* change stdin to non blocking */
@@ -64,9 +74,11 @@ sys_printf(char *msg, ...)
 
 	/* prepare message */
 	va_start(argptr, msg);
-	vsprintf(s, msg, argptr);
+	vsnprintf(s, sizeof s, msg, argptr);
 	va_end(argptr);
-	printf(s);
+	/* fputs, not printf(s): s is data, and may legitimately contain a '%' --
+	   a data path name, for instance. */
+	fputs(s, stdout);
 #endif
 }
 

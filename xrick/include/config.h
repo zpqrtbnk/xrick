@@ -65,6 +65,9 @@
 /* does seem to cause all sorts of problems on BeOS, Windows... */
 #undef ENABLE_FOCUS
 
+/* demo (attract) mode: -demo plays a script, -record writes one. see ../../demo.md */
+#define ENABLE_DEMO
+
 /* development tools */
 #undef ENABLE_DEVTOOLS
 #define DEBUG /* see include/debug.h */

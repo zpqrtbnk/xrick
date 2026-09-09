@@ -45,6 +45,10 @@
 #include "devtools.h"
 #endif
 
+#ifdef ENABLE_DEMO
+#include "demo.h"
+#endif
+
 
 /*
  * local typedefs
@@ -186,13 +190,17 @@ game_run(char *path)
 	tm = sys_gettime();
 	game_state = XRICK;
 
+#ifdef ENABLE_DEMO
+	demo_init();
+#endif
+
 	/* main loop */
 #ifdef EMSCRIPTEN
 	// callback, fps, simulate_infinite_loop
 	//
 	// "If called on the main browser thread, setting 0 or a negative value as the fps will
-	// use the browser’s requestAnimationFrame mechanism to call the main loop function."
-	// "This is HIGHLY recommended if you are doing rendering, as the browser’s
+	// use the browserï¿½s requestAnimationFrame mechanism to call the main loop function."
+	// "This is HIGHLY recommended if you are doing rendering, as the browserï¿½s
 	// requestAnimationFrame will make sure you render at a proper smooth rate that lines
 	// up properly with the browser and monitor."
 	//
@@ -431,6 +439,9 @@ static void game_cycle(void)
 			else
 			{
 				map_init();
+#ifdef ENABLE_DEMO
+				demo_enterSubmap(env_submap);
+#endif
 				game_save();
 				fb_clear();                 /* clear buffer */
 				//ent_clprev();
@@ -503,6 +514,9 @@ static void game_cycle(void)
 
 		case CTRL_ACTION:
 
+#ifdef ENABLE_DEMO
+			demo_cycle(); /* feed (or capture) the controls for this logic step */
+#endif
 			if (control_status & CONTROL_END) /* request to end the game */
 			{
 				game_state = FADEOUT__GAMEOVER;
@@ -674,6 +688,9 @@ static void game_cycle(void)
 		case INIT_SUBMAP:
 
 			map_init();                     /* initialize the map */
+#ifdef ENABLE_DEMO
+			demo_enterSubmap(env_submap);
+#endif
 			game_save();                        /* save data in case of a restart */
 			fb_clear();
 			ent_clprev();                   /* cleanup entities */
@@ -725,6 +742,10 @@ static void game_cycle(void)
 
 		case FADEOUT__GAMEOVER:
 
+#ifdef ENABLE_DEMO
+			/* the demo is over -- the hall of fame is entered by hand. idempotent. */
+			demo_end();
+#endif
 			if (fb_fadeOut())
 				game_state = GAMEOVER;
 			return;
@@ -865,6 +886,9 @@ static void restart(void)
 	map_frow = save_map_row;
 
 	map_init(); // see INIT_MAP check that everything is OK here
+#ifdef ENABLE_DEMO
+	demo_enterSubmap(env_submap); /* a death replays the submap script from tick 0 */
+#endif
 	game_save();
 	ent_clprev();
 	maps_paint();
