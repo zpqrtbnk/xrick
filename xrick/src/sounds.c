@@ -65,6 +65,8 @@ void sounds_load(void)
 	WAV_ENTITY[6] = syssnd_load("sounds/ent6.wav");
 	WAV_ENTITY[7] = syssnd_load("sounds/ent7.wav");
 	WAV_ENTITY[8] = syssnd_load("sounds/ent8.wav");
+	/* WAV_ENTITY[9] (ST track 0x1C, one entity in map 4) has no WAV yet; it stays
+	   NULL and syssnd_play rejects NULL -- accepted for now, see pm-baty.md G8 (c). */
 }
 
 void sounds_free(void)

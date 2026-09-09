@@ -904,19 +904,26 @@ e_them_t3_action2(U8 e)
     wakeup:
       if E_RICK_STTST(E_RICK_STZOMBIE)
 	return;
-#ifdef ENABLE_SOUND
+#if defined(PLATFORM_ST) && defined(ENABLE_SOUND)
 		/*
-		* FIXME the sound should come from a table, there are 10 of them
-		* but I dont have the table yet. must rip the data off the game...
-		* FIXME is it 8 of them, not 10?
-		* FIXME testing below...
-		*/
-		/* review-log.md R3.12: base was 0x14, but the port's OWN ent_entdata contains
-		   snd = 0x13, which gives index -1 -- an out-of-bounds read. The ten distinct
-		   values 0x13..0x1C map exactly onto WAV_ENTITY[0..9] with base 0x13. Defect,
-		   corrected on both platforms. */
-		syssnd_play(WAV_ENTITY[(ent_ents[e].trigsnd & 0x1F) - 0x13], 1);
-		/*syssnd_play(WAV_ENTITY[0], 1);*/
+		 * ST plays wTriggerSound here, ZERO-GUARDED -- pm-baty.md G8:
+		 *   4D25E  move.w (0x44,A0),D0     ; wTriggerSound
+		 *   4D262  tst.w D0 / beq.s 4D272  ; 0 = silent
+		 *   4D266  bclr #7,D0              ; strip the replay bit (the 0x9A entries)
+		 *   4D26C  jsr play_music(0x44CCE)
+		 * Unguarded, snd == 0 indexed WAV_ENTITY[-0x13] -- a wild sound_t* (Egypt
+		 * alone has 26 trigger-flagged placements with snd == 0: the "jewel" freeze).
+		 * Base 0x13 per review-log.md R3.12a: the ten real values 0x13..0x1C map onto
+		 * WAV_ENTITY[0..9]. Slot 9 (snd 0x1C, one entity, map 4) stays NULL until
+		 * ent9.wav ships; syssnd_play rejects NULL, so that is a silent no-op.
+		 * The PC plays NOTHING at wakeup (ibmpc_cs.bin 0x2836..0x2860: zombie guard,
+		 * lethal bits, step init, ret -- no sound call), so PLATFORM_ST only, like
+		 * the empty-gun click (defect #21).
+		 * NOT implemented: the ST's second site, replay-at-end-of-animation when
+		 * bit 7 is set (0x4D2BC) -- see pm-baty.md G8 (d).
+		 */
+		if ((ent_ents[e].trigsnd & 0x7F) != 0)
+			syssnd_play(WAV_ENTITY[(ent_ents[e].trigsnd & 0x7F) - 0x13], 1);
 #endif
       ent_ents[e].n &= ~ENT_LETHAL;
       if (ent_ents[e].flags & ENT_FLG_LETHALI)

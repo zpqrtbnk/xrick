@@ -171,7 +171,19 @@ connect_t map_connect[MAP_NBR_CONNECT] = {
   {0xff, 0x00, 0x00, 0x00},
   /* map 1 submap 11 */
   {0x01, 0x18, 0x10, 0x18},
-  {0000, 0x38, 0x12, 0x18}, /* was {0000, 0x38, 0x13, 0x68} ?? - now OK */
+  /* pm-baty.md G2: ST and PC genuinely differ here (BigOrno's own "was ... ?? -
+     now OK" comment is him switching this record from the PC value to the ST
+     value). ST: 0x11's right exit pairs bidirectionally with 0x12's left exit
+     (row 0x18 <-> row 0x38). PC: it instead leads to 0x13 @ entry 0x68 -- the
+     PC's forward path skips submap 0x12, though 0x12 stays reachable by
+     backing up from 0x13's own left exit (unaffected, below). Verified against
+     both dumps 2026-09-09: atari_ram.bin RoomHeader[0x11].pTransitions and
+     ibmpc_ds1.bin room-header table (47x8B @ 0x84CC). */
+#ifdef PLATFORM_ST
+  {0000, 0x38, 0x12, 0x18},
+#else /* PLATFORM_PC */
+  {0000, 0x38, 0x13, 0x68},
+#endif
   {0xff, 0x00, 0x00, 0x00},
   /* map 1 submap 12 */
   {0x01, 0x18, 0x11, 0x38}, /* pointless since it's not possible to go back */
