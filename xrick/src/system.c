@@ -11,7 +11,7 @@
  * You must not remove this notice, or any other, from this software.
  */
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include <stdarg.h>   /* args for sys_panic */
 #include <fcntl.h>    /* fcntl in sys_panic */
@@ -91,7 +91,10 @@ sys_gettime(void)
 	static U32 ticks_base = 0;
 	U32 ticks;
 
-	ticks = SDL_GetTicks();
+	/* SDL3 widened SDL_GetTicks() to 64-bit; truncate explicitly -- this is a
+	   monotonic ms counter used only relative to ticks_base, so the wraparound
+	   point moving out to ~49 days of Uint32 range is inconsequential here. */
+	ticks = (U32)SDL_GetTicks();
 
 	if (!ticks_base)
 		ticks_base = ticks;

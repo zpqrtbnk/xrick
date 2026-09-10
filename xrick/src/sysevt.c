@@ -16,7 +16,7 @@
  *          requires that SHIFT be pressed to input numbers.
  */
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include "system.h"
 #include "syskbd.h"
@@ -46,9 +46,9 @@ processEvent()
 #endif
 
 	switch (event.type) {
-	case SDL_KEYDOWN:
-		key = event.key.keysym.scancode;
-		//key = event.key.keysym.sym;
+	case SDL_EVENT_KEY_DOWN:
+		key = event.key.scancode; /* SDL3 flattened keysym onto the event directly */
+		//key = event.key.key;
 		if (key == syskbd_up || key == SDL_SCANCODE_UP) {
 			SETBIT(control_status, CONTROL_UP);
 			control_last = CONTROL_UP;
@@ -111,9 +111,9 @@ processEvent()
 			game_toggleCheat(3);
 		}
 		break;
-	case SDL_KEYUP:
-		key = event.key.keysym.scancode;
-		//key = event.key.keysym.sym;
+	case SDL_EVENT_KEY_UP:
+		key = event.key.scancode;
+		//key = event.key.key;
 		if (key == syskbd_up || key == SDL_SCANCODE_UP) {
       CLRBIT(control_status, CONTROL_UP);
       control_last = CONTROL_UP;
@@ -147,7 +147,7 @@ processEvent()
       control_last = CONTROL_FIRE;
     }
     break;
-  case SDL_QUIT:
+  case SDL_EVENT_QUIT:
     /* player tries to close the window -- this is the same as pressing ESC */
     SETBIT(control_status, CONTROL_EXIT);
     control_last = CONTROL_EXIT;
@@ -166,7 +166,7 @@ processEvent()
   break;
 #endif
 #ifdef ENABLE_JOYSTICK
-  case SDL_JOYAXISMOTION:
+  case SDL_EVENT_JOYSTICK_AXIS_MOTION:
     IFDEBUG_EVENTS(sys_printf("xrick/events: joystick\n"););
     if (event.jaxis.axis == 0) {  /* left-right */
       if (event.jaxis.value < -SYSJOY_RANGE) {  /* left */
@@ -197,10 +197,10 @@ processEvent()
       }
     }
     break;
-  case SDL_JOYBUTTONDOWN:
+  case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
     SETBIT(control_status, CONTROL_FIRE);
     break;
-  case SDL_JOYBUTTONUP:
+  case SDL_EVENT_JOYSTICK_BUTTON_UP:
     CLRBIT(control_status, CONTROL_FIRE);
     break;
 #endif

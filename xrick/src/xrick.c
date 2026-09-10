@@ -17,8 +17,9 @@
 #include "game.h"
 #include "fb.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include <signal.h>
+#include <stdlib.h> /* atexit, exit -- SDL2's SDL.h pulled this in transitively, SDL3's doesn't */
 #ifdef __WIN32__
 #include <windows.h>
 #endif
@@ -60,7 +61,9 @@ sys_init(int argc, char** argv)
 	sysarg_init(argc, argv);
 
 	// FIXME not writing to stdxxx.txt files anymore?
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS) < 0)
+	// SDL3 dropped SDL_INIT_TIMER (timers are always available) and SDL_INIT_EVENTS
+	// (implied by SDL_INIT_VIDEO); SDL_Init now returns bool, true on success.
+	if (!SDL_Init(SDL_INIT_VIDEO))
 		sys_panic("xrick/video: could not init SDL\n");
 
 	// FIXME logging

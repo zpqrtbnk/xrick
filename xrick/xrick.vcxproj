@@ -1,14 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
-    <ProjectConfiguration Include="Debug|Win32">
-      <Configuration>Debug</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|Win32">
-      <Configuration>Release</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
@@ -18,6 +10,16 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <!-- T21 (2026-09-10): defaults for a bare `MSBuild xrick.vcxproj` with no
+       /p:Configuration or /p:Platform: Release/x64 rather than MSBuild's own
+       Debug/Win32 fallback. Must be set before Microsoft.Cpp.Default.props, which
+       is what actually consumes $(Platform) to pick a default toolset.
+       Note: XML comments can't contain two adjacent dashes, so a dash pair
+       elsewhere in this file is written as "- " or ":" instead. -->
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+  </PropertyGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <ProjectGuid>{FD11A8D7-90E4-475D-835C-0410965E4BC5}</ProjectGuid>
@@ -25,25 +27,15 @@
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <!-- T19 native-build fix (2026-09-10): SDL2/zlib now come from vcpkg (vcpkg.json
          manifest in this directory), not the ..\..\lib\SDL2-2.0.9 / zlib1211 paths
-         this project used to expect and which were never present in the repo. -->
+         this project used to expect and which were never present in the repo.
+         T20 (2026-09-10): SDL2 -> SDL3, matching the Makefile/WSL build, see
+         build.md.
+         T21 (2026-09-10): dropped the Win32/x86 configs, x64 only from here on, so
+         VcpkgTriplet no longer needs a per-platform condition. -->
     <VcpkgEnabled>true</VcpkgEnabled>
-    <VcpkgTriplet Condition="'$(Platform)'=='x64'">x64-windows</VcpkgTriplet>
-    <VcpkgTriplet Condition="'$(Platform)'=='Win32'">x86-windows</VcpkgTriplet>
+    <VcpkgTriplet>x64-windows</VcpkgTriplet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>MultiByte</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -62,12 +54,6 @@
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -75,15 +61,25 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup />
-  <!-- T19 native-build fix: common settings shared by all four configs, merged with
+  <!-- T21: bin\<Configuration>\ instead of the default $(Platform)\$(Configuration)\
+       (x64\Release\ etc): there's only one platform now, so the platform segment
+       was pure noise. IntDir keeps the old default shape so object files from a
+       stale Win32 build (if any) can't collide with these. -->
+  <PropertyGroup>
+    <OutDir>$(ProjectDir)bin\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)obj\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <!-- T19 native-build fix: common settings shared by both configs, merged with
        %(...) so the per-config blocks below can still add their own. Previously only
        Debug|Win32 set AdditionalIncludeDirectories/PreprocessorDefinitions at all,
-       so the three other configs had no path to include\*.h, which is why they
-       could never compile. -->
+       so the other configs had no path to include\*.h, which is why they could
+       never compile. -->
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalIncludeDirectories>include;vcpkg_installed\$(VcpkgTriplet)\include;vcpkg_installed\$(VcpkgTriplet)\include\SDL2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <!-- T20: source now includes <SDL3/SDL.h> (not bare <SDL.h>), so unlike the
+           SDL2 port, no extra ...\include\SDL3 entry is needed: vcpkg's sdl3
+           port already places headers under include\SDL3\ within this path. -->
+      <AdditionalIncludeDirectories>include;vcpkg_installed\$(VcpkgTriplet)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <!-- SDL_MAIN_HANDLED: SDL_main.h renames main() to SDL_main() on Windows unless
            told otherwise, which otherwise leaves xrick.c's own main() with no real
            main symbol to link against (found via LNK2001 on the first native build,
@@ -93,28 +89,16 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>vcpkg_installed\$(VcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>SDL2.lib;z.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>SDL3.lib;z.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <!-- T19 native-build fix: SDL2.dll/z.dll are vcpkg's dynamic-triplet runtime
-         deps and don't get auto-deployed here (that needs VcpkgEnabled's own
-         targets import, which this project doesn't pull in), so copy them next to
-         the exe explicitly on every build. -->
+    <!-- T19 native-build fix: SDL2.dll/z.dll [T20: SDL3.dll] are vcpkg's
+         dynamic-triplet runtime deps and don't get auto-deployed here (that needs
+         VcpkgEnabled's own targets import, which this project doesn't pull in),
+         so copy them next to the exe explicitly on every build. -->
     <PostBuildEvent>
-      <Command>copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\SDL2.dll" "$(OutDir)" &gt;nul
+      <Command>copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\SDL3.dll" "$(OutDir)" &gt;nul
 copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\z.dll" "$(OutDir)" &gt;nul</Command>
     </PostBuildEvent>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ClCompile>
-      <WarningLevel>EnableAllWarnings</WarningLevel>
-      <Optimization>Disabled</Optimization>
-      <SDLCheck>true</SDLCheck>
-      <ConformanceMode>true</ConformanceMode>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -125,21 +109,6 @@ copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\z.dll" "$(OutDir)" &gt
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <Optimization>MaxSpeed</Optimization>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <ConformanceMode>true</ConformanceMode>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

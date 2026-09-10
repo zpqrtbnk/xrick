@@ -2,8 +2,8 @@
 #
 # The tree shipped with an MSVC project only (xrick.vcxproj), which expects
 # ..\..\lib\SDL2-2.0.9 and ..\..\lib\zlib1211 — neither present in the repo. This
-# builds the same sources against the system SDL2 and zlib so the review can compile,
-# warn and run on Linux/WSL.
+# builds the same sources against the system SDL3 (T20) and zlib so the review can
+# compile, warn and run on Linux/WSL.
 #
 # Targets:
 #   make            release-ish build with the full warning set
@@ -12,8 +12,10 @@
 
 CC      ?= gcc
 CXX     ?= g++
-SDL_CFLAGS := $(shell sdl2-config --cflags)
-SDL_LIBS   := $(shell sdl2-config --libs)
+# T20: upgraded from SDL2 to SDL3 -- see build.md. SDL3 dropped sdl2-config-style
+# shell scripts in favor of pkg-config exclusively.
+SDL_CFLAGS := $(shell pkg-config --cflags sdl3)
+SDL_LIBS   := $(shell pkg-config --libs sdl3)
 
 # The warning set is deliberate: -Wconversion/-Wsign-conversion are how phase 2
 # (variable widths) gets its candidate list. Do not silence them.

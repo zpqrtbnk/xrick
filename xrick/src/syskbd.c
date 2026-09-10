@@ -11,7 +11,7 @@
  * You must not remove this notice, or any other, from this software.
  */
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include "system.h"
 

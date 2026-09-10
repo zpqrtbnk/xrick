@@ -11,7 +11,7 @@
  * You must not remove this notice, or any other, from this software.
  */
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include "config.h"
 
@@ -25,37 +25,42 @@ static SDL_Joystick *j = NULL;
 void
 sysjoy_init(void)
 {
-  U8 i, jcount;
+  int i, jcount;
+  SDL_JoystickID *jids;
 
-  if (SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0) {
+  if (!SDL_InitSubSystem(SDL_INIT_JOYSTICK)) {
     IFDEBUG_JOYSTICK(
       sys_printf("xrick/joystick: can not initialize joystick subsystem\n");
       );
     return;
   }
 
-  jcount = SDL_NumJoysticks();
-  if (!jcount) {  /* no joystick on this system */
+  /* SDL3 replaced SDL_NumJoysticks()/SDL_JoystickOpen(index) with an explicit
+     instance-id array from SDL_GetJoysticks(). */
+  jids = SDL_GetJoysticks(&jcount);
+  if (!jids || !jcount) {  /* no joystick on this system */
     IFDEBUG_JOYSTICK(sys_printf("xrick/joystick: no joystick available\n"););
+    SDL_free(jids);
     return;
   }
 
   /* use the first joystick that we can open */
   for (i = 0; i < jcount; i++) {
-    j = SDL_JoystickOpen(i);
+    j = SDL_OpenJoystick(jids[i]);
     if (j)
       break;
   }
+  SDL_free(jids);
 
-  /* enable events */
-  SDL_JoystickEventState(SDL_ENABLE);
+  /* enable events -- SDL3 takes a plain bool, no separate SDL_ENABLE constant */
+  SDL_SetJoystickEventsEnabled(true);
 }
 
 void
 sysjoy_shutdown(void)
 {
   if (j)
-    SDL_JoystickClose(j);
+    SDL_CloseJoystick(j);
 }
 
 #endif /* ENABLE_JOYSTICK */

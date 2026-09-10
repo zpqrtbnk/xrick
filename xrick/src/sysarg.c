@@ -18,7 +18,7 @@
 #include <stdlib.h>  /* atoi */
 #include <string.h>  /* strcasecmp */
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include "system.h"
 #include "syskbd.h"

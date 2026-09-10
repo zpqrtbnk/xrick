@@ -23,8 +23,9 @@
 
 
 #include <stdlib.h> /* malloc */
+#include <string.h> /* memcpy */
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include "sysvid.h"
 #include "sysarg.h"
@@ -42,8 +43,10 @@
 #undef BPP8
 #define BPP32
 
-//#define SDL_FULLSCREEN SDL_WINDOW_FULLSCREEN
-#define SDL_FULLSCREEN SDL_WINDOW_FULLSCREEN_DESKTOP
+/* SDL3 dropped the separate "fullscreen desktop" flag: SDL_WINDOW_FULLSCREEN now
+   always means borderless-at-desktop-resolution unless an exclusive display mode
+   is set via SDL_SetWindowFullscreenMode(), which this file never does. */
+#define SDL_FULLSCREEN SDL_WINDOW_FULLSCREEN
 
 
 
@@ -55,7 +58,7 @@ static U32* pixels;
 static SDL_Window *screen;
 static SDL_Renderer *renderer;
 static SDL_Texture* texture;
-static U32 videoFlags;
+static SDL_WindowFlags videoFlags; /* SDL3 window flags are 64-bit */
 /* review-plan.md R0.1: renamed from 'gamma', which collides with libm's gamma().
    File-static, build portability only. */
 static U8 vid_gamma;
@@ -163,10 +166,24 @@ void sysvid_init(U16 width, U16 height)
 	IFDEBUG_VIDEO(sys_printf("xrick/video: start\n"););
 
 	/* various WM stuff */
-	SDL_ShowCursor(SDL_DISABLE);
+	SDL_HideCursor();
 
-	s = SDL_CreateRGBSurfaceFrom(IMG_ICON->pixels, IMG_ICON->w, IMG_ICON->h, 8, IMG_ICON->w, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff);
-	//SDL_SetColors(s, (SDL_Color *)IMG_ICON->colors, 0, IMG_ICON->ncolors);
+	/* SDL3 has no SDL_CreateRGBSurfaceFrom (mask-based format inference); build the
+	   indexed surface and its palette explicitly instead. */
+	s = SDL_CreateSurface(IMG_ICON->w, IMG_ICON->h, SDL_PIXELFORMAT_INDEX8);
+	if (s) {
+		SDL_Palette *pal = SDL_CreatePalette(IMG_ICON->ncolors);
+		for (i = 0; i < IMG_ICON->ncolors; i++) {
+			pal->colors[i].r = IMG_ICON->colors[i].r;
+			pal->colors[i].g = IMG_ICON->colors[i].g;
+			pal->colors[i].b = IMG_ICON->colors[i].b;
+			pal->colors[i].a = 255;
+		}
+		SDL_SetSurfacePalette(s, pal);
+		SDL_DestroyPalette(pal);
+		for (i = 0; i < IMG_ICON->h; i++)
+			memcpy((U8 *)s->pixels + i * (U32)s->pitch, IMG_ICON->pixels + i * (U32)IMG_ICON->w, IMG_ICON->w);
+	}
 	tpix = *(IMG_ICON->pixels);
 IFDEBUG_VIDEO(
 	sys_printf("xrick/video: icon is %dx%d\n", IMG_ICON->w, IMG_ICON->h);
@@ -240,22 +257,22 @@ IFDEBUG_VIDEO(
 	pixels = (U32*)malloc(fb_width * fb_height * sizeof(U32));
 
 	// create window/screen
-	screen = SDL_CreateWindow("xrick", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, fb_width * zoom, fb_height * zoom, videoFlags);
+	// SDL3 SDL_CreateWindow drops the x/y position args (always undefined-position
+	// equivalent; use SDL_SetWindowPosition if a specific spot is ever needed).
+	screen = SDL_CreateWindow("xrick", fb_width * zoom, fb_height * zoom, videoFlags);
 	SDL_SetWindowIcon(screen, s);
+	SDL_DestroySurface(s);
 
-	// create renderer
-	renderer = SDL_CreateRenderer(screen, -1, 0);
+	// create renderer -- SDL3 takes a driver name (NULL = default) instead of an index/flags pair
+	renderer = SDL_CreateRenderer(screen, NULL);
 
 	// needed for fullscreen-desktop mode?
-	SDL_RenderSetLogicalSize(renderer, fb_width, fb_height);
+	SDL_SetRenderLogicalPresentation(renderer, fb_width, fb_height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
 	// clear
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 	SDL_RenderClear(renderer);
 	SDL_RenderPresent(renderer);
-
-	// scaling hint - before texture creation
-	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
 
 	// fixme this is temp
 	// not using rects for now but we could ...
@@ -264,9 +281,20 @@ IFDEBUG_VIDEO(
 		SDL_TEXTUREACCESS_STREAMING,
 		fb_width, fb_height);
 
+	// scaling quality: SDL3 dropped SDL_HINT_RENDER_SCALE_QUALITY in favor of a
+	// per-texture scale mode (SDL_SCALEMODE_LINEAR is also the SDL3 default).
+	SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
+
+	// This is an opaque raster framebuffer -- pald[].a is never populated (always
+	// 0) since alpha was never meant to carry anything here. SDL2 apparently
+	// defaulted new textures to a blend mode that ignores it; SDL3 renders an
+	// all-zero alpha channel as fully transparent by default, which blended the
+	// whole frame down to the black SDL_RenderClear() color underneath it.
+	SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
+
 	SDL_UpdateTexture(texture, NULL, pixels, fb_width * sizeof(U32));
 	SDL_RenderClear(renderer);
-	SDL_RenderCopy(renderer, texture, NULL, NULL);
+	SDL_RenderTexture(renderer, texture, NULL, NULL);
 	SDL_RenderPresent(renderer);
 
 // http://www.linuxdevcenter.com/pub/a/linux/2003/08/07/sdl_anim.html
@@ -333,7 +361,13 @@ sysvid_update(rect_t *rects)
 	{
 		U16 o = rect->x + rect->y * fb_width;
 		U8* src0 = ((U8*)& fb) + o;
-		U8* dst0 = (U8 *)(pixelx + o);
+		/* Byte-offset into the locked texture using the *actual* pitch SDL_LockTexture
+		   returned, not an assumed fb_width*4 -- that assumption only holds when the
+		   renderer happens to return an unpadded pitch (true under the WSLg backend
+		   this was developed against; not guaranteed elsewhere, e.g. Windows' default
+		   SDL3 renderer, where a padded pitch made every row after the first drift,
+		   visible as scrolling glitches and sprite misalignment). */
+		U8* dst0 = (U8 *)pixelx + rect->y * pitch + rect->x * (int)sizeof(U32);
 		for (int y = rect->y; y < rect->y + rect->height; y++)
 		{
 			U8* srcx = src0;
@@ -353,7 +387,7 @@ sysvid_update(rect_t *rects)
 			}
 
 			src0 += fb_width;
-			dst0 += fb_width * 4;
+			dst0 += pitch;
 		}
 		rect = rect->next;
 		n++;
@@ -362,7 +396,7 @@ sysvid_update(rect_t *rects)
 	SDL_UnlockTexture(texture);
 
 	// rects?
-	SDL_RenderCopy(renderer, texture, NULL, NULL);
+	SDL_RenderTexture(renderer, texture, NULL, NULL);
 	SDL_RenderPresent(renderer);
 }
 
@@ -412,7 +446,8 @@ void
 sysvid_toggleFullscreen(void)
 {
 	videoFlags ^= SDL_FULLSCREEN;
-	SDL_SetWindowFullscreen(screen, videoFlags & SDL_FULLSCREEN ? SDL_FULLSCREEN : 0);
+	/* SDL3 SDL_SetWindowFullscreen takes a bool, not a flag value. */
+	SDL_SetWindowFullscreen(screen, (videoFlags & SDL_FULLSCREEN) != 0);
 
 	zoom = videoFlags & SDL_FULLSCREEN ? 1 : wmzoom;
 
