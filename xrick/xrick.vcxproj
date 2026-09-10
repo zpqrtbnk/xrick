@@ -89,15 +89,15 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>vcpkg_installed\$(VcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>SDL3.lib;z.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>SDL3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <!-- T19 native-build fix: SDL2.dll/z.dll [T20: SDL3.dll] are vcpkg's
-         dynamic-triplet runtime deps and don't get auto-deployed here (that needs
-         VcpkgEnabled's own targets import, which this project doesn't pull in),
-         so copy them next to the exe explicitly on every build. -->
+    <!-- T19 native-build fix: SDL2.dll [T20: SDL3.dll] is vcpkg's dynamic-triplet
+         runtime dep and doesn't get auto-deployed here (that needs VcpkgEnabled's
+         own targets import, which this project doesn't pull in), so copy it next to
+         the exe explicitly on every build. T22: zlib/z.dll dropped, see build.md;
+         nothing in the tree calls into it any more. -->
     <PostBuildEvent>
-      <Command>copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\SDL3.dll" "$(OutDir)" &gt;nul
-copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\z.dll" "$(OutDir)" &gt;nul</Command>
+      <Command>copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\SDL3.dll" "$(OutDir)" &gt;nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -129,7 +129,6 @@ copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\z.dll" "$(OutDir)" &gt
   <ItemGroup>
     <ClInclude Include="include\config.h" />
     <ClInclude Include="include\control.h" />
-    <ClInclude Include="include\data.h" />
     <ClInclude Include="include\dat_sndh_engine.h" />
     <ClInclude Include="include\debug.h" />
     <ClInclude Include="include\demo.h" />
@@ -162,7 +161,6 @@ copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\z.dll" "$(OutDir)" &gt
     <ClInclude Include="include\system.h" />
     <ClInclude Include="include\sysvid.h" />
     <ClInclude Include="include\tiles.h" />
-    <ClInclude Include="include\unzip.h" />
     <ClInclude Include="include\util.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="src\audio_engine\AtariMachine.h" />
@@ -177,7 +175,6 @@ copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\z.dll" "$(OutDir)" &gt
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\control.c" />
-    <ClCompile Include="src\data.c" />
     <ClCompile Include="src\dat_demo.c" />
     <ClCompile Include="src\dat_ents.c" />
     <ClCompile Include="src\dat_maps.c" />
@@ -220,7 +217,6 @@ copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\z.dll" "$(OutDir)" &gt
     <ClCompile Include="src\system.c" />
     <ClCompile Include="src\sysvid.c" />
     <ClCompile Include="src\tiles.c" />
-    <ClCompile Include="src\unzip.c" />
     <ClCompile Include="src\util.c" />
     <ClCompile Include="src\xrick.c" />
     <!-- T19: vendored AtariAudio C++ sources, compiled with their own lenient warning

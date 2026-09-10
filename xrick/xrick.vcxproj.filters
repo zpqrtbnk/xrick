@@ -21,9 +21,6 @@
     <ClInclude Include="include\control.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\data.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="include\debug.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -102,9 +99,6 @@
     <ClInclude Include="include\tiles.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\unzip.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="include\util.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -159,9 +153,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\dat_tilesST.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\data.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\demo.c">
@@ -261,9 +252,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\tiles.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\unzip.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\util.c">

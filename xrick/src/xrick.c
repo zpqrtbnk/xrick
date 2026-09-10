@@ -117,13 +117,7 @@ main(int argc, char *argv[])
 {
 	sys_init(argc, argv);
 
-	char* path;
-	if (sysarg_args_data)
-		path = sysarg_args_data;
-	else
-		path = "data.zip";
-
-	game_run(path);
+	game_run();
 
 	sys_shutdown();
 	return 0;

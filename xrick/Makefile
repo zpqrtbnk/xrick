@@ -2,8 +2,8 @@
 #
 # The tree shipped with an MSVC project only (xrick.vcxproj), which expects
 # ..\..\lib\SDL2-2.0.9 and ..\..\lib\zlib1211 — neither present in the repo. This
-# builds the same sources against the system SDL3 (T20) and zlib so the review can
-# compile, warn and run on Linux/WSL.
+# builds the same sources against the system SDL3 (T20) so the review can compile,
+# warn and run on Linux/WSL.
 #
 # Targets:
 #   make            release-ish build with the full warning set
@@ -32,8 +32,11 @@ CFLAGS  += -Iinclude $(SDL_CFLAGS) $(WARN) -fcommon -O2 -g -DPLATFORM_$(PLATFORM
 # third-party code. Quote-includes resolve same-directory (ym2149c.h, external/Musashi/
 # m68k.h, etc.), so no extra -I is needed beyond what CFLAGS already has.
 CXXFLAGS += -Iinclude $(SDL_CFLAGS) -O2 -g -std=c++17
+# T22: zlib/unzip dropped -- see build.md. Nothing loads assets from disk anymore;
+# every WAV_*/dat_* table is compiled in, and data_file_{open,read,close,...} (the
+# only things that ever called into zlib) were dead code with zero callers.
 LDFLAGS +=
-LIBS    := $(SDL_LIBS) -lz -lm
+LIBS    := $(SDL_LIBS) -lm
 
 CSRC := $(wildcard src/*.c)
 
@@ -47,7 +50,7 @@ BIN := xrick
 
 # Game logic only — no generated tables, no SDL layer, no vendored library. This is the
 # set that review-plan.md phases 2-3 actually read.
-LOGIC := $(filter-out $(wildcard src/dat_*.c) src/unzip.c $(wildcard src/sys*.c),$(CSRC))
+LOGIC := $(filter-out $(wildcard src/dat_*.c) $(wildcard src/sys*.c),$(CSRC))
 
 all: $(BIN)
 

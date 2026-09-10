@@ -2,8 +2,7 @@
   "name": "xrick",
   "version": "1.0.0",
   "dependencies": [
-    "sdl3",
-    "zlib"
+    "sdl3"
   ],
   "builtin-baseline": "1cfeac0392ecf6e2d82cbadb22fc9f0683dde797"
 }

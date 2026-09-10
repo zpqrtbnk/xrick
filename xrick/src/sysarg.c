@@ -56,8 +56,6 @@ int sysarg_args_vol = 0;
 int sysarg_args_demo = 0;
 char *sysarg_args_record = NULL;
 #endif
-char *sysarg_args_data = NULL;
-
 #ifdef ENABLE_DEMO
 #define SYSARG_DEMOHELP \
 	"  -demo : Play the built-in demo script (attract mode). No keyboard needed.\n" \
@@ -228,10 +226,6 @@ sysarg_init(int argc, char **argv)
       sysarg_args_record = argv[i];
     }
 #endif
-	else if (!strcmp(argv[i], "-data")) {
-		if (++i == argc) sysarg_fail("missing data");
-		sysarg_args_data = argv[i];
-	}
 
     else {
       sysarg_fail("invalid argument(s)");

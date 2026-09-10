@@ -20,7 +20,6 @@
 #include "syssnd.h"
 
 #include "rects.h"
-#include "data.h"
 
 #define LEFT 1
 #define RIGHT 0
@@ -44,7 +43,7 @@ extern U8 game_period;     /* time between each frame, in millisecond */
 
 extern rect_t *game_rects; /* rectangles to redraw at each frame */
 
-extern void game_run(char *path);
+extern void game_run(void);
 
 extern void game_toggleCheat(U8);
 

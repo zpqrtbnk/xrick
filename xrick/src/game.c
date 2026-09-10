@@ -32,7 +32,6 @@
 #include "rects.h"
 #include "scroller.h"
 #include "control.h"
-#include "data.h"
 #include "fb.h"
 #include "tiles.h"
 #include "draw.h"
@@ -179,11 +178,8 @@ static void game_exit(void);
  * main loop.
  */
 void
-game_run(char *path)
+game_run(void)
 {
-	sys_printf("xrick/game: path='%s'\n", path ? path : "");
-
-	data_setpath(path);
 	loadData(); /* load cached data */
 
 	game_period = sysarg_args_period ? sysarg_args_period : GAME_PERIOD;
@@ -223,7 +219,6 @@ game_run(char *path)
 static void game_exit(void)
 {
 	freeData(); /* free cached data */
-	data_closepath();
 }
 
 static void game_loop(void)
