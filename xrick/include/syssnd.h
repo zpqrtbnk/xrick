@@ -9,6 +9,12 @@
  * terms of this license.
  *
  * You must not remove this notice, or any other, from this software.
+ *
+ * T19 / audio-sndh.md: WAV playback replaced by the real ST sound engine, run under
+ * AtariAudio's 68000 emulation and driven directly (see src/syssnd.c). A sound_t is
+ * no longer a PCM buffer -- it is the ST track number plus the play_music() D1 value
+ * the original game used at its own call site for this exact sound (audio-sndh.md
+ * S5/S7), a fact established once per sound and baked in as a compile-time constant.
  */
 
 #ifndef _SYSSND_H
@@ -19,49 +25,29 @@
 #ifdef ENABLE_SOUND
 
 typedef struct {
-#ifdef DEBUG
-	char* name;
-#endif
-	U8* buf;
-	U32 len;
-	U8 dispose;
+	U8 track;	/* index into music_track_table, 0-28 */
+	S8 d1;		/* play_music()'s D1 at this sound's original ST call site */
 } sound_t;
 
 extern void syssnd_init(void);
 extern void syssnd_shutdown(void);
 extern void syssnd_vol(S8);
 extern void syssnd_toggleMute(void);
-extern S8 syssnd_play(sound_t*, S8);
+extern void syssnd_play(const sound_t *sound);
+extern void syssnd_play_track(U8 track, S8 d1);
 extern void syssnd_pause(U8, U8);
-extern void syssnd_stopchan(S8);
-extern void syssnd_stopsound(sound_t*);
-extern void syssnd_stopall();
-extern int syssnd_isplaying(sound_t*);
-extern sound_t* syssnd_load(char* name);
-extern void syssnd_free(sound_t*);
 
-/* 8-bit mono at 22050Hz */
-#define SYSSND_FREQ 22050
+/* mono, signed 16-bit -- what AtariMachine::ComputeNextSample() produces */
+#define SYSSND_FREQ 44100
 #define SYSSND_CHANNELS 1
 #define SYSSND_MAXVOL 10
-#define SYSSND_MIXCHANNELS 8
-/* MIXSAMPLES: 256 is too low on Windows. 512 means ~20 mix per second at 11025Hz */
-/* MIXSAMPLES: 1024 at 22050Hz is fine on Windows, FF but not Chrome */
-/* MIXSAMPLES: 2048 seems OK on Chrome too ~10 mix per second? */
-/* MIXSAMPLES: what about 4096? */
+/* MIXSAMPLES: kept from the WAV-mixer era -- still the right order of magnitude for
+   callback latency vs. per-buffer overhead; unrelated to how many sounds can overlap
+   now (the ST engine itself arbitrates its 3 PSG voices, not this buffer size). */
 #define SYSSND_MIXSAMPLES 2048
-
-typedef struct {
-	sound_t *snd;
-	U8 *buf;
-	U32 len;
-	S8 loop;
-} channel_t;
 
 #endif /* ENABLE_SOUND */
 
 #endif /* _SYSSND_H */
 
 /* eof */
-
-

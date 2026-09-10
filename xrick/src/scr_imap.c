@@ -108,7 +108,7 @@ U8 screen_introMap(void)
 			//game_rects = &draw_SCREENRECT;
 
 #ifdef ENABLE_SOUND
-			sounds_setMusic(map_maps[env_map].tune, 1);
+			sounds_setMusic(map_maps[env_map].tune, 0);
 #endif
 
 			seq = 1;

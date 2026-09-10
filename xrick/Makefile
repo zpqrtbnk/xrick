@@ -11,6 +11,7 @@
 #   make clean
 
 CC      ?= gcc
+CXX     ?= g++
 SDL_CFLAGS := $(shell sdl2-config --cflags)
 SDL_LIBS   := $(shell sdl2-config --libs)
 
@@ -23,28 +24,41 @@ WARN    := -Wall -Wextra -Wconversion -Wsign-conversion -Wtype-limits
 # PLATFORM=ST (default) or PLATFORM=PC -- selects game behaviour and data.
 PLATFORM ?= ST
 CFLAGS  += -Iinclude $(SDL_CFLAGS) $(WARN) -fcommon -O2 -g -DPLATFORM_$(PLATFORM)
+# T19 / audio-sndh.md S9: src/audio_engine/ is AtariAudio, vendored verbatim from
+# arnaud-carre/AtariAudio (MIT) -- C++, not C. Built with its own, more lenient flags;
+# this tree's -Wconversion/-Wsign-conversion discipline is not held against vendored
+# third-party code. Quote-includes resolve same-directory (ym2149c.h, external/Musashi/
+# m68k.h, etc.), so no extra -I is needed beyond what CFLAGS already has.
+CXXFLAGS += -Iinclude $(SDL_CFLAGS) -O2 -g -std=c++17
 LDFLAGS +=
 LIBS    := $(SDL_LIBS) -lz -lm
 
-SRC := $(wildcard src/*.c)
+CSRC := $(wildcard src/*.c)
 
 # GFXST is selected in config.h, so the GFXPC data tables must not be compiled.
-SRC := $(filter-out src/dat_picsPC.c src/dat_spritesPC.c src/dat_tilesPC.c,$(SRC))
+CSRC := $(filter-out src/dat_picsPC.c src/dat_spritesPC.c src/dat_tilesPC.c,$(CSRC))
 
-OBJ := $(SRC:.c=.o)
+CXXSRC := $(wildcard src/audio_engine/*.cpp) $(wildcard src/audio_engine/external/Musashi/*.cpp)
+
+OBJ := $(CSRC:.c=.o) $(CXXSRC:.cpp=.o)
 BIN := xrick
 
-# Game logic only — no generated tables, no SDL layer. This is the set that
-# review-plan.md phases 2-3 actually read.
-LOGIC := $(filter-out $(wildcard src/dat_*.c) src/unzip.c $(wildcard src/sys*.c),$(SRC))
+# Game logic only — no generated tables, no SDL layer, no vendored library. This is the
+# set that review-plan.md phases 2-3 actually read.
+LOGIC := $(filter-out $(wildcard src/dat_*.c) src/unzip.c $(wildcard src/sys*.c),$(CSRC))
 
 all: $(BIN)
 
+# Linked with CXX (not CC) because audio_engine/ pulls in libstdc++ -- harmless for the
+# C objects, required for the C++ ones.
 $(BIN): $(OBJ)
-	$(CC) $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
+	$(CXX) $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # R0.1 evidence: warnings over the logic surface, without linking.
 warn:

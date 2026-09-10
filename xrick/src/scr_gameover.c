@@ -48,7 +48,7 @@ screen_gameover(void)
 		period = game_period; /* save period, */
 		game_period = 50;     /* and use our own */
 #ifdef ENABLE_SOUND
-		sounds_setMusic("sounds/gameover.wav", 1);
+		sounds_setMusic(SND_TRACK_GAMEOVER, 0);
 #endif
 	}
 

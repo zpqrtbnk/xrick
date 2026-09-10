@@ -153,7 +153,7 @@ e_bomb_action(UNUSED(U8 e))
 		 */
 #ifdef ENABLE_SOUND
 		if ((e_bomb_ticker & 0x03) == 0x02)
-			syssnd_play(WAV_BOMBSHHT, 1);
+			syssnd_play(WAV_BOMBSHHT);
 #endif
 #ifdef PLATFORM_ST
 		/*
@@ -192,7 +192,7 @@ e_bomb_action(UNUSED(U8 e))
 		 * explode
 		 */
 #ifdef ENABLE_SOUND
-		syssnd_play(WAV_EXPLODE, 1);
+		syssnd_play(WAV_EXPLODE);
 #endif
 #ifdef PLATFORM_ST
 		/*

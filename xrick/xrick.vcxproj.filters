@@ -149,9 +149,6 @@
     <ClCompile Include="src\dat_screens.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\dat_snd.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\dat_spritesPC.c">
       <Filter>Source Files</Filter>
     </ClCompile>

@@ -9,12 +9,18 @@
  * terms of this license.
  *
  * You must not remove this notice, or any other, from this software.
+ *
+ * T19 / audio-sndh.md: rewritten to drive the game's real ST sound engine (lifted
+ * verbatim into dat_sndh_engine.c) through AtariAudio's AtariMachine emulator
+ * (src/audio_engine/, vendored from arnaud-carre/AtariAudio, MIT) instead of mixing
+ * WAV buffers. One AtariMachine instance runs for the whole session -- see
+ * audio-sndh.md S2 for why SndhRenderer's one-subtune-at-a-time model doesn't fit a
+ * game that layers music, SFX and two digidrums through one live engine.
  */
 
 #include <SDL.h>
 #include <stdlib.h>
-#include <memory.h>
-#include <string.h> /* strlen, strncpy */
+#include <string.h>
 
 #include "syssnd.h"
 
@@ -23,437 +29,230 @@
 #include "sysarg.h"
 #include "game.h"
 #include "debug.h"
-#include "data.h"
-
-#ifdef EMSCRIPTEN
-#define SDL_mutexP(m)
-#define SDL_mutexV(m)
-#endif
-
-#define ADJVOL(S) (((S)*sndVol)/SDL_MIX_MAXVOLUME)
+#include "dat_sndh_engine.h"
+#include "audio_engine/AtariMachineC.h"
 
 static U8 isAudioActive = FALSE;
-static channel_t channel[SYSSND_MIXCHANNELS];
 
-static U8 sndVol = SDL_MIX_MAXVOLUME;  /* internal volume */
-static U8 sndUVol = SYSSND_MAXVOL;  /* user-selected volume */
-static U8 sndMute = FALSE;  /* mute flag */
+static AtariMachineHandle *machine = NULL;
+static U32 samplesPerTick;	/* host samples per 50 Hz engine tick */
+static U32 tickCountdown;
+
+static U8 sndUVol = SYSSND_MAXVOL;	/* user-selected volume */
+static U8 sndMute = FALSE;		/* mute flag */
 
 static SDL_AudioDeviceID device;
 static SDL_mutex *sndlock;
 
 /*
- * prototypes
- */
-static int sdlRWops_open(SDL_RWops *context, char *name);
-/* review-plan.md R0.1: SDL_RWops callback signatures widened after SDL 2.0.9 (the
-   version this tree targeted) -- seek returns Sint64, read/write return size_t. Build
-   portability only; the bodies are unchanged and still delegate to data_file_*. */
-static Sint64 sdlRWops_seek(SDL_RWops *context, Sint64 offset, int whence);
-static size_t sdlRWops_read(SDL_RWops *context, void *ptr, size_t size, size_t maxnum);
-static size_t sdlRWops_write(SDL_RWops *context, const void *ptr, size_t size, size_t num);
-static int sdlRWops_close(SDL_RWops *context);
-static void end_channel(U8);
-
-/*
- * Callback -- this is also where all sound mixing is done
+ * The D1 trampolines -- play_music()'s calling convention is D0.b=track, D1.b=variant
+ * (audio-sndh.md S5), but AtariMachine::Jsr(addr, d0) only ever sets D0. Every call
+ * site in the original game uses D1 = 0 or D1 = 1 (audio-sndh.md S7's census; no third
+ * value appears anywhere), so two 8-byte stubs cover every case -- D0 is left exactly
+ * as Jsr() set it and the stub tail-jumps (not jsr's, so the stack is untouched) into
+ * play_music.
  *
- * Note: it may not be that much a good idea to do all the mixing here ; it
- * may be more efficient to mix samples every frame, or maybe everytime a
- * new sound is sent to be played. I don't know.
+ * Both opcodes are verified encodings, not guessed:
+ *   7200/7201 = "moveq #0,d1"/"moveq #1,d1" -- re/build_sndh.py's own ENCODINGS table
+ *               already cites 0x7200 (as "moveq #0,d1") and a real 0x7201 instance at
+ *               atari_ram.bin 0x4C534 ("moveq #1,d1").
+ *   4EF9      = "jmp (xxx).l" -- the standard 68000 encoding one bit above JSR (xxx).l,
+ *               which re/build_sndh.py's ENCODINGS table already verified as 0x4EB9
+ *               (JSR/JMP differ only in bit 6 of the opcode word: 0x4EB9 | 0x0040).
+ * Re-verified after this build by disassembling the uploaded bytes with the vendored
+ * Musashi core (P4 smoke test) rather than trusted from the derivation alone.
  */
-void syssnd_callback(UNUSED(void *userdata), U8 *stream, int len)
+#define TRAMP_D1_0 (SNDH_ENGINE_END)		/* moveq #0,d1 ; jmp play_music */
+#define TRAMP_D1_1 (SNDH_ENGINE_END + 8u)	/* moveq #1,d1 ; jmp play_music */
+
+static const U8 trampolines[16] = {
+	0x72, 0x00, 0x4E, 0xF9, (SNDH_FN_PLAY >> 24) & 0xFF, (SNDH_FN_PLAY >> 16) & 0xFF,
+	(SNDH_FN_PLAY >> 8) & 0xFF, SNDH_FN_PLAY & 0xFF,
+	0x72, 0x01, 0x4E, 0xF9, (SNDH_FN_PLAY >> 24) & 0xFF, (SNDH_FN_PLAY >> 16) & 0xFF,
+	(SNDH_FN_PLAY >> 8) & 0xFF, SNDH_FN_PLAY & 0xFF,
+};
+
+static void
+syssnd_callback(UNUSED(void *userdata), U8 *stream, int len)
 {
-	U8 c;
-	S16 s;
+	S16 *out = (S16 *)stream;
+	U32 n = (U32)len / sizeof(S16);
 	U32 i;
 
 	SDL_mutexP(sndlock);
-
-	for (i = 0; i < (U32)len; i++) 
-	{
-		s = 0;
-		for (c = 0; c < SYSSND_MIXCHANNELS; c++) 
-		{
-			if (channel[c].loop != 0) /* channel is active */
-			{
-				if (channel[c].len > 0) /* not ending */
-				{
-					s += ADJVOL(*channel[c].buf - 0x80);
-					channel[c].buf++;
-					channel[c].len--;
-				}
-				else /* ending */
-				{
-					if (channel[c].loop > 0) channel[c].loop--;
-					if (channel[c].loop) /* just loop */
-					{
-						IFDEBUG_AUDIO2(sys_printf("xrick/audio: channel %d - loop\n", c););
-						channel[c].buf = channel[c].snd->buf;
-						channel[c].len = channel[c].snd->len;
-						s += ADJVOL(*channel[c].buf - 0x80);
-						channel[c].buf++;
-						channel[c].len--;
-					}
-					else /* end for real */
-					{
-						IFDEBUG_AUDIO2(sys_printf("xrick/audio: channel %d - end\n", c););
-						end_channel(c);
-					}
-				}
-			}
+	for (i = 0; i < n; i++) {
+		if (--tickCountdown == 0) {
+			atari_machine_jsr(machine, SNDH_FN_TICK, 0);
+			tickCountdown = samplesPerTick;
 		}
-
-		if (sndMute)
-		{
-			stream[i] = 0x80;
+		if (sndMute) {
+			out[i] = 0;
 		}
-		else 
-		{
-			s += 0x80;
-			if (s > 0xff) s = 0xff;
-			if (s < 0x00) s = 0x00;
-			stream[i] = (U8)s;
+		else {
+			S32 s = atari_machine_next_sample(machine);
+			out[i] = (S16)((s * (S32)sndUVol) / SYSSND_MAXVOL);
 		}
 	}
-
-	// fixme is that even needed?
-	//memcpy(stream, stream, len);
-	//SDL_MixAudioFormat(stream, stream, );
-
 	SDL_mutexV(sndlock);
-}
-
-static void
-end_channel(U8 c)
-{
-	channel[c].loop = 0;
-	if (channel[c].snd->dispose)
-		syssnd_free(channel[c].snd);
-	channel[c].snd = NULL;
 }
 
 void
 syssnd_init(void)
 {
-  SDL_AudioSpec desired, obtained;
-  U16 c;
+	SDL_AudioSpec desired, obtained;
 
-  if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
-    IFDEBUG_AUDIO(
-      sys_printf("xrick/audio: can not initialize audio subsystem\n");
-      );
-    return;
-  }
+	if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
+		IFDEBUG_AUDIO(
+			sys_printf("xrick/audio: can not initialize audio subsystem\n");
+		);
+		return;
+	}
 
-  desired.freq = SYSSND_FREQ;
-  desired.format = AUDIO_U8;
-  desired.channels = SYSSND_CHANNELS;
-  desired.samples = SYSSND_MIXSAMPLES;
-  desired.callback = syssnd_callback;
-  desired.userdata = NULL;
+	desired.freq = SYSSND_FREQ;
+	desired.format = AUDIO_S16SYS;
+	desired.channels = SYSSND_CHANNELS;
+	desired.samples = SYSSND_MIXSAMPLES;
+	desired.callback = syssnd_callback;
+	desired.userdata = NULL;
 
-  device = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0); //SDL_AUDIO_ALLOW_FORMAT_CHANGE);
-  if (device < 0) {
-    IFDEBUG_AUDIO(
-      sys_printf("xrick/audio: can not open audio (%s)\n", SDL_GetError());
-      );
-    return;
-  }
+	device = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
+	if (device < 0) {
+		IFDEBUG_AUDIO(
+			sys_printf("xrick/audio: can not open audio (%s)\n", SDL_GetError());
+		);
+		return;
+	}
 
 #ifndef EMSCRIPTEN
-  sndlock = SDL_CreateMutex();
-  if (sndlock == NULL) {
-    IFDEBUG_AUDIO(sys_printf("xrick/audio: can not create lock\n"););
-    SDL_CloseAudio();
-    return;
-  }
+	sndlock = SDL_CreateMutex();
+	if (sndlock == NULL) {
+		IFDEBUG_AUDIO(sys_printf("xrick/audio: can not create lock\n"););
+		SDL_CloseAudioDevice(device);
+		return;
+	}
 #endif
 
-  if (sysarg_args_vol != 0) {
-    sndUVol = sysarg_args_vol;
-    sndVol = SDL_MIX_MAXVOLUME * sndUVol / SYSSND_MAXVOL;
-  }
+	if (sysarg_args_vol != 0)
+		sndUVol = sysarg_args_vol;
 
-  for (c = 0; c < SYSSND_MIXCHANNELS; c++)
-    channel[c].loop = 0;  /* deactivate */
+	machine = atari_machine_create((unsigned int)obtained.freq);
+	if (!machine) {
+		IFDEBUG_AUDIO(sys_printf("xrick/audio: can not create ST audio engine\n"););
+		SDL_CloseAudioDevice(device);
+		return;
+	}
+	atari_machine_upload(machine, sndh_engine_blob, SNDH_ENGINE_BASE, sndh_engine_blob_len);
+	atari_machine_upload(machine, trampolines, TRAMP_D1_0, sizeof(trampolines));
+
+	/* T19 P8: a freshly-Startup()'d AtariMachine's very first Jsr() can misbehave
+	   (measured: reset_sound_chip's first call returns false though harmless;
+	   calling a DIFFERENT function first instead segfaults) -- confirmed specific to
+	   the first pulse_reset ever executed on an instance, not to any particular
+	   target. One throwaway call absorbs it; every call after is reliable, including
+	   over a full simulated gameplay session. Discard this result on purpose. */
+	atari_machine_jsr(machine, SNDH_FN_RESET, 0);
+
+	atari_machine_jsr(machine, SNDH_FN_RESET, 0);
+	/* Our blob is a snapshot of a LIVE, mid-play engine (title music playing), not a
+	   clean boot -- reset_sound_chip alone doesn't clear the per-voice envelope/note
+	   state that carries over, which rings under the first type-1/2 track played
+	   (re/build_sndh.py's own "superimposed ding" fix, same root cause here). */
+	atari_machine_jsr(machine, SNDH_FN_SILENCE, 0);
+	atari_machine_jsr(machine, SNDH_FN_TIMERA, 0);	/* required for both digidrums */
+
+	samplesPerTick = (U32)obtained.freq / 50u;
+	if (samplesPerTick == 0)
+		samplesPerTick = 1;
+	tickCountdown = samplesPerTick;
 
 	isAudioActive = TRUE;
 	SDL_PauseAudioDevice(device, 0);
 
-	IFDEBUG_AUDIO(sys_printf("xrick/audio: initialized\n"););
+	IFDEBUG_AUDIO(sys_printf("xrick/audio: initialized (%d Hz)\n", obtained.freq););
 }
 
-/*
- * Shutdown
- */
 void
 syssnd_shutdown(void)
 {
-  if (!isAudioActive) return;
+	if (!isAudioActive)
+		return;
 
-  SDL_CloseAudioDevice(device);
-  SDL_DestroyMutex(sndlock);
-  isAudioActive = FALSE;
+	SDL_CloseAudioDevice(device);
+	SDL_DestroyMutex(sndlock);
+	if (machine) {
+		atari_machine_destroy(machine);
+		machine = NULL;
+	}
+	isAudioActive = FALSE;
 }
 
-/*
- * Toggle mute
- *
- * When muted, sounds are still managed but not sent to the dsp, hence
- * it is possible to un-mute at any time.
- */
 void
 syssnd_toggleMute(void)
 {
-  SDL_mutexP(sndlock);
-  sndMute = !sndMute;
-  SDL_mutexV(sndlock);
+	SDL_mutexP(sndlock);
+	sndMute = !sndMute;
+	SDL_mutexV(sndlock);
 }
 
 void
 syssnd_vol(S8 d)
 {
-  if ((d < 0 && sndUVol > 0) ||
-      (d > 0 && sndUVol < SYSSND_MAXVOL)) {
-    sndUVol += d;
-    SDL_mutexP(sndlock);
-    sndVol = SDL_MIX_MAXVOLUME * sndUVol / SYSSND_MAXVOL;
-    SDL_mutexV(sndlock);
-  }
+	if ((d < 0 && sndUVol > 0) ||
+		(d > 0 && sndUVol < SYSSND_MAXVOL)) {
+		SDL_mutexP(sndlock);
+		sndUVol += d;
+		SDL_mutexV(sndlock);
+	}
 }
 
 /*
- * Play a sound
- *
- * loop: number of times the sound should be played, -1 to loop forever
- * returns: channel number, or -1 if none was available
- *
- * NOTE if sound is already playing, simply reset it (i.e. can not have
- * twice the same sound playing -- tends to become noisy when too many
- * bad guys die at the same time).
+ * Play a track through the live engine, exactly as the original game does:
+ * play_music() itself arbitrates the 3 shared PSG voices (audio-sndh.md S2) -- there
+ * is no per-sound "channel" here to pick or stop.
  */
-S8
-syssnd_play(sound_t *sound, S8 loop)
+void
+syssnd_play_track(U8 track, S8 d1)
 {
-  S8 c;
+	if (!isAudioActive)
+		return;
 
-  if (!isAudioActive) return -1;
-  if (sound == NULL) return -1;
+	SDL_mutexP(sndlock);
+	atari_machine_jsr(machine, d1 != 0 ? TRAMP_D1_1 : TRAMP_D1_0, track);
+	SDL_mutexV(sndlock);
 
-  c = 0;
-  SDL_mutexP(sndlock);
-  while ((channel[c].snd != sound || channel[c].loop == 0) &&
-	 channel[c].loop != 0 &&
-	 c < SYSSND_MIXCHANNELS)
-    c++;
-  if (c == SYSSND_MIXCHANNELS)
-    c = -1;
+	IFDEBUG_AUDIO(sys_printf("xrick/sound: play_music(%d, %d)\n", track, d1););
+}
 
-  IFDEBUG_AUDIO(
-    if (channel[c].snd == sound && channel[c].loop != 0)
-      sys_printf("xrick/sound: already playing %s on channel %d - resetting\n",
-		 sound->name, c);
-    else if (c >= 0)
-      sys_printf("xrick/sound: playing %s on channel %d\n", sound->name, c);
-    );
-
-  if (c >= 0) {
-    channel[c].loop = loop;
-    channel[c].snd = sound;
-    channel[c].buf = sound->buf;
-    channel[c].len = sound->len;
-  }
-  SDL_mutexV(sndlock);
-
-  return c;
+void
+syssnd_play(const sound_t *sound)
+{
+	if (!sound)
+		return;
+	syssnd_play_track(sound->track, sound->d1);
 }
 
 /*
  * Pause
  *
  * pause: TRUE or FALSE
- * clear: TRUE to cleanup all sounds and make sure we start from scratch
+ * clear: TRUE to also silence the engine immediately (reset_sound_chip), not just
+ *        stop the SDL callback
  */
 void
 syssnd_pause(U8 pause, U8 clear)
 {
-  U8 c;
+	if (!isAudioActive)
+		return;
 
-  if (!isAudioActive) return;
-
-  if (clear == TRUE) {
-    SDL_mutexP(sndlock);
-    for (c = 0; c < SYSSND_MIXCHANNELS; c++)
-      channel[c].loop = 0;
-    SDL_mutexV(sndlock);
-  }
-
-  if (pause == TRUE)
-    SDL_PauseAudio(1);
-  else
-    SDL_PauseAudio(0);
-}
-
-/*
- * Stop a channel
- */
-void
-syssnd_stopchan(S8 chan)
-{
-  if (chan < 0 || chan > SYSSND_MIXCHANNELS)
-    return;
-
-  SDL_mutexP(sndlock);
-  if (channel[chan].snd) end_channel(chan);
-  SDL_mutexV(sndlock);
-}
-
-/*
- * Stop a sound
- */
-void
-syssnd_stopsound(sound_t *sound)
-{
-	U8 i;
-
-	if (!sound) return;
-
-	SDL_mutexP(sndlock);
-	for (i = 0; i < SYSSND_MIXCHANNELS; i++)
-		if (channel[i].snd == sound) end_channel(i);
-	SDL_mutexV(sndlock);
-}
-
-/*
- * See if a sound is playing
- */
-int
-syssnd_isplaying(sound_t *sound)
-{
-	U8 i, playing;
-
-	playing = 0;
-	SDL_mutexP(sndlock);
-	for (i = 0; i < SYSSND_MIXCHANNELS; i++)
-		if (channel[i].snd == sound) playing = 1;
-	SDL_mutexV(sndlock);
-	return playing;
-}
-
-/*
- * Stops all channels.
- */
-void
-syssnd_stopall(void)
-{
-	U8 i;
-
-	SDL_mutexP(sndlock);
-	for (i = 0; i < SYSSND_MIXCHANNELS; i++)
-		if (channel[i].snd) end_channel(i);
-	SDL_mutexV(sndlock);
-}
-
-/*
- * Load a sound.
- */
-sound_t *
-syssnd_load(char *name)
-{
-	sound_t *s;
-	SDL_RWops *context;
-	SDL_AudioSpec audiospec;
-
-	/* alloc context */
-	context = malloc(sizeof(SDL_RWops));
-	context->seek = sdlRWops_seek;
-	context->read = sdlRWops_read;
-	context->write = sdlRWops_write;
-	context->close = sdlRWops_close;
-
-	/* open */
-	if (sdlRWops_open(context, name) == -1)
-		return NULL;
-
-	/* alloc sound */
-	s = malloc(sizeof(sound_t));
-#ifdef DEBUG
-	s->name = malloc(strlen(name) + 1);
-	strncpy(s->name, name, strlen(name) + 1);
-#endif
-
-	/* read */
-	/* second param == 1 -> close source once read */
-	if (!SDL_LoadWAV_RW(context, 1, &audiospec, &(s->buf), &(s->len)))
-	{
-		free(s);
-		return NULL;
+	if (clear == TRUE) {
+		SDL_mutexP(sndlock);
+		atari_machine_jsr(machine, SNDH_FN_RESET, 0);
+		SDL_mutexV(sndlock);
 	}
 
-	s->dispose = FALSE;
-
-	return s;
-}
-
-/*
- *
- */
-void
-syssnd_free(sound_t *s)
-{
-	if (!s) return;
-	if (s->buf) SDL_FreeWAV(s->buf);
-	s->buf = NULL;
-	s->len = 0;
-}
-
-/*
- *
- */
-static int
-sdlRWops_open(SDL_RWops *context, char *name)
-{
-	data_file_t *f;
-
-	f = data_file_open(name);
-	if (!f) return -1;
-	context->hidden.unknown.data1 = (void *)f;
-
-	return 0;
-}
-
-static Sint64
-sdlRWops_seek(SDL_RWops *context, Sint64 offset, int whence)
-{
-	return data_file_seek((data_file_t *)(context->hidden.unknown.data1), offset, whence);
-}
-
-static size_t
-sdlRWops_read(SDL_RWops *context, void *ptr, size_t size, size_t maxnum)
-{
-	return data_file_read((data_file_t *)(context->hidden.unknown.data1), ptr, size, maxnum);
-}
-
-static size_t
-sdlRWops_write(SDL_RWops *context, const void *ptr, size_t size, size_t num)
-{
-	/* not implemented */
-	return -1;
-}
-
-static int
-sdlRWops_close(SDL_RWops *context)
-{
-	if (context)
-	{
-		data_file_close((data_file_t *)(context->hidden.unknown.data1));
-		free(context);
-	}
-	return 0;
+	SDL_PauseAudioDevice(device, pause == TRUE ? 1 : 0);
 }
 
 #endif /* ENABLE_SOUND */
 
 /* eof */
-

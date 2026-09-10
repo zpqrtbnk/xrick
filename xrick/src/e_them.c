@@ -87,7 +87,7 @@ e_them_gozombie(U8 e)
   ent_ents[e].offsy = -0x0400;
 #endif
 #ifdef ENABLE_SOUND
-  syssnd_play(WAV_DIE, 1);
+  syssnd_play(WAV_DIE);
 #endif
   env_addscore(50);
   if (ent_ents[e].flags & ENT_FLG_ONCE) {
@@ -914,8 +914,9 @@ e_them_t3_action2(U8 e)
 		 * Unguarded, snd == 0 indexed WAV_ENTITY[-0x13] -- a wild sound_t* (Egypt
 		 * alone has 26 trigger-flagged placements with snd == 0: the "jewel" freeze).
 		 * Base 0x13 per review-log.md R3.12a: the ten real values 0x13..0x1C map onto
-		 * WAV_ENTITY[0..9]. Slot 9 (snd 0x1C, one entity, map 4) stays NULL until
-		 * ent9.wav ships; syssnd_play rejects NULL, so that is a silent no-op.
+		 * WAV_ENTITY[0..9], all ten now populated (T19 / audio-sndh.md S7 -- closes
+		 * G8 (c): there is no longer a WAV file to be missing, the engine already
+		 * contains track 0x1C like every other track).
 		 * The PC plays NOTHING at wakeup (ibmpc_cs.bin 0x2836..0x2860: zombie guard,
 		 * lethal bits, step init, ret -- no sound call), so PLATFORM_ST only, like
 		 * the empty-gun click (defect #21).
@@ -923,7 +924,7 @@ e_them_t3_action2(U8 e)
 		 * bit 7 is set (0x4D2BC) -- see pm-baty.md G8 (d).
 		 */
 		if ((ent_ents[e].trigsnd & 0x7F) != 0)
-			syssnd_play(WAV_ENTITY[(ent_ents[e].trigsnd & 0x7F) - 0x13], 1);
+			syssnd_play(WAV_ENTITY[(ent_ents[e].trigsnd & 0x7F) - 0x13]);
 #endif
       ent_ents[e].n &= ~ENT_LETHAL;
       if (ent_ents[e].flags & ENT_FLG_LETHALI)

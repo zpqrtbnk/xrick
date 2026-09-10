@@ -50,7 +50,11 @@ screen_xrick(void)
 		if (wait++ > 0x2)
 		{
 #ifdef ENABLE_SOUND
-			sounds_setMusic("sounds/bullet.wav", 1);
+			/* T19: this was routed through sounds_setMusic (a "music" track) even
+			   though it is really the one-shot gunshot SFX -- WAV_BULLET is a type-2
+			   PCM sample, not a type-0 song (audio-sndh.md S7), so syssnd_play is the
+			   right call here. */
+			syssnd_play(WAV_BULLET);
 #endif
 			seq = 2;
 			wait = 0;

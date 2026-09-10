@@ -175,7 +175,6 @@
     <ClCompile Include="src\dat_picsPC.c" />
     <ClCompile Include="src\dat_picsST.c" />
     <ClCompile Include="src\dat_screens.c" />
-    <ClCompile Include="src\dat_snd.c" />
     <ClCompile Include="src\dat_spritesPC.c" />
     <ClCompile Include="src\dat_spritesST.c" />
     <ClCompile Include="src\dat_tilesPC.c" />

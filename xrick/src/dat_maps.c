@@ -31,17 +31,20 @@
  * Left as the port has it under BOTH platforms -- changing it would alter the ending
  * sequence, and the question is still open (review-log.md D5b).
  */
+/* T19 / audio-sndh.md S7: tune is now the ST track number directly -- play_music's
+   D0=level_index call at show_level_intro_screen (re/algo-render.md:606) means each
+   map's own index IS its track number, 1:1, not a separately-assigned constant. */
 map_t map_maps[MAP_NBR_MAPS] = {
-  {0x0008, 0x008b, 0x0008, 000000, "sounds/tune0.wav"},
-  {0x0008, 0x008b, 0x0068, 0x0009, "sounds/tune1.wav"},
+  {0x0008, 0x008b, 0x0008, 000000, 0},
+  {0x0008, 0x008b, 0x0068, 0x0009, 1},
 #ifdef PLATFORM_ST
-  {0x0008, 0x008b, 0x0010, 0x0014, "sounds/tune2.wav"},   /* start X 0x08, not 0x10 */
-  {0x0008, 0x008b, 0x0010, 0x0026, "sounds/tune3.wav"},   /* start X 0x08, not 0x10 */
+  {0x0008, 0x008b, 0x0010, 0x0014, 2},   /* start X 0x08, not 0x10 */
+  {0x0008, 0x008b, 0x0010, 0x0026, 3},   /* start X 0x08, not 0x10 */
 #else /* PLATFORM_PC */
-  {0x0010, 0x008b, 0x0010, 0x0014, "sounds/tune2.wav"},
-  {0x0010, 0x008b, 0x0010, 0x0026, "sounds/tune3.wav"},
+  {0x0010, 0x008b, 0x0010, 0x0014, 2},
+  {0x0010, 0x008b, 0x0010, 0x0026, 3},
 #endif
-  {0x0074, 0x00c8, 0x0008, 0x0026, "sounds/tune4.wav"},   /* see note above: unresolved */
+  {0x0074, 0x00c8, 0x0008, 0x0026, 4},   /* see note above: unresolved */
 };
 
 submap_t map_submaps[MAP_NBR_SUBMAPS] = {

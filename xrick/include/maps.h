@@ -83,7 +83,8 @@ typedef struct {
   U16 x, y;		/* initial position for rick */
   U16 row;		/* initial map_map top row within the submap */
   U16 submap;	/* initial submap */
-  char *tune;	/* map tune */
+  U8 tune;		/* ST track number for this level's theme -- T19 / audio-sndh.md S7;
+			   play_music(D0=level_index, D1=0), so this is the map's own index */
 } map_t;
 
 extern map_t map_maps[MAP_NBR_MAPS];
