@@ -23,31 +23,37 @@
     <ProjectGuid>{FD11A8D7-90E4-475D-835C-0410965E4BC5}</ProjectGuid>
     <RootNamespace>xrick</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <!-- T19 native-build fix (2026-09-10): SDL2/zlib now come from vcpkg (vcpkg.json
+         manifest in this directory), not the ..\..\lib\SDL2-2.0.9 / zlib1211 paths
+         this project used to expect and which were never present in the repo. -->
+    <VcpkgEnabled>true</VcpkgEnabled>
+    <VcpkgTriplet Condition="'$(Platform)'=='x64'">x64-windows</VcpkgTriplet>
+    <VcpkgTriplet Condition="'$(Platform)'=='Win32'">x86-windows</VcpkgTriplet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -70,20 +76,44 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup />
+  <!-- T19 native-build fix: common settings shared by all four configs, merged with
+       %(...) so the per-config blocks below can still add their own. Previously only
+       Debug|Win32 set AdditionalIncludeDirectories/PreprocessorDefinitions at all,
+       so the three other configs had no path to include\*.h, which is why they
+       could never compile. -->
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>include;vcpkg_installed\$(VcpkgTriplet)\include;vcpkg_installed\$(VcpkgTriplet)\include\SDL2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <!-- SDL_MAIN_HANDLED: SDL_main.h renames main() to SDL_main() on Windows unless
+           told otherwise, which otherwise leaves xrick.c's own main() with no real
+           main symbol to link against (found via LNK2001 on the first native build,
+           2026-09-10). The Linux/Makefile build never hits this since SDL_main.h's
+           renaming is Windows/WinRT/iOS/Android-only. -->
+      <PreprocessorDefinitions>_MBCS;_CRT_SECURE_NO_WARNINGS;SDL_MAIN_HANDLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>vcpkg_installed\$(VcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>SDL2.lib;z.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <!-- T19 native-build fix: SDL2.dll/z.dll are vcpkg's dynamic-triplet runtime
+         deps and don't get auto-deployed here (that needs VcpkgEnabled's own
+         targets import, which this project doesn't pull in), so copy them next to
+         the exe explicitly on every build. -->
+    <PostBuildEvent>
+      <Command>copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\SDL2.dll" "$(OutDir)" &gt;nul
+copy /Y "$(ProjectDir)vcpkg_installed\$(VcpkgTriplet)\bin\z.dll" "$(OutDir)" &gt;nul</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>EnableAllWarnings</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>include;..\..\lib\SDL2-2.0.9\include;..\..\lib\zlib1211\zlib-1.2.11</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_MBCS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
-      <AdditionalLibraryDirectories>..\..\lib\SDL2-libs;..\..\lib\zlib-win-build\build-VS2019-MT\Debug</AdditionalLibraryDirectories>
-      <AdditionalDependencies>SDL2.lib;SDL2main.lib;libz.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <SubSystem>Console</SubSystem>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -131,6 +161,7 @@
     <ClInclude Include="include\config.h" />
     <ClInclude Include="include\control.h" />
     <ClInclude Include="include\data.h" />
+    <ClInclude Include="include\dat_sndh_engine.h" />
     <ClInclude Include="include\debug.h" />
     <ClInclude Include="include\demo.h" />
     <ClInclude Include="include\devtools.h" />
@@ -165,6 +196,15 @@
     <ClInclude Include="include\unzip.h" />
     <ClInclude Include="include\util.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="src\audio_engine\AtariMachine.h" />
+    <ClInclude Include="src\audio_engine\AtariMachineC.h" />
+    <ClInclude Include="src\audio_engine\Mk68901.h" />
+    <ClInclude Include="src\audio_engine\SteDac.h" />
+    <ClInclude Include="src\audio_engine\ym2149c.h" />
+    <ClInclude Include="src\audio_engine\ym2149_tables.h" />
+    <ClInclude Include="src\audio_engine\external\Musashi\m68k.h" />
+    <ClInclude Include="src\audio_engine\external\Musashi\m68kcpu.h" />
+    <ClInclude Include="src\audio_engine\external\Musashi\m68kops.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\control.c" />
@@ -172,12 +212,10 @@
     <ClCompile Include="src\dat_demo.c" />
     <ClCompile Include="src\dat_ents.c" />
     <ClCompile Include="src\dat_maps.c" />
-    <ClCompile Include="src\dat_picsPC.c" />
     <ClCompile Include="src\dat_picsST.c" />
     <ClCompile Include="src\dat_screens.c" />
-    <ClCompile Include="src\dat_spritesPC.c" />
+    <ClCompile Include="src\dat_sndh_engine.c" />
     <ClCompile Include="src\dat_spritesST.c" />
-    <ClCompile Include="src\dat_tilesPC.c" />
     <ClCompile Include="src\dat_tilesST.c" />
     <ClCompile Include="src\demo.c" />
     <ClCompile Include="src\devtools.c" />
@@ -216,6 +254,33 @@
     <ClCompile Include="src\unzip.c" />
     <ClCompile Include="src\util.c" />
     <ClCompile Include="src\xrick.c" />
+    <!-- T19: vendored AtariAudio C++ sources, compiled with their own lenient warning
+         level (see Makefile's CXXFLAGS comment for why), not held to this tree's
+         warning bar since it is unmodified third-party code. -->
+    <ClCompile Include="src\audio_engine\AtariMachine.cpp">
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\AtariMachineC.cpp">
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\Mk68901.cpp">
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\SteDac.cpp">
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\ym2149c.cpp">
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\external\Musashi\m68k.cpp">
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\external\Musashi\m68kcpu.cpp">
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\external\Musashi\m68kops.cpp">
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="xrick.rc" />

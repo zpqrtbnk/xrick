@@ -6,3 +6,5 @@ build.tmp/
 data.zip
 *.o
 /xrick/xrick
+vcpkg_installed/
+x64/
