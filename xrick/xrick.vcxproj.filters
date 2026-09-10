@@ -149,6 +149,9 @@
     <ClCompile Include="src\dat_spritesST.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\dat_spritesST_stmap.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\dat_tilesPC.c">
       <Filter>Source Files</Filter>
     </ClCompile>

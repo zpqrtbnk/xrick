@@ -18,6 +18,7 @@
 #include "game.h"
 #include "ents.h"
 #include "sounds.h"
+#include "sprites.h"
 #include "e_box.h"
 #include "e_bullet.h"
 #include "e_bomb.h"
@@ -103,6 +104,10 @@ e_box_action(U8 e)
 	 *   0x37B9E 0x2EDDE 0x37CEE 0x2EF2E 0x37E3E 0x2F07E 0x37F8E 0x2F1CE 0x380DE 0x2F31E
 	 * every one dividing exactly. The odd entries come out as 0x24..0x28 -- the very
 	 * numbers the port already used -- which is what confirms the base.
+	 *
+	 * These are ST-native sprite-slot numbers, not dat_spritesST.c array indices --
+	 * 0x90..0x94 need translating through sprites_stnum_to_index (see sprites.h),
+	 * same bug and same fix as e_bomb.c's dynamite fuse table (2026-09-10).
 	 */
 	static U8 sp[] = {0x90, 0x24, 0x91, 0x25, 0x92, 0x26, 0x93, 0x27, 0x94, 0x28};
 #else
@@ -118,7 +123,7 @@ e_box_action(U8 e)
 		 */
 #ifdef PLATFORM_ST
 		/* index counts UP on the ST: ticks elapsed = SEQ_INIT - cnt, frame = that >> 1 */
-		ent_ents[e].sprite = sp[(SEQ_INIT - ent_ents[e].cnt) >> 1];
+		ent_ents[e].sprite = sprites_stnum_to_index[sp[(SEQ_INIT - ent_ents[e].cnt) >> 1]];
 		/*
 		 * ST only: an exploding box KILLS RICK -- review-log.md R4.21.
 		 *   4D0C8  move.l D1,(0x22,A0)          ; store the frame

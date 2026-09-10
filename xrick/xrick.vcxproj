@@ -182,6 +182,7 @@
     <ClCompile Include="src\dat_screens.c" />
     <ClCompile Include="src\dat_sndh_engine.c" />
     <ClCompile Include="src\dat_spritesST.c" />
+    <ClCompile Include="src\dat_spritesST_stmap.c" />
     <ClCompile Include="src\dat_tilesST.c" />
     <ClCompile Include="src\demo.c" />
     <ClCompile Include="src\devtools.c" />
