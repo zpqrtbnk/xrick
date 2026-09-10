@@ -70,7 +70,8 @@
 
 /* development tools */
 #undef ENABLE_DEVTOOLS
-#define DEBUG /* see include/debug.h */
+#undef DEBUG /* see include/debug.h -- was unconditionally on, spamming the console
+                every frame (xrick/ents) plus video/audio/maps */
 
 #endif
 

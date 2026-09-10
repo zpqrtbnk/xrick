@@ -341,39 +341,49 @@ sysvid_shutdown(void)
 void
 sysvid_update(rect_t *rects)
 {
-	SDL_Rect *sdlrects;
 	rect_t *rect;
-	U16 x, y, xx, yy;
-	U8 *src, *dst, *src0, *dst0;
 	U8 n;
 
 	if (rects == NULL) /* nothing to do? */
 		return;
 
-	int pitch;
-	U32* pixelx;
-
-	SDL_LockTexture(texture, NULL, (void **)&pixelx, &pitch);
-
 	n = 0;
 	rect = rects;
 	while (rect)
 	{
-		U16 o = rect->x + rect->y * fb_width;
-		U8* src0 = ((U8*)& fb) + o;
-		/* Byte-offset into the locked texture using the *actual* pitch SDL_LockTexture
-		   returned, not an assumed fb_width*4 -- that assumption only holds when the
-		   renderer happens to return an unpadded pitch (true under the WSLg backend
-		   this was developed against; not guaranteed elsewhere, e.g. Windows' default
-		   SDL3 renderer, where a padded pitch made every row after the first drift,
-		   visible as scrolling glitches and sprite misalignment). */
-		U8* dst0 = (U8 *)pixelx + rect->y * pitch + rect->x * (int)sizeof(U32);
-		for (int y = rect->y; y < rect->y + rect->height; y++)
-		{
-			U8* srcx = src0;
-			U8* dstx = dst0;
+		SDL_Rect sdlrect = { rect->x, rect->y, rect->width, rect->height };
+		int pitch;
+		U32 *pixelx;
 
-			for (int x = rect->x; x < rect->x + rect->width; x++)
+		/* Lock exactly this rect, not the whole texture: SDL3's D3D11 backend
+		   allocates a fresh, uninitialized staging texture sized to the locked
+		   area on every call and blits the WHOLE staging buffer back on unlock.
+		   Locking the whole texture (NULL) while only painting the game's dirty
+		   sub-rects into it left the rest of that staging buffer uninitialized/
+		   stale, which then got stamped over the real texture -- visible as
+		   flicker/tearing on Windows (not on WSL's OpenGL/software renderers,
+		   which back streaming textures with one persistent buffer per texture
+		   and only ever touch the locked rect). See sdl3-dx-fix.md. */
+		if (!SDL_LockTexture(texture, &sdlrect, (void **)&pixelx, &pitch))
+		{
+			rect = rect->next;
+			continue;
+		}
+
+		U16 o = rect->x + rect->y * fb_width;
+		U8 *src0 = ((U8 *)&fb) + o;
+		/* The returned pointer is the top-left of the locked rect itself, not
+		   an offset into a full-texture buffer -- so the destination write
+		   starts at (0,0), unlike the old whole-texture-lock code which had to
+		   seek into the buffer by rect->x/rect->y. */
+		U8 *dst0 = (U8 *)pixelx;
+
+		for (int y = 0; y < rect->height; y++)
+		{
+			U8 *srcx = src0;
+			U8 *dstx = dst0;
+
+			for (int x = 0; x < rect->width; x++)
 			{
 				*dstx = pald[*srcx].b;
 				dstx++;
@@ -389,13 +399,13 @@ sysvid_update(rect_t *rects)
 			src0 += fb_width;
 			dst0 += pitch;
 		}
+
+		SDL_UnlockTexture(texture);
+
 		rect = rect->next;
 		n++;
 	}
 
-	SDL_UnlockTexture(texture);
-
-	// rects?
 	SDL_RenderTexture(renderer, texture, NULL, NULL);
 	SDL_RenderPresent(renderer);
 }
