@@ -29,6 +29,13 @@ void rd2_dbg_frame(void);                         /* debug trace hook (env RD2_T
 void rd2_sys_hang_red(void);                      /* $11fb8: move.w #$700,$ffff8240 ; bra $11fb8 */
 void rd2_sys_joyresync(void);                     /* resend the host joystick at the next pump */
 
+/* host additions borrowed from rd1, not in the original (port-rd2.md §7, 2026-09-24):
+   overlays drawn into fb after the ST screen conversion, never into emulated RAM */
+void rd2_sys_paused(U8 on);                       /* the rd1 "PAUSED" box over the game */
+void rd2_sys_info(U8 on);                         /* map / submap numbers in the left border */
+U8 rd2_sys_endreq(void);                          /* the rd1 "end game" key (E) is down */
+U8 rd2_sys_pausekey(void);                        /* the rd1 pause key (P) is down */
+
 /* demo mode adapter (rd2_demo.c, include/demo.h) */
 void rd2_demo_init(void);                         /* -demo / -record */
 void rd2_demo_level(void);                        /* level start $10a4e */

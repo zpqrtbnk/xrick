@@ -89,7 +89,10 @@ dbg_shot(U32 v)
 }
 
 /* ---- host key -> IKBD code, only the codes the game tests (algo-flow.md §1/§3:
-   1 ESC, $19 P, $1f S, $39 space). Name entry ($17f22) uses the joystick, not keys. */
+   1 ESC, $19 P, $1f S, $39 space). Name entry ($17f22) uses the joystick, not keys.
+   ESC is NOT sent: as in rd1, the host's ESC (CONTROL_EXIT) quits the program
+   (rd2_sys_pump), and rd1's E (CONTROL_END) ends the game (rd2_sys_endreq); user
+   decision 2026-09-24, not the ST behaviour (ESC $01 = back to the title, $10b90). */
 extern void (*sysevt_rawkey)(U16 scancode, U8 down, U8 repeat);
 extern U8 sysevt_quit;
 
@@ -97,7 +100,6 @@ static U8
 st_code(U16 sdl)
 {
 	switch (sdl) {
-	case SDL_SCANCODE_ESCAPE: return 0x01;
 	case SDL_SCANCODE_P:      return 0x19;
 	case SDL_SCANCODE_S:      return 0x1f;
 	default: return 0;
@@ -186,6 +188,57 @@ joystick(void)
 	}
 }
 
+/* ---- host overlays (rd1 features, not in the original; drawn into fb only) ---- */
+static U8 ovl_paused, ovl_info;
+
+void rd2_sys_paused(U8 on) { ovl_paused = on; }
+void rd2_sys_info(U8 on)   { ovl_info = on; }
+U8 rd2_sys_endreq(void)    { return (U8)((control_status & CONTROL_END) != 0); }
+U8 rd2_sys_pausekey(void)  { return (U8)((control_status & CONTROL_PAUSE) != 0); }
+
+/* one glyph of the game's own font ($3ce54 + 32n: 8 rows x 4 plane bytes, opaque, the way
+   $19272 draws it) at pixel x, y of fb */
+static void
+glyph(U8 g, U16 x, U16 y)
+{
+	U32 a = 0x3ce54u + 32u * g;
+	U16 r, i;
+	for (r = 0; r < 8; r++) {
+		U8 p0 = rd2_rb(a + 4 * r), p1 = rd2_rb(a + 4 * r + 1);
+		U8 p2 = rd2_rb(a + 4 * r + 2), p3 = rd2_rb(a + 4 * r + 3);
+		for (i = 0; i < 8; i++) {
+			U8 m = (U8)(0x80 >> i);
+			fb[y + r][x + i] = (U8)(((p0 & m) ? 1 : 0) | ((p1 & m) ? 2 : 0) |
+			                        ((p2 & m) ? 4 : 0) | ((p3 & m) ? 8 : 0));
+		}
+	}
+}
+
+/* ASCII text: digits map to glyphs 0-9, letters and space are at their ASCII codes */
+static void
+text(const char *s, U16 x, U16 y)
+{
+	for (; *s; s++, x += 8)
+		glyph((U8)(*s >= '0' && *s <= '9' ? *s - '0' : *s), x, y);
+}
+
+static void
+overlays(void)
+{
+	char s[8];
+	if (ovl_info) {                       /* rd1 env_paintXtra: M<map> / S<submap> at 0,16 */
+		snprintf(s, sizeof s, "M%02u", (unsigned int)(rd2_rw(RD2_MAP_PLAYING) % 100));
+		text(s, 0, 16);
+		snprintf(s, sizeof s, "S%02u", (unsigned int)(rd2_rw(0x16464u) % 100));   /* $14458 */
+		text(s, 0, 24);
+	}
+	if (ovl_paused) {                     /* rd1 screen_pausedtxt at 120,80 */
+		text("          ", 120, 80);
+		text("  PAUSED  ", 120, 88);
+		text("          ", 120, 96);
+	}
+}
+
 /* show the ST low-res screen at the video base with the hardware palette */
 static void
 present(void)
@@ -211,6 +264,7 @@ present(void)
 				                    ((p2 & m) ? 4 : 0) | ((p3 & m) ? 8 : 0));
 			}
 		}
+	overlays();
 	sysvid_update(&full);
 }
 
@@ -231,8 +285,8 @@ rd2_sys_pump(void)
 	U8 shown = 0;
 
 	sysevt_poll();
-	if (sysevt_quit)
-		exit(0);                                             /* sys_shutdown runs at exit (xrick.c) */
+	if (sysevt_quit || (control_status & CONTROL_EXIT))
+		exit(0);                                             /* window closed or ESC (rd1); sys_shutdown runs at exit */
 	joystick();
 
 	now = sys_gettime();

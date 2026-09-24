@@ -25,6 +25,7 @@
 #include "debug.h"
 
 #include "control.h"
+#include "sysarg.h"
 #include "draw.h"
 
 #define SYSJOY_RANGE 3280
@@ -107,13 +108,14 @@ processEvent()
 			syssnd_vol(+1);
 		}
 #endif
-		else if (key == SDL_SCANCODE_F7) {
+		/* F7-F9: rd1 cheats; rd2 has none yet (PLAN.md), so they must not reach rd1 state */
+		else if (key == SDL_SCANCODE_F7 && sysarg_args_rd != 2) {
 			game_toggleCheat(1);
 		}
-		else if (key == SDL_SCANCODE_F8) {
+		else if (key == SDL_SCANCODE_F8 && sysarg_args_rd != 2) {
 			game_toggleCheat(2);
 		}
-		else if (key == SDL_SCANCODE_F9) {
+		else if (key == SDL_SCANCODE_F9 && sysarg_args_rd != 2) {
 			game_toggleCheat(3);
 		}
 		break;

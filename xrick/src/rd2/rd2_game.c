@@ -35,13 +35,15 @@ rd2_game_run(void)
 	rd2_wb(RD2_JOY, 0);                         /* $10a12 */
 
 TITLE:
-	rd2_demo_stop();                            /* host: demo playback over (ESC) */
+	rd2_demo_stop();                            /* host: demo playback over */
+	rd2_sys_info(0);                            /* host: map/submap numbers off */
 	rd2_178dc();                                /* $10a18 */
 PICK:
 	rd2_17a46();                                /* $10a1e */
 	rd2_1771c();                                /* $10a24 */
 	rd2_123a0();                                /* $10a2a */
 LOAD:
+	rd2_sys_info(0);                            /* host: off during the loading banner */
 	rd2_19388();                                /* $10a30 */
 	rd2_dbg_load();                             /* debug only (env RD2_FORCE_MAP) */
 	rd2_123b0();                                /* $10a36 */
@@ -50,6 +52,7 @@ LOAD:
 	rd2_19388();                                /* $10a48 */
 	rd2_142a0();                                /* $10a4e */
 	rd2_demo_level();                           /* host: demo segment = this map */
+	rd2_sys_info(1);                            /* host: rd1's map/submap numbers */
 FRAME:
 	rd2_dbg_frame();                            /* debug only (env RD2_TRACE) */
 	rd2_demo_frame();                           /* host: play or record [$1a4fb] */
@@ -98,10 +101,17 @@ FRAME:
 		rd2_1a5d0();
 		goto TITLE;
 	} else if (rd2_rb(RD2_KEY) == 0x19) {       /* $10ba6: P, pause */
-		do
-			rd2_191e6();
-		while (!(rd2_rb(RD2_JOY) & 0x80));
+		/* host: rd1's pause (PAUSED box, P again resumes); the ST draws nothing and resumes on
+		   fire: do $191e6 while !(btst #7,[$1a4fb]) */
+		rd2_sys_paused(1);
+		do rd2_191e6(); while (rd2_sys_pausekey());     /* P released */
+		do rd2_191e6(); while (!rd2_sys_pausekey());    /* P pressed again */
+		do rd2_191e6(); while (rd2_sys_pausekey());     /* P released */
+		rd2_sys_paused(0);
 		rd2_191e6();
+	} else if (rd2_sys_endreq()) {              /* host: rd1's E ends the game (not in the original) */
+		rd2_1a5d0();
+		goto END_OF_RUN;
 	}
 
 	if (rd2_rw(RD2_RICK_DEAD) != 0 && rd2_rws(RD2_RICK_Y) >= 0x100) {   /* $10bc6 */
@@ -143,6 +153,7 @@ ENDING:                                         /* $10bf2 */
 
 END_OF_RUN:                                     /* $10c00 */
 	rd2_demo_stop();                            /* host: keyboard for game over / name entry */
+	rd2_sys_info(0);
 	if (rd2_rw(RD2_DEMO) != 0) {
 		rd2_ww(RD2_DEMO, 0);
 		goto TITLE;
