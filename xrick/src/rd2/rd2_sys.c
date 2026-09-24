@@ -26,6 +26,7 @@ U16 rd2_hw_pal[16];
 static U8 base_hi, base_mid;        /* $ff8201 / $ff8203 */
 static U32 vbl_next;                /* host ms of the next VBL */
 static U8 joy_sent;                 /* last joystick-1 byte sent by the "IKBD" */
+static U8 joy_stale;                /* resend at the next pump even if unchanged */
 static rect_t full = { 0, 0, FB_WIDTH, FB_HEIGHT, NULL };
 
 #define VBL_MS 20   /* 50 Hz */
@@ -174,8 +175,9 @@ joystick(void)
 	if (control_status & CONTROL_RIGHT) j |= 0x08;
 	if (control_status & CONTROL_FIRE)  j |= 0x80;
 	if (dbg_joy >= 0) j = (U8)dbg_joy;
-	if (j != joy_sent) {
+	if (j != joy_sent || joy_stale) {
 		joy_sent = j;
+		joy_stale = 0;
 		rd2_1a546(0xff);
 		rd2_1a546(j);
 	}
@@ -328,6 +330,13 @@ rd2_dbg_frame(void)
 		if (js && (c = fgetc(js)) != EOF)
 			rd2_wb(0x1a4fbu, (U8)c);
 	}
+}
+
+/* demo playback wrote [$1a4fb] behind the IKBD's back: send the host state again */
+void
+rd2_sys_joyresync(void)
+{
+	joy_stale = 1;
 }
 
 void

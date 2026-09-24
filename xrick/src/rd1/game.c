@@ -46,6 +46,12 @@
 
 #ifdef ENABLE_DEMO
 #include "demo.h"
+
+/* the RD1 demo scripts: one per submap, written back as src/rd1/dat_demo.c */
+static const demoset_t demoset = {
+  demo_scripts, MAP_NBR_SUBMAPS, "xrick/src/rd1/dat_demo.c", "submap", "env_submap",
+  "#include \"maps.h\"\n", "demo_scripts", "MAP_NBR_SUBMAPS", NULL
+};
 #endif
 
 
@@ -187,7 +193,7 @@ game_run(void)
 	game_state = XRICK;
 
 #ifdef ENABLE_DEMO
-	demo_init();
+	demo_init(&demoset);
 #endif
 
 	/* main loop */
@@ -435,7 +441,7 @@ static void game_cycle(void)
 			{
 				map_init();
 #ifdef ENABLE_DEMO
-				demo_enterSubmap(env_submap);
+				demo_enterSegment(env_submap);
 #endif
 				game_save();
 				fb_clear();                 /* clear buffer */
@@ -684,7 +690,7 @@ static void game_cycle(void)
 
 			map_init();                     /* initialize the map */
 #ifdef ENABLE_DEMO
-			demo_enterSubmap(env_submap);
+			demo_enterSegment(env_submap);
 #endif
 			game_save();                        /* save data in case of a restart */
 			fb_clear();
@@ -882,7 +888,7 @@ static void restart(void)
 
 	map_init(); // see INIT_MAP check that everything is OK here
 #ifdef ENABLE_DEMO
-	demo_enterSubmap(env_submap); /* a death replays the submap script from tick 0 */
+	demo_enterSegment(env_submap); /* a death replays the submap script from tick 0 */
 #endif
 	game_save();
 	ent_clprev();

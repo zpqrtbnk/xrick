@@ -62,8 +62,11 @@ char *sysarg_args_record = NULL;
 	"  -demo : Play the built-in demo script (attract mode). No keyboard needed.\n" \
 	"    Control returns to the keyboard once play reaches a submap that has no\n" \
 	"    script. Combines with -map / -submap to replay a single submap.\n" \
+	"    With -rd 2: one script per map, played from the level start of a game\n" \
+	"    started by hand; the run's end hands control back.\n" \
 	"  -record <file> : Record the controls played into <file>, as a ready to\n" \
-	"    build src/dat_demo.c. Overrides -demo.\n"
+	"    build src/rd1/dat_demo.c (-rd 2: src/rd2/dat_rd2_script.c, plus one\n" \
+	"    <file>.map<N>.joy per map, a joystick byte per frame). Overrides -demo.\n"
 #else
 #define SYSARG_DEMOHELP ""
 #endif

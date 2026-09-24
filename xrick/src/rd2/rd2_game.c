@@ -29,11 +29,13 @@ void
 rd2_game_run(void)
 {
 	rd2_boot();
+	rd2_demo_init();                            /* host: -demo / -record */
 
 	/* $10992: rte at $19044, MFP/vector restore -- hardware */
 	rd2_wb(RD2_JOY, 0);                         /* $10a12 */
 
 TITLE:
+	rd2_demo_stop();                            /* host: demo playback over (ESC) */
 	rd2_178dc();                                /* $10a18 */
 PICK:
 	rd2_17a46();                                /* $10a1e */
@@ -47,8 +49,10 @@ LOAD:
 	rd2_ww(RD2_MAPDONE, 0);                     /* $10a42 */
 	rd2_19388();                                /* $10a48 */
 	rd2_142a0();                                /* $10a4e */
+	rd2_demo_level();                           /* host: demo segment = this map */
 FRAME:
 	rd2_dbg_frame();                            /* debug only (env RD2_TRACE) */
+	rd2_demo_frame();                           /* host: play or record [$1a4fb] */
 	rd2_ww(RD2_SHOT_HIT, 0);                    /* $10a54 */
 	rd2_14594();
 	rd2_15bc0();
@@ -138,6 +142,7 @@ ENDING:                                         /* $10bf2 */
 	rd2_17bda();
 
 END_OF_RUN:                                     /* $10c00 */
+	rd2_demo_stop();                            /* host: keyboard for game over / name entry */
 	if (rd2_rw(RD2_DEMO) != 0) {
 		rd2_ww(RD2_DEMO, 0);
 		goto TITLE;

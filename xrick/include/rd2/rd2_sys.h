@@ -27,6 +27,13 @@ void rd2_sys_pump(void);                          /* one pass of a busy-wait loo
 void rd2_dbg_load(void);                          /* debug map force hook (env RD2_FORCE_MAP) */
 void rd2_dbg_frame(void);                         /* debug trace hook (env RD2_TRACE) */
 void rd2_sys_hang_red(void);                      /* $11fb8: move.w #$700,$ffff8240 ; bra $11fb8 */
+void rd2_sys_joyresync(void);                     /* resend the host joystick at the next pump */
+
+/* demo mode adapter (rd2_demo.c, include/demo.h) */
+void rd2_demo_init(void);                         /* -demo / -record */
+void rd2_demo_level(void);                        /* level start $10a4e */
+void rd2_demo_frame(void);                        /* frame head $10a54 */
+void rd2_demo_stop(void);                         /* end of run / back to the title */
 
 void rd2_1a546(U8 b);   /* ACIA handler, one received IKBD byte */
 void rd2_1a866(void);   /* TICK: runs in the audio thread, rd2_snd.c */
