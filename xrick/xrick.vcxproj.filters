@@ -1,17 +1,32 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Source Files">
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Source Files\rd1">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A301}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\rd2">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A302}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\audio_engine">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A303}</UniqueIdentifier>
     </Filter>
     <Filter Include="Header Files">
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Header Files\rd1">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EC01}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\rd2">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EC02}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\audio_engine">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EC03}</UniqueIdentifier>
     </Filter>
     <Filter Include="Resource Files">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -27,79 +42,10 @@
     <ClInclude Include="include\demo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\devtools.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\draw.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\e_bomb.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\e_bonus.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\e_box.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\e_bullet.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\e_rick.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\e_sbonus.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\e_them.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\ents.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\env.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\fb.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\game.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="include\img.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\maps.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\pics.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="include\rects.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\screens.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\scroller.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\sprites.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\syssnd.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\system.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\sysvid.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\tiles.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\util.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\sysarg.h">
@@ -114,123 +60,171 @@
     <ClInclude Include="include\syskbd.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\sounds.h">
+    <ClInclude Include="include\system.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sysvid.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\dat_sndh_engine.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\devtools.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\draw.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\e_bomb.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\e_bonus.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\e_box.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\e_bullet.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\e_rick.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\e_sbonus.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\e_them.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\ents.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\env.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\fb.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\game.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\maps.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\pics.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\screens.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\scroller.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\sounds.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\sprites.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\syssnd.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\tiles.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd1\util.h">
+      <Filter>Header Files\rd1</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\dat_rd2_demo.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\dat_rd2_levelimg.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\dat_rd2_program.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\dat_rd2_sndh_engine.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\rd2_collide.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\rd2_cpu.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\rd2_game.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\rd2_mem.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\rd2_record.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\rd2_script.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\rd2_snd.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\rd2_sound.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\rd2_sys.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\rd2_tables.h">
+      <Filter>Header Files\rd2</Filter>
+    </ClInclude>
+    <ClInclude Include="include\rd2\rd2_tileattr.h">
+      <Filter>Header Files\rd2</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio_engine\AtariMachine.h">
+      <Filter>Header Files\audio_engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio_engine\AtariMachineC.h">
+      <Filter>Header Files\audio_engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio_engine\Mk68901.h">
+      <Filter>Header Files\audio_engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio_engine\SteDac.h">
+      <Filter>Header Files\audio_engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio_engine\ym2149c.h">
+      <Filter>Header Files\audio_engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio_engine\ym2149_tables.h">
+      <Filter>Header Files\audio_engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio_engine\external\Musashi\m68k.h">
+      <Filter>Header Files\audio_engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio_engine\external\Musashi\m68kcpu.h">
+      <Filter>Header Files\audio_engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio_engine\external\Musashi\m68kops.h">
+      <Filter>Header Files\audio_engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\audio_engine\external\Musashi\m68kconf.h">
+      <Filter>Header Files\audio_engine</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\control.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\dat_demo.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\dat_ents.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\dat_maps.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\dat_picsPC.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\dat_picsST.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\dat_screens.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\dat_spritesPC.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\dat_spritesST.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\dat_spritesST_stmap.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\dat_tilesPC.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\dat_tilesST.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\demo.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\devtools.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\draw.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\e_bomb.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\e_bonus.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\e_box.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\e_bullet.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\e_rick.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\e_sbonus.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\e_them.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ents.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\env.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\fb.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\game.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\img.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\maps.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\rects.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\scr_gameover.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\scr_getname.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\scr_imain.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\scr_imap.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\scr_pause.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\scr_xrick.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\scroller.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\sprites.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\sysarg.c">
@@ -245,26 +239,206 @@
     <ClCompile Include="src\syskbd.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\syssnd.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\system.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\sysvid.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\tiles.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\util.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\xrick.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\sounds.c">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="src\rd1\dat_demo.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\dat_ents.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\dat_maps.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\dat_picsST.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\dat_screens.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\dat_sndh_engine.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\dat_spritesST_stmap.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\dat_spritesST.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\dat_tilesST.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\devtools.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\draw.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\e_bomb.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\e_bonus.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\e_box.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\e_bullet.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\e_rick.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\e_sbonus.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\e_them.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\ents.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\env.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\fb.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\game.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\maps.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\scr_gameover.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\scr_getname.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\scr_imain.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\scr_imap.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\scr_pause.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\scr_xrick.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\scroller.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\sounds.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\sprites.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\syssnd.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\tiles.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd1\util.c">
+      <Filter>Source Files\rd1</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\dat_rd2_demo.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\dat_rd2_levelimg.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\dat_rd2_program.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\dat_rd2_script.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\dat_rd2_sndh_engine.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_actors.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_collide.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_demo.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_flow.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_game.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_group.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_level.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_load.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_mem.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_objects.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_player.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_render.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_score.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_snd.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_spawn.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\rd2\rd2_sys.c">
+      <Filter>Source Files\rd2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\AtariMachine.cpp">
+      <Filter>Source Files\audio_engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\AtariMachineC.cpp">
+      <Filter>Source Files\audio_engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\Mk68901.cpp">
+      <Filter>Source Files\audio_engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\SteDac.cpp">
+      <Filter>Source Files\audio_engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\ym2149c.cpp">
+      <Filter>Source Files\audio_engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\external\Musashi\m68k.cpp">
+      <Filter>Source Files\audio_engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\external\Musashi\m68kcpu.cpp">
+      <Filter>Source Files\audio_engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\audio_engine\external\Musashi\m68kops.cpp">
+      <Filter>Source Files\audio_engine</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

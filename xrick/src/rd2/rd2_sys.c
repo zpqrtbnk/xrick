@@ -126,6 +126,9 @@ rd2_sys_init(void)
 	base_hi = base_mid = 0;
 	joy_sent = 0;
 	sysevt_rawkey = rawkey;
+	/* the host display scales every colour by its gamma, which starts at 0 and only rd1's
+	   fades set; RD2 fades in the ST palette itself, so the host gamma stays at full */
+	sysvid_setGamma(255);
 	vbl_next = sys_gettime() + VBL_MS;
 }
 

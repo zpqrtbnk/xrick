@@ -3,8 +3,8 @@
  *
  * Rick Dangerous 2 -- sound (P5). The game's own YM2149 engine (sound-ref.md) runs
  * unmodified on the emulated 68000 + YM2149 + MFP of src/audio_engine (the same AtariMachine
- * rd1 uses). Its code, tables and state are uploaded from the PRISTINE program image in
- * rd2_ram ($19e96-$31eb0, sound-ref.md §1/§9), so the snapshot blob dat_rd2_sndh_engine.c is
+ * rd1 uses). Its code, tables and state are uploaded from the PRISTINE program image
+ * rd2_program ($19e96-$31eb0, sound-ref.md §1/§9), so the snapshot blob dat_rd2_sndh_engine.c is
  * not used and nothing is patched: from the pristine state the engine is consistent
  * (sound-ref.md §9), and the demo flag it tests is the game's real one.
  *
@@ -24,6 +24,7 @@
 #include "rd2_mem.h"
 #include "rd2_game.h"
 #include "rd2_snd.h"
+#include "dat_rd2_program.h"
 #include "audio_engine/AtariMachineC.h"
 
 #define SND_BASE  0x19e96u
@@ -81,7 +82,9 @@ rd2_snd_init(void)
 		stream = NULL;
 		return;
 	}
-	atari_machine_upload(machine, rd2_ram + SND_BASE, SND_BASE, SND_END - SND_BASE);
+	/* from the pristine image itself, not rd2_ram: sys_init (xrick.c) runs this before
+	   rd2_game_run's rd2_mem_init has filled rd2_ram, which then still reads all zero */
+	atari_machine_upload(machine, rd2_program + (SND_BASE - RD2_PROG_BASE), SND_BASE, SND_END - SND_BASE);
 	atari_machine_mem_write16(machine, RD2_DEMO, rd2_rw(RD2_DEMO));
 	/* rd1 measured that the first Jsr() on a fresh machine can misbehave (syssnd.c, T19 P8);
 	   the same throwaway call is made here, to the PSG silence routine */
