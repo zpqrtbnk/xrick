@@ -44,4 +44,9 @@ void atari_machine_mem_write16(AtariMachineHandle *m, unsigned int addr, unsigne
 	m->machine.memWrite16(addr, value);
 }
 
+unsigned int atari_machine_mem_read16(AtariMachineHandle *m, unsigned int addr)
+{
+	return m->machine.memRead16(addr);
+}
+
 /* eof */

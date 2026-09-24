@@ -28,6 +28,12 @@ extern const U8 rd2_levelimg_map1[RD2_LEVELIMG_SIZE];
 extern const U8 rd2_levelimg_map2[RD2_LEVELIMG_SIZE];
 extern const U8 rd2_levelimg_map3[RD2_LEVELIMG_SIZE];
 extern const U8 rd2_levelimg_map4[RD2_LEVELIMG_SIZE];
+extern const U8 rd2_stage1_map1[34816];
+extern const U8 rd2_stage1_map2[37888];
+extern const U8 rd2_stage1_map3[37376];
+extern const U8 rd2_stage1_map4[39936];
+extern const U8 * const rd2_stage1[4];
+extern const U32 rd2_stage1_size[4];
 
 extern const U8 * const rd2_levelimg[4]; /* index 0..3 = map 1..4 */
 

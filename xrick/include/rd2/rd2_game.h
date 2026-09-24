@@ -1,16 +1,11 @@
 /*
  * xrick/include/rd2/rd2_game.h
  *
- * Rick Dangerous 2 -- the game_main state machine (algo-flow.md S1-S2) and the
- * global variables it and its callees share (algo-flow.md S1). This header declares
- * the state machine's entry point plus every subsystem entry point game_main calls,
- * so rd2_game.c's control flow (P3a) can be written and syntax-checked now even
- * though most of those subsystems (P3b-h) are not implemented yet -- each such
- * declaration is commented "TODO Pnn" and rd2_game.c will not LINK until they are
- * all defined (expected at this stage: port-rd2.md's own P7 is explicitly gated on
- * P3-P6 all being present. Do not add a stub body anywhere just to make it link
- * early -- an empty function is not a documented fact and would misrepresent
- * progress in port-rd2.md).
+ * Rick Dangerous 2 -- game_main ($10992) and the routines it calls, RAM model
+ * (port-rd2.md §7). Game state lives in emulated RAM (rd2_mem.h) at the original
+ * addresses; this header names the cells game_main touches and declares every
+ * routine by its original address. Routines not yet transliterated are marked TODO
+ * with their phase; the game will not LINK until all exist (no stub bodies).
  */
 
 #ifndef _RD2_GAME_H
@@ -18,76 +13,101 @@
 
 #include "system.h"
 
-/* ---- variables (algo-flow.md S1; addresses are the original's RAM numbering, given
-   only as plate comments -- the port's own storage is just C globals) */
-extern S16 rd2_map_playing;      /* [$1239c] map being played, 1-4 (word; the original's range
-                                     is 1-5 but map 5 is dead code that always hangs the loader
-                                     if reached -- PLAN.md T28 -- so the port's own range is 1-4) */
-extern S16 rd2_map_loaded;       /* [$1239e] map whose data is currently loaded */
-extern S16 rd2_picker_choice;    /* [$17994] map chosen on the picker */
-extern U16 rd2_picker_rows;      /* [$17992] number of unlocked picker rows, initial 4 */
-extern U16 rd2_cheat_flag;       /* [$1798e] POOKY cheat flag, initial 0 */
-extern U16 rd2_long_game;        /* [$17990] "long/short game" cheat-only switch, initial 0 */
-extern S16 rd2_demo_flag;        /* [$3efb6] attract-mode flag, -1 while a demo plays */
-extern U8  rd2_demo_ended;       /* [$3efb8] demo stream finished */
-extern U8  rd2_input_byte;       /* [$1a4fb] current input byte (bit7 fire, 0 up,1 down,2 left,3 right) */
-extern U8  rd2_last_scancode;    /* [$1a4fc] last key scancode */
-extern S16 rd2_map_done_flag;    /* [$115e0] map-complete flag, set by the trigger scan */
-extern S16 rd2_shot_hit_flag;    /* [$115dc] "laser shot hit something this frame" */
-extern S16 rd2_rick_dead;        /* [$12e2a] Rick dead flag */
-extern S16 rd2_actor_group_flag; /* [$144c2] armed 5-actor group flag, algo-flow.md S10 */
-extern S16 rd2_lives;            /* [$17710] */
-extern U16 rd2_lives_dirty;      /* [$1770e] */
-extern S16 rd2_ammo;             /* [$176f4] laser ammo */
-extern U16 rd2_ammo_dirty;       /* [$176f2] */
-extern S16 rd2_bombs;            /* [$17702] bomb count */
-extern U16 rd2_bombs_dirty;      /* [$176f0] score dirty (sic -- algo-flow.md S1 lists this next to
-                                     bombs' dirty flag; kept as a separate field, not merged, since
-                                     the doc names it distinctly) */
-extern U32 rd2_score_bcd;        /* $176e4..6, 3 bytes packed BCD (6 digits); represented here as
-                                     one U32 holding the packed BCD bytes in the low 3 bytes, matching
-                                     what $17810's abcd chain operates on -- P3c decides the exact
-                                     in-memory form when it implements $17810 */
-extern U16 rd2_vblanks_per_frame; /* [$18ed8] 2 normally, 1 during the 16-step submap slide */
-extern U16 rd2_vblank_counter;    /* [$19232] incremented by the vblank ISR */
-extern S16 rd2_id_remap_flag;     /* [$1a5ce] S-key sound id-remap toggle */
-extern U16 rd2_music_playing;     /* [$1aa08] 0 = no music running */
+/* ---- RAM cells (algo-flow.md §1; disassembly of $10992-$10c22) */
+#define RD2_MAP_PLAYING   0x1239cu  /* word, 1..5 */
+#define RD2_MAP_LOADED    0x1239eu  /* word */
+#define RD2_PICKER_ROWS   0x17992u  /* word, pristine 4; game_main writes 5 ($10af2) */
+#define RD2_PICKER_CHOICE 0x17994u  /* word */
+#define RD2_DEMO          0x3efb6u  /* word, -1 while a demo plays */
+#define RD2_DEMO_ENDED    0x3efb8u  /* word */
+#define RD2_JOY           0x1a4fbu  /* byte: bit7 fire, 0 up, 1 down, 2 left, 3 right */
+#define RD2_KEY           0x1a4fcu  /* byte: last raw IKBD byte (make, or break |$80) */
+#define RD2_MAPDONE       0x115e0u  /* word */
+#define RD2_SHOT_HIT      0x115dcu  /* word */
+#define RD2_RICK_DEAD     0x12e2au  /* word */
+#define RD2_RICK_Y        0x16960u  /* word */
+#define RD2_LIVES         0x17710u  /* word */
+#define RD2_SKEY_LATCH    0x10b5cu  /* word inside the code segment */
+#define RD2_ID_REMAP      0x1a5ceu  /* word */
 
-/* ---- subsystem entry points game_main calls, in algo-flow.md S2's own order */
-void rd2_title_attract(void);        /* TODO P3b: $178dc, algo-flow.md S3 */
-void rd2_level_picker(void);         /* TODO P3b: $17a46, algo-flow.md S4 */
-void rd2_new_game_reset(void);       /* TODO P3c: $1771c (score:=0, lives:=6), algo-flow.md S7 */
-void rd2_select_map_from_picker(void); /* TODO P3c: $123a0, algo-flow.md S2 */
-void rd2_refill_ammo_bombs(void);    /* TODO P3c: $17760, algo-flow.md S7 */
-void rd2_clear_screens(void);        /* TODO P4c: $19388 */
-void rd2_load_map_if_changed(void);  /* TODO P3c: $123b0 loader, algo-flow.md S2/S5 */
-void rd2_level_start(void);          /* TODO P3c: $142a0, algo-flow.md S5 */
-void rd2_scan_spawn_table(void);     /* TODO P3f: $14594, level-tables.md S3 */
-void rd2_update_actor_group(void);   /* TODO P3g: $15bc0, algo-flow.md S10 */
-void rd2_update_actors(void);        /* TODO P3f: $14d48, algo-actors.md S3 */
-void rd2_update_objects(void);       /* TODO P3e: $150a2, algo-objects.md */
-void rd2_update_bonus_timer(void);   /* TODO P3c: $15826, algo-flow.md S7 */
-void rd2_update_player_rick(void);   /* TODO P3d: $13096, algo-player.md */
-void rd2_update_laser_shot(void);    /* TODO P3d: $13e14, algo-player.md */
-void rd2_update_bomb(void);          /* TODO P3d: $13e98, algo-player.md S11 */
-void rd2_scroll_edge_trigger(void);  /* TODO P4a: $16658, graphics.md S5 */
-void rd2_animate_background_tiles(void); /* TODO P4a: $18dac, graphics.md S3b */
-void rd2_draw_background(void);      /* TODO P4c: $18782, graphics.md S5 */
-void rd2_draw_sprites(void);         /* TODO P4c: $170b6, graphics.md S5 */
-void rd2_draw_hud(void);             /* TODO P4d: $177a8, graphics.md S4a */
-void rd2_vblank_wait_and_flip(void); /* TODO P4c: $19216, graphics.md S1/algo-flow.md S2 */
-void rd2_vblank_wait(void);          /* TODO P4c: $191e6 */
-void rd2_scan_exit_triggers(void);   /* TODO P3c: $14362, algo-flow.md S9 */
-void rd2_stop_all_sound(void);       /* TODO P5: $1a5d0, sound-ref.md / algo-flow.md S6 */
-void rd2_kill_all_objects_and_actors(void); /* TODO P3e/P3f: $149c2 */
-void rd2_restore_checkpoint(void);   /* TODO P3c: $13060, algo-flow.md S5 */
-void rd2_map_done_sequence(void);    /* TODO P3c: $10ad2 MAPDONE, algo-flow.md S8 */
-void rd2_pause_until_fire(void);     /* TODO P3b: the $19 (P) pause loop, algo-flow.md S6 */
-void rd2_game_over_screen(void);     /* TODO P3b: $17c06, algo-flow.md S8 */
-void rd2_hall_of_fame_entry(void);   /* TODO P3b: $17f22, algo-flow.md S11 */
+/* ---- routines, by original address */
+void rd2_178dc(void);  /* title / attract, rd2_flow.c */
+void rd2_17a46(void);  /* level picker, rd2_flow.c */
+void rd2_1771c(void);  /* score := 0, lives := 6, rd2_score.c */
+void rd2_123a0(void);  /* [$1239c] := [$17994]; $17760, rd2_level.c */
+void rd2_19388(void);  /* clear both screens, rd2_render.c */
+void rd2_123b0(void);  /* load_map_if_changed, rd2_load.c */
+void rd2_123ca(void);  /* loader past its banner, rd2_load.c */
+void rd2_194ce(U16 d0); /* banner d0, rd2_render.c */
+void rd2_19106(void);  /* install palette $18ee6, rd2_render.c */
+void rd2_19116(U32 a0); /* install palette a0, rd2_render.c */
+void rd2_19134(void);  /* fade in, rd2_render.c */
+void rd2_1919e(void);  /* fade out, rd2_render.c */
+void rd2_19316(U16 d0, U16 d1, U32 a0);  /* glyph string into the off-screen picture, rd2_render.c */
+void rd2_1925a(U32 a0);  /* record-list text draw, rd2_render.c */
+void rd2_17086(void);  /* scene sprites, rd2_render.c */
+void rd2_1709e(void);  /* sprites into the off-screen picture, rd2_render.c */
+void rd2_18caa(void);  /* off-screen picture to the draw screen, rd2_render.c */
+void rd2_17760(void);  /* ammo/bombs := 6, rd2_score.c */
+void rd2_142a0(void);  /* level start, rd2_level.c */
+void rd2_14222(void);  /* re-arm the demo reader, rd2_level.c */
+void rd2_14458(U16 d0, U16 d1);  /* submap loader, rd2_level.c */
+void rd2_1300e(void);  /* checkpoint save, rd2_level.c */
+void rd2_18516(void);  /* PRNG reseed, rd2_level.c */
+void rd2_18538(void);  /* PRNG step, rd2_level.c */
+void rd2_16474(void);  /* tile window generation, rd2_render.c */
+void rd2_16630(void);  /* reset anim slots + full bitmap render, rd2_render.c */
+void rd2_18186(U16 d0); /* run_scene(d0), rd2_flow.c */
+void rd2_18abe(U16 d0, U16 d1);  /* left-exit transition, rd2_render.c */
+void rd2_18bb2(U16 d0, U16 d1);  /* right-exit transition, rd2_render.c */
+void rd2_14594(void);  /* spawn scan, rd2_spawn.c */
+void rd2_14542(void);  /* seek the spawn table, rd2_spawn.c */
+int  rd2_14962(U32 *a6);  /* free actor slot (carry), rd2_spawn.c */
+int  rd2_14970(U32 *a6);  /* free object slot (carry), rd2_spawn.c */
+int  rd2_14998(U32 a6);   /* off-screen (carry), rd2_spawn.c */
+void rd2_149f0(U32 a6);   /* despawn, forced, rd2_spawn.c */
+void rd2_14a12(U32 a6);   /* despawn, rd2_spawn.c */
+int  rd2_14a3c(U32 a0, U32 a6);  /* dispatch_spawn_record: trigger boxes (carry), rd2_spawn.c */
+void rd2_157be(U32 a0);   /* bonus timer start, rd2_score.c */
+void rd2_157f4(U32 a0);   /* bonus timer stop with award, rd2_score.c */
+void rd2_15b3c(void);     /* init_actor_group, rd2_group.c */
+int  rd2_171bc(U32 a6);   /* animation script step (carry = jump), rd2_actors.c */
+int  rd2_172fa(U32 a6, S16 *dx, S16 *dy);  /* movement script step (carry = jump), rd2_actors.c */
+int  rd2_1726e(U32 a6, S16 *dx, S16 *dy);  /* group/scene movement step (carry = jump), rd2_actors.c */
+void rd2_1704c(U32 a6);   /* clear records from a6 to the sentinel, rd2_actors.c */
+void rd2_171a4(S16 d0);   /* y += d0 for every live record, rd2_actors.c */
+void rd2_17810(U32 d0);   /* add BCD score, rd2_score.c */
+void rd2_1a6aa(U16 d0, U16 d1);  /* play_sound(id, d1), rd2_snd.c */
+void rd2_15bc0(void);  /* actor group, rd2_group.c */
+void rd2_14d48(void);  /* actors, rd2_actors.c */
+void rd2_150a2(void);  /* objects, rd2_objects.c */
+void rd2_15826(void);  /* bonus timer tick, rd2_score.c */
+void rd2_157b4(void);  /* bonus timer off, rd2_score.c */
+void rd2_13096(void);  /* Rick, rd2_player.c */
+void rd2_13e14(void);  /* laser shot, rd2_player.c */
+void rd2_13e98(void);  /* bomb, rd2_player.c */
+void rd2_16658(void);  /* scroll, rd2_render.c */
+void rd2_18dac(void);  /* animated tiles, rd2_render.c */
+void rd2_18782(void);  /* background to screen, rd2_render.c */
+void rd2_170b6(void);  /* sprites to screen, rd2_render.c */
+void rd2_177a8(void);  /* HUD, rd2_score.c */
+void rd2_19272(U16 d0, U16 d1, U32 a0);  /* glyph string a0 at column d0, row d1, rd2_render.c */
+void rd2_19216(void);  /* frame wait + flip, rd2_sys.c */
+void rd2_19234(void);  /* page flip, rd2_sys.c */
+void rd2_191e6(void);  /* frame wait, rd2_sys.c */
+void rd2_14362(void);  /* exit-trigger scan, rd2_level.c */
+void rd2_1a5d0(void);  /* stop all sound, rd2_snd.c */
+void rd2_149c2(void);  /* despawn objects and actors, rd2_spawn.c */
+void rd2_142fc(void);  /* respawn: $13060 then $14300, rd2_level.c */
+void rd2_17bf4(void);  /* scene 1 unless demo, rd2_flow.c */
+void rd2_17782(void);  /* extra life, rd2_score.c */
+void rd2_1789a(void);  /* end-of-game tally, rd2_score.c */
+void rd2_17bda(void);  /* ending: sound 9 + scene 2 unless demo, rd2_flow.c */
+void rd2_17c06(void);  /* game over, rd2_flow.c */
+void rd2_17f22(void);  /* hall-of-fame entry, rd2_flow.c */
 
 /* ---- entry point */
-void rd2_game_run(void);   /* game_main $10992, replaces rd1's game_run() when -rd 2 (P6) */
+void rd2_game_run(void);   /* boot $10000 + game_main $10992, replaces rd1's game_run() when -rd 2 (P6) */
 
 #endif /* _RD2_GAME_H */
 

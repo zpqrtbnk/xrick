@@ -32,6 +32,9 @@ short atari_machine_next_sample(AtariMachineHandle *m);
    (audio-sndh.md S5's scratch-cell trampoline). */
 void atari_machine_mem_write16(AtariMachineHandle *m, unsigned int addr, unsigned int value);
 
+/* Direct RAM peek (rd2: the game reads engine state cells such as [$1aa08]). */
+unsigned int atari_machine_mem_read16(AtariMachineHandle *m, unsigned int addr);
+
 #ifdef __cplusplus
 }
 #endif

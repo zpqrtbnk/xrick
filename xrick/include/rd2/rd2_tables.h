@@ -3,7 +3,7 @@
  *
  * Rick Dangerous 2 -- trigger table, spawn table and trigger-box record layouts
  * (level-tables.md SS2-3, algo-actors.md S4). These records are read directly out
- * of the embedded level-image blobs (dat_rd2_levelimg.c, RD2_LVLIMG_OFF_SUBMAP_HEADERS
+ * of the embedded level-image blobs (the mutable level image at $53400, RD2_LVLIMG_OFF_SUBMAP_HEADERS
  * onward -- the trigger/spawn tables have no fixed offset of their own, they're
  * chained right after the per-submap header, level-tables.md S1) at their raw byte
  * offsets, so this header gives byte-index constants and bit masks, NOT a C struct --
@@ -26,8 +26,8 @@
 #define RD2_TRIG_SIZE 4
 #define RD2_TRIG_B0(r)            ((r)[0])
 #define RD2_TRIG_SIDE(r)          ((r)[0] & 3)      /* must equal the player's clamp side, [$14360] */
-#define RD2_TRIG_B0_ARM_GROUP     0x20               /* bit5: [$12e14] = -1 */
-#define RD2_TRIG_B0_ARM_5ACTORS   0x40               /* bit6: [$144c2] = 1, arms the 5-actor group */
+#define RD2_TRIG_B0_TUNNEL        0x20               /* bit5: [$12e14] = -1 (Rick tunnel branch $13b84, algo-player.md) */
+#define RD2_TRIG_B0_ARM_GROUP     0x40               /* bit6: [$144c2] = 1, arms the 5-actor group (algo-flow.md §10) */
 #define RD2_TRIG_B0_MAPDONE_BIT7  0x80
 #define RD2_TRIG_B0_MAPDONE_BIT4  0x10
 #define RD2_TRIG_Y_TILE(r)        ((r)[1])
@@ -56,18 +56,21 @@
 /* ---- trigger box (spawn record detail block): 4 bytes (algo-actors.md S4, dispatch_spawn_record $14a3c) */
 #define RD2_BOX_SIZE 4
 #define RD2_BOX_X(r)     ((r)[0])                 /* pixels, raw */
-#define RD2_BOX_Y_TILE(r) ((r)[1])                /* y = tile*8 - (scroll & ~7) */
+#define RD2_BOX_Y_TILE(r) ((r)[1])                /* y = tile*8 - (scroll & ~7); above screen: h += y, y = 0,
+                                                     skipped only if h < 0 (algo-spawn.md §5) */
 #define RD2_BOX_W8(r)    ((r)[2] & 0x0f)          /* width = (n+1)*8 px */
 #define RD2_BOX_H8(r)    (((r)[2] >> 4) & 0x0f)   /* height = (n+1)*8 px */
 #define RD2_BOX_TESTMASK(r) ((r)[3] & 0x3f)
 #define RD2_BOX_TEST_PLAYER  0x01  /* bit0: check_box_vs_player */
 #define RD2_BOX_TEST_SHOT    0x02  /* bit1: laser shot point, only while [$16902] != 0; sets [$115dc]=-1, shot consumed */
 #define RD2_BOX_TEST_BOMB    0x04  /* bit2: bomb point, while [$16b12] != 0 && [$12efe] != 0 */
-#define RD2_BOX_TEST_MELEE   0x08  /* bit3: melee point, while [$12ef4] != 0; firing plays sound $17 */
+#define RD2_BOX_TEST_MELEE   0x08  /* bit3: melee point, while [$12ef4] != 0; if the mask has bit3, a fire of
+                                      ANY test plays sound $17 (algo-spawn.md §5) */
 #define RD2_BOX_TEST_OBJECT  0x10  /* bit4: any of the 4 object slots (except caller) overlaps */
 #define RD2_BOX_TEST_ACTOR   0x20  /* bit5: any live actor slot (except caller) overlaps */
 #define RD2_BOX_REPEATABLE(r) ((r)[3] & 0x40)     /* bit6: not latched */
-#define RD2_BOX_LATCHED(r)    ((r)[3] & 0x80)     /* bit7: runtime latch state, not in the data files */
+#define RD2_BOX_LATCHED(r)    ((r)[3] & 0x80)     /* bit7: runtime latch; a latched block that hits is ignored and
+                                                     NOT cleared; cleared when no test hits (algo-spawn.md §5) */
 
 /* ---- monster type descriptor: 8 or 12 bytes (level-tables.md S4, FUN_000146a0 $146a0) */
 #define RD2_MONDESC_B0(r) ((r)[0])    /* -> actor +0x26 (hitbox_w) */

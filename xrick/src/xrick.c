@@ -16,6 +16,8 @@
 #include "sysvid.h"
 #include "game.h"
 #include "fb.h"
+#include "rd2_game.h"
+#include "rd2_snd.h"
 
 #include <SDL3/SDL.h>
 #include <signal.h>
@@ -79,8 +81,12 @@ sys_init(int argc, char** argv)
 	sysjoy_init();
 #endif
 #ifdef ENABLE_SOUND
-	if (sysarg_args_nosound == 0)
-		syssnd_init();
+	if (sysarg_args_nosound == 0) {
+		if (sysarg_args_rd == 2)
+			rd2_snd_init();
+		else
+			syssnd_init();
+	}
 #endif
 
 	atexit(sys_shutdown);
@@ -97,7 +103,10 @@ void
 sys_shutdown(void)
 {
 #ifdef ENABLE_SOUND
-	syssnd_shutdown();
+	if (sysarg_args_rd == 2)
+		rd2_snd_shutdown();
+	else
+		syssnd_shutdown();
 #endif
 #ifdef ENABLE_JOYSTICK
 	sysjoy_shutdown();
@@ -117,7 +126,10 @@ main(int argc, char *argv[])
 {
 	sys_init(argc, argv);
 
-	game_run();
+	if (sysarg_args_rd == 2)
+		rd2_game_run();
+	else
+		game_run();
 
 	sys_shutdown();
 	return 0;

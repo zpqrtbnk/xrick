@@ -34,6 +34,10 @@
 
 static SDL_Event event;
 
+/* raw key hook (rd2's IKBD model, rd2_sys.c) and window-close flag; NULL/0 for rd1 */
+void (*sysevt_rawkey)(U16 scancode, U8 down, U8 repeat) = NULL;
+U8 sysevt_quit = 0;
+
 /*
  * Process an event
  */
@@ -48,6 +52,8 @@ processEvent()
 	switch (event.type) {
 	case SDL_EVENT_KEY_DOWN:
 		key = event.key.scancode; /* SDL3 flattened keysym onto the event directly */
+		if (sysevt_rawkey)
+			sysevt_rawkey(key, 1, event.key.repeat ? 1 : 0);
 		//key = event.key.key;
 		if (key == syskbd_up || key == SDL_SCANCODE_UP) {
 			SETBIT(control_status, CONTROL_UP);
@@ -113,6 +119,8 @@ processEvent()
 		break;
 	case SDL_EVENT_KEY_UP:
 		key = event.key.scancode;
+		if (sysevt_rawkey)
+			sysevt_rawkey(key, 0, 0);
 		//key = event.key.key;
 		if (key == syskbd_up || key == SDL_SCANCODE_UP) {
       CLRBIT(control_status, CONTROL_UP);
@@ -149,6 +157,7 @@ processEvent()
     break;
   case SDL_EVENT_QUIT:
     /* player tries to close the window -- this is the same as pressing ESC */
+    sysevt_quit = 1;
     SETBIT(control_status, CONTROL_EXIT);
     control_last = CONTROL_EXIT;
     break;
