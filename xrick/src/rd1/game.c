@@ -531,6 +531,15 @@ static void game_cycle(void)
 			{
 				ent_action();      /* run entities */
 				e_them_rndseed++;  /* (0270) */
+#ifdef PLATFORM_ST
+				/*
+				 * ST: the main loop's once-per-frame update_prng, `bsr` at 0x4DD3A
+				 * in RENDER, after render_sprites ran the entity handlers. RENDER is
+				 * skipped on scroll frames and on the respawn frame, as CTRL_ACTION is
+				 * here. Was missing -- kb/demo-solver.md F1.
+				 */
+				e_them_rndstep();
+#endif
 				game_state = CTRL_PAUSE;
 			}
 			break;

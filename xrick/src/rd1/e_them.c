@@ -41,6 +41,31 @@ static U16 e_them_rndnbr = 0;
 /* ST PRNG state, 0x495C0 / 0x495C4; seeds are the values held in atari_ram.bin */
 static U32 st_rnd_a = 0x121901F9u;
 static U32 st_rnd_b = 0x160566F9u;
+
+/*
+ * ST generator step, update_prng 0x49596:
+ *
+ *   move.l (0x495C0),D6 / move.l (0x495C4),D7 / exg D6,D7
+ *   rol.l #3,D7 / subq.w #7,D7 / eor.w D6,D7
+ *   move.l D6,(0x495C0) / move.l D7,(0x495C4)
+ *
+ * output byte = 0x495C7 = D7 & 0xFF. Two callers in the original, both `bsr`
+ * to 0x49596 (read in atari_ram.bin): 0x4D79E in enemy_ai_update (per decision,
+ * e_them_t2_action below) and 0x4DD3A in the main loop's RENDER path, once per
+ * frame after render_sprites has run the entity handlers (game.c CTRL_ACTION).
+ * The per-frame call was missing from the port -- kb/demo-solver.md F1.
+ */
+U8
+e_them_rndstep(void)
+{
+	U32 d6 = st_rnd_a, d7 = st_rnd_b, t;
+	t = d6; d6 = d7; d7 = t;                                 /* exg d6,d7 */
+	d7 = ((d7 << 3) | (d7 >> 29)) & 0xFFFFFFFFu;             /* rol.l #3 */
+	d7 = (d7 & 0xFFFF0000u) | ((d7 - 7) & 0xFFFFu);          /* subq.w #7 */
+	d7 = (d7 & 0xFFFF0000u) | ((d7 ^ d6) & 0xFFFFu);         /* eor.w d6,d7 */
+	st_rnd_a = d6; st_rnd_b = d7;
+	return (U8)(d7 & 0xFF);
+}
 #endif
 
 /*
@@ -651,11 +676,7 @@ e_them_t2_action2(U8 e)
 	/*
 	 * ST random turn -- review-log.md A3. A DIFFERENT generator and a different rule.
 	 *
-	 *   generator 0x49596: two 32-bit words at 0x495C0/0x495C4 --
-	 *       move.l (0x495C0),D6 / move.l (0x495C4),D7 / exg D6,D7
-	 *       rol.l #3,D7 / subq.w #7,D7 / eor.w D6,D7
-	 *       move.l D6,(0x495C0) / move.l D7,(0x495C4)
-	 *     output byte = 0x495C7 = D7 & 0xFF.
+	 *   generator 0x49596: e_them_rndstep() above.
 	 *   decision  0x4D7A8: andi.b #3,D5 / bne skip  -> turn on 1 in 4,
 	 *     and the turn (0x4D7DE) FLIPS nDirection between 0 and 0xFF; it does not pick
 	 *     a direction. The PC instead SETS the direction from one random bit (0x2B13
@@ -665,16 +686,8 @@ e_them_t2_action2(U8 e)
 	 * port's is the position (`(x & 0x1e) == 0x08`); both fire every 8 steps, so the
 	 * gate is left as the port has it and only the generator and rule are switched.
 	 */
-	{
-		U32 d6 = st_rnd_a, d7 = st_rnd_b, t;
-		t = d6; d6 = d7; d7 = t;                 /* exg d6,d7 */
-		d7 = ((d7 << 3) | (d7 >> 29)) & 0xFFFFFFFFu;   /* rol.l #3 */
-		d7 = (d7 & 0xFFFF0000u) | ((d7 - 7) & 0xFFFFu);        /* subq.w #7 */
-		d7 = (d7 & 0xFFFF0000u) | ((d7 ^ d6) & 0xFFFFu);       /* eor.w d6,d7 */
-		st_rnd_a = d6; st_rnd_b = d7;
-		if (((d7 & 0xFF) & 0x03) == 0)
-			ent_ents[e].offsx = (S16)-ent_ents[e].offsx;
-	}
+	if ((e_them_rndstep() & 0x03) == 0)
+		ent_ents[e].offsx = (S16)-ent_ents[e].offsx;
 #else
 	bx = e_them_rndnbr + *sh + *sl + 0x0d;
 	cx = *sh;

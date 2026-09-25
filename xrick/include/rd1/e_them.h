@@ -17,6 +17,9 @@
 #include "system.h"
 
 extern U32 e_them_rndseed;
+#ifdef PLATFORM_ST
+extern U8 e_them_rndstep(void);  /* update_prng 0x49596 */
+#endif
 
 extern void e_them_t1a_action(U8);
 extern void e_them_t1b_action(U8);
