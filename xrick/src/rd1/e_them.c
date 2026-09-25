@@ -694,7 +694,20 @@ e_them_t2_action2(U8 e)
       ent_ents[e].offsx = 2;
     x = ent_ents[e].x + ent_ents[e].offsx;
     /*sys_printf("e_them_t2 xmove x=%02x\n", x);*/
+    /*
+     * Left edge -- kb/demo-solver.md F6. `x` became S16 (R3.1), so a negative x
+     * passed `x < 0xe8` and the probe read map_map out of bounds (segfault).
+     *   PC 0x2AD3  offsx < 0: ADD AL,[SI+2] / JC probe, else blocked -> x >= 0 only;
+     *      0x2AE8  offsx > 0: CMP AL,0xE8 / JNC blocked.
+     *   ST 0x4D76C no bound either side before the probe (0x4DA40); off the left
+     *      edge it reads constant bytes (util.c st_offgrid) and the enemy is
+     *      despawned at x < -8 (ents.c). The right bound stays the PC's here.
+     */
+#ifdef PLATFORM_ST
     if (x < 0xe8) {
+#else
+    if (x >= 0 && x < 0xe8) {
+#endif
       u_envtest(x, ent_ents[e].y, FALSE, &env0, &env1);
       if (!(env1 & (MAP_EFLG_VERT|MAP_EFLG_SOLID|MAP_EFLG_SPAD|MAP_EFLG_WAYUP))) {
 	ent_ents[e].x = x;

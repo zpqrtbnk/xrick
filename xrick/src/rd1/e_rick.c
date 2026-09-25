@@ -34,6 +34,16 @@ U16 e_rick_stop_x = 0;
 U16 e_rick_stop_y = 0;
 U8 e_rick_state = 0;
 U8 e_rick_atExit = FALSE; // TRUE when rick is exiting the submap
+/*
+ * The edge rick left by, LEFT or RIGHT -- what maps.c map_chain matches connectors
+ * against. kb/demo-solver.md F7. PC: [0x7D77], written only by the two exit stubs
+ * (0x19B4 = 0 left, 0x19C4 = 1 right) and read only by the connector search
+ * (0x0D99 `mov bl,[0x7d77] / cmp bl,[si]`). ST: the side is taken from X in
+ * process_level_transition_point (0x49A3E-0x49A50). The port matched game_dir,
+ * rick's FACING, which the climbing moves never update: climb out right while
+ * facing left and no connector matched.
+ */
+U8 e_rick_exitDir = RIGHT;
 
 /*
  * local vars
@@ -344,6 +354,7 @@ e_rick_action2(void)
 		game_dir = LEFT;
 		if (x < 0) {  /* prev submap */
 			e_rick_atExit = TRUE;
+			e_rick_exitDir = LEFT;
 			/* xref.md 'Submap re-entry X'. PC 0xE2 / 0x04 -- MOV word[SI+2],0x00E2 @0x19B9 and
 			   MOV word[SI+2],0x0004 @0x19C9; ST 0xE6 / 0x02 -- algo-level.md reposition. */
 			E_RICK_ENT.x = SUBMAP_REENTRY_RIGHT;
@@ -354,6 +365,7 @@ e_rick_action2(void)
 		game_dir = RIGHT;
 		if (x >= 0xe8) {  /* next submap */
 			e_rick_atExit = TRUE;
+			e_rick_exitDir = RIGHT;
 			E_RICK_ENT.x = SUBMAP_REENTRY_LEFT;
 			return;
 		}
@@ -592,7 +604,7 @@ e_rick_action2(void)
       x = E_RICK_ENT.x - 0x02;
       if (x < 0) {  /* (i.e. negative) prev submap */
 	e_rick_atExit = TRUE;
-	/*6dbd = 0x00;*/
+	e_rick_exitDir = LEFT;  /* was the commented-out 6dbd = 0x00, PC 0x19B4 */
 	E_RICK_ENT.x = SUBMAP_REENTRY_RIGHT;
 	return;
       }
@@ -601,7 +613,7 @@ e_rick_action2(void)
       x = E_RICK_ENT.x + 0x02;
       if (x >= 0xe8) {  /* next submap */
 	e_rick_atExit = TRUE;
-	/*6dbd = 0x01;*/
+	e_rick_exitDir = RIGHT;  /* was the commented-out 6dbd = 0x01, PC 0x19C4 */
 	E_RICK_ENT.x = SUBMAP_REENTRY_LEFT;
 	return;
       }

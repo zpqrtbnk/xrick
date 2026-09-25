@@ -40,6 +40,7 @@
 #include "draw.h"
 #include "screens.h"
 #include "e_sbonus.h"
+#include "e_rick.h"
 #include "tiles.h"
 #include "fb.h"
 
@@ -176,10 +177,27 @@ map_chain(void)
    * look for the first connector with compatible row number. if none
    * found, then panic
    */
+  /*
+   * Match the edge rick left by, not his facing (game_dir) -- kb/demo-solver.md F7.
+   * PC 0x0D99 compares [0x7D77] (set by the exit stubs); ST 0x49A3E derives the side
+   * from X. e_rick_exitDir holds it.
+   */
   for (c = map_submaps[env_submap].connect; ; c++) {
-    if (map_connect[c].dir == 0xff)
+    if (map_connect[c].dir == 0xff) {
+#ifdef PLATFORM_ST
+      /*
+       * ST process_level_transition_point: the sentinel (0x49A56 `cmp.w #0xff` /
+       * beq 0x49B28) skips the room change -- X is repositioned (the port already
+       * did that at the exit) and the SAME room is set up again (bsr 0x499C2).
+       */
+      return TRUE;
+#else
+      /* PC 0x0E31 `add si,6 / jmp 0x0D9D`: no sentinel test at all, so no defined
+         behaviour to copy */
       sys_panic("(map_chain) can not find connector\n");
-    if (map_connect[c].dir != game_dir) continue;
+#endif
+    }
+    if (map_connect[c].dir != e_rick_exitDir) continue;
     t = (ent_ents[1].y >> 3) + map_frow - map_connect[c].rowout;
     if (t < 3) break;
   }
