@@ -47,6 +47,20 @@ extern void game_run(void);
 
 extern void game_toggleCheat(U8);
 
+#ifdef HEADLESS
+/*
+ * headless core (PLAN.md T43, kb/demo-solver.md): the game logic with no video,
+ * sound or timing, advanced one logic step (one CTRL_ACTION pass) at a time.
+ */
+#define GAME_HL_STEP 0  /* one step done, the next one is pending */
+#define GAME_HL_OVER 1  /* game over: no more steps */
+#define GAME_HL_END 2   /* game completed: no more steps */
+
+extern void game_hlStart(void);  /* new game, as set by sysarg_args_map/submap */
+extern U8 game_hlStep(U8);       /* one step with these CONTROL_* bits held */
+extern U32 game_hlSteps(void);   /* steps run since game_hlStart */
+#endif
+
 #endif
 
 /* eof */

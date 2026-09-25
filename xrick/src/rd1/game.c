@@ -129,6 +129,9 @@ static void loadData(void);
 static void freeData(void);
 static void game_paintEntities();
 static void game_save(void);
+#ifdef HEADLESS
+static U32 hl_steps = 0;  /* CTRL_ACTION passes since game_hlStart */
+#endif
 #ifdef ENABLE_DEMO
 static void game_enterSegment(void);
 static void trace_open(void);
@@ -386,6 +389,11 @@ static void game_cycle(void)
 
 		case MAP_INTRO:
 
+#ifdef HEADLESS
+			/* the map intro only draws and waits for FIRE; it writes no game state */
+			game_state = INIT_MAP;
+			break;
+#endif
 			switch (screen_introMap())
 			{
 				case SCREEN_RUNNING:
@@ -537,6 +545,9 @@ static void game_cycle(void)
 			else
 			{
 				ent_action();      /* run entities */
+#ifdef HEADLESS
+				hl_steps++;
+#endif
 				e_them_rndseed++;  /* (0270) */
 #ifdef PLATFORM_ST
 				/*
@@ -1028,6 +1039,58 @@ static void freeData()
 	sounds_free();
 #endif
 }
+
+
+
+#ifdef HEADLESS
+/*
+ * game_hlStart
+ *
+ * start a new game from sysarg_args_map/submap, straight into INIT: the title
+ * and hall of fame screens write no game state. -demo / -trace apply as in
+ * game_run.
+ */
+void
+game_hlStart(void)
+{
+#ifdef ENABLE_DEMO
+	demo_init(&demoset);
+	trace_open();
+#endif
+	hl_steps = 0;
+	game_state = INIT;
+}
+
+/*
+ * game_hlStep
+ *
+ * hold <ctrl> (CONTROL_* bits) and run frames until one CTRL_ACTION pass has
+ * run and its frame is painted. scroll, fade and restart frames in between are
+ * run too: they are not logic steps (the demo clock does not count them either).
+ * under -demo the script overrides <ctrl>, as it overrides the keyboard.
+ */
+U8
+game_hlStep(U8 ctrl)
+{
+	U32 n = hl_steps;
+
+	control_status = ctrl;
+	while (hl_steps == n)
+	{
+		if (game_state == FADEOUT__GAMEOVER || game_state == GAMEOVER ||
+		    game_state == GETNAME || game_state == EXIT)
+			return env_map >= 0x04 ? GAME_HL_END : GAME_HL_OVER;
+		game_cycle();
+	}
+	return GAME_HL_STEP;
+}
+
+U32
+game_hlSteps(void)
+{
+	return hl_steps;
+}
+#endif
 
 
 
