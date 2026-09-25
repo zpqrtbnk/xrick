@@ -69,6 +69,42 @@ e_them_rndstep(void)
 #endif
 
 /*
+ * Put the random generator back to its power-on state.
+ *
+ * ST: the values seed_prng_state (0x49574) computes, which are also what
+ * atari_ram.bin holds at 0x495C0 and the initialisers above. PC: 0 / 0, the
+ * initialisers. Demo mode only -- the originals seed once, at boot. Called on
+ * every demo segment entry so each submap's script is self-contained
+ * (PLAN.md T43 D1/D5).
+ */
+void
+e_them_rndreset(void)
+{
+#ifdef PLATFORM_ST
+	st_rnd_a = 0x121901F9u;
+	st_rnd_b = 0x160566F9u;
+#endif
+	e_them_rndseed = 0;
+	e_them_rndnbr = 0;
+}
+
+/*
+ * Read the random generator state, for the trace (game.c). ST: st_rnd_a/b.
+ * PC: e_them_rndseed/rndnbr.
+ */
+void
+e_them_rndstate(U32 *a, U32 *b)
+{
+#ifdef PLATFORM_ST
+	*a = st_rnd_a;
+	*b = st_rnd_b;
+#else
+	*a = e_them_rndseed;
+	*b = e_them_rndnbr;
+#endif
+}
+
+/*
  * Check if entity boxtests with a lethal e_them i.e. something lethal
  * in slot 0 and 4 to 8.
  *

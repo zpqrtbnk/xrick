@@ -29,6 +29,7 @@ extern int sysarg_args_rd;
 #ifdef ENABLE_DEMO
 extern int sysarg_args_demo;
 extern char* sysarg_args_record;
+extern char* sysarg_args_trace;
 #endif
 
 extern void sysarg_init(int, char**);

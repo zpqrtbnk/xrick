@@ -90,7 +90,7 @@ save_joy(void)
 
 static const demoset_t demoset = {
 	rd2_demo_scripts, RD2_DEMO_SEGS, "xrick/src/rd2/dat_rd2_script.c", "map", "map - 1",
-	"", "rd2_demo_scripts", "4", save_joy
+	"", "rd2_demo_scripts", "4", save_joy, NULL
 };
 
 void

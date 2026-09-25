@@ -12,6 +12,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "system.h"
 #include "sysarg.h"
@@ -50,7 +51,7 @@
 /* the RD1 demo scripts: one per submap, written back as src/rd1/dat_demo.c */
 static const demoset_t demoset = {
   demo_scripts, MAP_NBR_SUBMAPS, "xrick/src/rd1/dat_demo.c", "submap", "env_submap",
-  "#include \"maps.h\"\n", "demo_scripts", "MAP_NBR_SUBMAPS", NULL
+  "#include \"maps.h\"\n", "demo_scripts", "MAP_NBR_SUBMAPS", NULL, e_them_rndreset
 };
 #endif
 
@@ -128,6 +129,11 @@ static void loadData(void);
 static void freeData(void);
 static void game_paintEntities();
 static void game_save(void);
+#ifdef ENABLE_DEMO
+static void game_enterSegment(void);
+static void trace_open(void);
+static void trace_tick(void);
+#endif
 
 
 /*
@@ -194,6 +200,7 @@ game_run(void)
 
 #ifdef ENABLE_DEMO
 	demo_init(&demoset);
+	trace_open();
 #endif
 
 	/* main loop */
@@ -441,7 +448,7 @@ static void game_cycle(void)
 			{
 				map_init();
 #ifdef ENABLE_DEMO
-				demo_enterSegment(env_submap);
+				game_enterSegment();
 #endif
 				game_save();
 				fb_clear();                 /* clear buffer */
@@ -539,6 +546,9 @@ static void game_cycle(void)
 				 * here. Was missing -- kb/demo-solver.md F1.
 				 */
 				e_them_rndstep();
+#endif
+#ifdef ENABLE_DEMO
+				trace_tick();
 #endif
 				game_state = CTRL_PAUSE;
 			}
@@ -699,7 +709,7 @@ static void game_cycle(void)
 
 			map_init();                     /* initialize the map */
 #ifdef ENABLE_DEMO
-			demo_enterSegment(env_submap);
+			game_enterSegment();
 #endif
 			game_save();                        /* save data in case of a restart */
 			fb_clear();
@@ -897,7 +907,7 @@ static void restart(void)
 
 	map_init(); // see INIT_MAP check that everything is OK here
 #ifdef ENABLE_DEMO
-	demo_enterSegment(env_submap); /* a death replays the submap script from tick 0 */
+	game_enterSegment(); /* a death replays the submap script from tick 0 */
 #endif
 	game_save();
 	ent_clprev();
@@ -919,6 +929,77 @@ static void game_save(void)
   e_rick_save();
   save_map_row = map_frow;
 }
+
+
+
+#ifdef ENABLE_DEMO
+/*
+ * trace (-trace <file>): one line per logic step and one per segment entry,
+ * so two runs -- e.g. the SDL build and the headless core, PLAN.md T43 -- can
+ * be diffed tick by tick.
+ *
+ *   E <step> <submap> <rng a> <rng b>
+ *   T <step> <submap> <ctrl> <rng a> <rng b> <lives> <bombs> <bullets> <score>
+ *     <rick state> then n:x,y,sprite for every entity slot
+ *
+ * <step> counts CTRL_ACTION passes since the game started. rng is st_rnd_a/b on
+ * the ST, e_them_rndseed/rndnbr on the PC.
+ */
+static FILE *trace_f = NULL;
+static U32 trace_n = 0;
+
+static void
+trace_open(void)
+{
+  if (!sysarg_args_trace)
+    return;
+  trace_f = fopen(sysarg_args_trace, "w");
+  if (!trace_f)
+    sys_printf("xrick/trace: could not write '%s'\n", sysarg_args_trace);
+}
+
+static void
+trace_tick(void)
+{
+  U32 a, b;
+  U8 i;
+
+  if (!trace_f)
+    return;
+  e_them_rndstate(&a, &b);
+  fprintf(trace_f, "T %lu %02x %02x %08lx %08lx %u %u %u %lu %02x",
+	  (unsigned long)trace_n, (unsigned int)env_submap,
+	  (unsigned int)(control_status & (CONTROL_UP|CONTROL_DOWN|CONTROL_LEFT|
+					   CONTROL_RIGHT|CONTROL_FIRE)),
+	  (unsigned long)a, (unsigned long)b,
+	  (unsigned int)env_lives, (unsigned int)env_bombs,
+	  (unsigned int)env_bullets, (unsigned long)env_score,
+	  (unsigned int)e_rick_state);
+  for (i = 0; i < ENT_ENTSNUM; i++)
+    fprintf(trace_f, " %02x:%d,%d,%02x", (unsigned int)ent_ents[i].n,
+	    (int)ent_ents[i].x, (int)ent_ents[i].y, (unsigned int)ent_ents[i].sprite);
+  fputc('\n', trace_f);
+  trace_n++;
+}
+
+/*
+ * every (re)entry of a submap: the demo clock and, while a script plays or
+ * records, the random generator restart here (demo.c, T43 D1).
+ */
+static void
+game_enterSegment(void)
+{
+  U32 a, b;
+
+  demo_enterSegment(env_submap);
+  if (trace_f)
+  {
+    e_them_rndstate(&a, &b);
+    fprintf(trace_f, "E %lu %02x %08lx %08lx\n", (unsigned long)trace_n,
+	    (unsigned int)env_submap, (unsigned long)a, (unsigned long)b);
+  }
+}
+#endif
 
 
 

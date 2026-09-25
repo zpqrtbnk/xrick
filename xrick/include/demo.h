@@ -66,6 +66,9 @@ typedef struct {
   const char *array;      /* name of the script array */
   const char *size;       /* its size, as written in the generated file */
   void (*saved)(void);    /* extra game-specific export after the C file, or NULL */
+  void (*enter)(void);    /* on every segment entry while a script plays or records, or
+                             NULL. RD1: reseed the random generator, so every segment
+                             is self-contained (PLAN.md T43 D1) */
 } demoset_t;
 
 #define DEMO_MAXSEG 0x40

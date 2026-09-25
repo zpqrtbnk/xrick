@@ -56,6 +56,7 @@ int sysarg_args_rd = 1;   /* -rd: 1 = Rick Dangerous, 2 = Rick Dangerous 2 */
 #ifdef ENABLE_DEMO
 int sysarg_args_demo = 0;
 char *sysarg_args_record = NULL;
+char *sysarg_args_trace = NULL;
 #endif
 #ifdef ENABLE_DEMO
 #define SYSARG_DEMOHELP \
@@ -66,7 +67,9 @@ char *sysarg_args_record = NULL;
 	"    started by hand; the run's end hands control back.\n" \
 	"  -record <file> : Record the controls played into <file>, as a ready to\n" \
 	"    build src/rd1/dat_demo.c (-rd 2: src/rd2/dat_rd2_script.c, plus one\n" \
-	"    <file>.map<N>.joy per map, a joystick byte per frame). Overrides -demo.\n"
+	"    <file>.map<N>.joy per map, a joystick byte per frame). Overrides -demo.\n" \
+	"  -trace <file> : RD1: write one line per logic step to <file> -- random\n" \
+	"    generator, counters, entities -- to diff two runs tick by tick.\n"
 #else
 #define SYSARG_DEMOHELP ""
 #endif
@@ -234,6 +237,11 @@ sysarg_init(int argc, char **argv)
     else if (!strcmp(argv[i], "-record")) {
       if (++i == argc) sysarg_fail("missing record file name");
       sysarg_args_record = argv[i];
+    }
+
+    else if (!strcmp(argv[i], "-trace")) {
+      if (++i == argc) sysarg_fail("missing trace file name");
+      sysarg_args_trace = argv[i];
     }
 #endif
 

@@ -126,6 +126,7 @@ demo_init(const demoset_t *s)
  * called wherever the game (re)enters a segment -- RD1: next to every map_init,
  * RD2: at level start. resets the clock and selects the script. entering a segment
  * that has no script ends the demo and hands the controls back to the keyboard.
+ * while a script plays or records, the game's <enter> hook runs too.
  */
 void
 demo_enterSegment(U16 sm)
@@ -156,6 +157,8 @@ demo_enterSegment(U16 sm)
     rec_nbr[sm] = 0;
     rec_len[sm] = 0;
     rec_open = TRUE;
+    if (set->enter)
+      set->enter();
     return;
   }
 
@@ -169,6 +172,8 @@ demo_enterSegment(U16 sm)
   }
 
   script = &set->scripts[sm];
+  if (set->enter)
+    set->enter();
 }
 
 
