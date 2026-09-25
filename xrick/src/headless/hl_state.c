@@ -45,6 +45,7 @@ regions(hl_region_f f)
   f(&env_changeSubmap, sizeof(env_changeSubmap), "env_changeSubmap");
   f(&e_rick_state, sizeof(e_rick_state), "e_rick_state");
   f(&e_rick_atExit, sizeof(e_rick_atExit), "e_rick_atExit");
+  f(&e_rick_exitDir, sizeof(e_rick_exitDir), "e_rick_exitDir");
   f(&e_rick_stop_x, sizeof(e_rick_stop_x), "e_rick_stop_x");
   f(&e_rick_stop_y, sizeof(e_rick_stop_y), "e_rick_stop_y");
   f(&game_dir, sizeof(game_dir), "game_dir");

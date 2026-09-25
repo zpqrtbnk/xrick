@@ -169,7 +169,8 @@ hl_dump(FILE *f)
 
   /*
    * exits: maps.c map_chain. rick leaves by the left (x < 0) or right (x >= 0xE8)
-   * edge; the connector used is the first with dir == game_dir and
+   * edge; the connector used is the first with dir == the edge left by
+   * (e_rick_exitDir -- not game_dir, the facing, since F7) and
    * (y >> 3) + frow - rowout in 0..2, i.e. rick's tile row in [lo, lo + 2].
    */
   fprintf(f, "  \"exits\": [");
