@@ -59,6 +59,7 @@ extern void game_toggleCheat(U8);
 extern void game_hlStart(void);  /* new game, as set by sysarg_args_map/submap */
 extern U8 game_hlStep(U8);       /* one step with these CONTROL_* bits held */
 extern U32 game_hlSteps(void);   /* steps run since game_hlStart */
+extern U8 game_hlStatus(void);   /* GAME_HL_STEP while the game runs, else OVER / END */
 #endif
 
 #endif

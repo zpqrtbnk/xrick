@@ -1089,15 +1089,29 @@ U8
 game_hlStep(U8 ctrl)
 {
 	U32 n = hl_steps;
+	U8 s;
 
 	control_status = ctrl;
 	while (hl_steps == n)
 	{
-		if (game_state == FADEOUT__GAMEOVER || game_state == GAMEOVER ||
-		    game_state == GETNAME || game_state == EXIT)
-			return env_map >= 0x04 ? GAME_HL_END : GAME_HL_OVER;
+		if ((s = game_hlStatus()) != GAME_HL_STEP)
+			return s;
 		game_cycle();
 	}
+	return GAME_HL_STEP;
+}
+
+/*
+ * game_hlStatus
+ *
+ * GAME_HL_STEP while the game runs, else GAME_HL_OVER / GAME_HL_END.
+ */
+U8
+game_hlStatus(void)
+{
+	if (game_state == FADEOUT__GAMEOVER || game_state == GAMEOVER ||
+	    game_state == GETNAME || game_state == EXIT)
+		return env_map >= 0x04 ? GAME_HL_END : GAME_HL_OVER;
 	return GAME_HL_STEP;
 }
 

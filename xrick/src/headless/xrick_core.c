@@ -23,6 +23,8 @@
  * -log       with -fuzz: before each round, write the inputs a plain game would
  *            play to reach the end of that round (one CONTROL_* byte per step).
  * -inputs    play <file>, one CONTROL_* byte per step (e.g. a -log file).
+ * -dump      at the end, print the game state as JSON on stdout (T43 phase 5,
+ *            hl_dump.c) instead of the summary line.
  * -list      print the snapshot regions.
  */
 
@@ -40,6 +42,7 @@
 #include "e_them.h"
 #include "demo.h"
 #include "hl_state.h"
+#include "hl_dump.h"
 
 static void
 usage(void)
@@ -48,6 +51,7 @@ usage(void)
 	  "usage: xrick-core [-submap <n>] [-demo] [-trace <file>] [-steps <n>] [-scramble <n>]\n"
 	  "       xrick-core -fuzz <rounds> [-submap <n>] [-seed <n>] [-log <file>]\n"
 	  "       xrick-core [-submap <n>] -inputs <file>\n"
+	  "       any run above but -fuzz: add -dump for the final state as JSON\n"
 	  "       xrick-core -list\n");
   exit(2);
 }
@@ -160,6 +164,7 @@ now(void)
  */
 static const char *fuzz_log = NULL;  /* -log: timeline to replay with -inputs */
 #define FUZZ_NEWGAME 0xFF             /* in a -log file: game_hlStart again */
+static int fuzz_verbose = 0;          /* -v: name each submap on stderr */
 static U8 tl[1 << 20];                /* the inputs played since the game started */
 static size_t tl_n;
 
@@ -184,6 +189,8 @@ fuzz(int rounds, int only)
   {
     set_submap(sm);
     tl_n = 0;
+    if (fuzz_verbose)
+      fprintf(stderr, "fuzz: submap %d\n", sm);
     game_hlStart();
     for (r = 0; r < rounds; r++)
     {
@@ -258,7 +265,7 @@ int
 main(int argc, char *argv[])
 {
   unsigned long steps = 100000, scramble = 0, i;
-  int a, rounds = 0, only = 0, c;
+  int a, rounds = 0, only = 0, c, dump = 0;
   U8 r = GAME_HL_STEP;
   const char *why, *inputs = NULL;
   FILE *f = NULL;
@@ -279,10 +286,14 @@ main(int argc, char *argv[])
       rounds = atoi(argv[++a]);
     else if (!strcmp(argv[a], "-seed") && a + 1 < argc)
       rnd_s = (U32)strtoul(argv[++a], NULL, 0) | 1u;
+    else if (!strcmp(argv[a], "-v"))
+      fuzz_verbose = 1;
     else if (!strcmp(argv[a], "-log") && a + 1 < argc)
       fuzz_log = argv[++a];
     else if (!strcmp(argv[a], "-inputs") && a + 1 < argc)
       inputs = argv[++a];
+    else if (!strcmp(argv[a], "-dump"))
+      dump = 1;
     else if (!strcmp(argv[a], "-list"))
     {
       hl_stateList();
@@ -331,6 +342,12 @@ main(int argc, char *argv[])
     if (sysarg_args_demo && !demo_active) { why = "end of demo"; break; }
   }
 
+  if (dump)
+  {
+    hl_dump(stdout);  /* stdout is the JSON alone */
+    fprintf(stderr, "xrick-core: %s\n", why);
+    return 0;
+  }
   printf("xrick-core: %s after %lu steps, submap %#04x, lives %u, score %lu\n",
 	 why, (unsigned long)game_hlSteps(), (unsigned int)env_submap,
 	 (unsigned int)env_lives, (unsigned long)env_score);
