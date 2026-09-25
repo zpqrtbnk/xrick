@@ -753,4 +753,30 @@ void e_rick_restore(void)
 
 
 
+#ifdef HEADLESS
+#include "headless/hl_state.h"
+
+/*
+ * xrick-core only (branch `solver`): this file's statics that are game state,
+ * for snapshots -- kb/demo-solver.md §3. `stopped` (e_rick_action) only gates
+ * a sound, so it is not state.
+ */
+void
+e_rick_hlRegions(hl_region_f f)
+{
+	f(&scrawl, sizeof(scrawl), "e_rick scrawl");
+	f(&trigger, sizeof(trigger), "e_rick trigger");
+	f(&offsx, sizeof(offsx), "e_rick offsx");
+	f(&ylow, sizeof(ylow), "e_rick ylow");
+	f(&offsy, sizeof(offsy), "e_rick offsy");
+	f(&seq, sizeof(seq), "e_rick seq");
+#ifdef PLATFORM_ST
+	f(&tumble_seq, sizeof(tumble_seq), "e_rick tumble_seq");
+#endif
+	f(&save_crawl, sizeof(save_crawl), "e_rick save_crawl");
+	f(&save_x, sizeof(save_x), "e_rick save_x");
+	f(&save_y, sizeof(save_y), "e_rick save_y");
+}
+#endif
+
 /* eof */

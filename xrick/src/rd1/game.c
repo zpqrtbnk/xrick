@@ -130,6 +130,7 @@ static void freeData(void);
 static void game_paintEntities();
 static void game_save(void);
 #ifdef HEADLESS
+#include "headless/hl_state.h"
 static U32 hl_steps = 0;  /* CTRL_ACTION passes since game_hlStart */
 #endif
 #ifdef ENABLE_DEMO
@@ -474,6 +475,14 @@ static void game_cycle(void)
 
 		case FADEIN__CTRL_ACTION:
 
+#ifdef HEADLESS
+			/*
+			 * fades only set the gamma, but their counters are statics inside
+			 * fb.c that a snapshot cannot hold: skip them (kb/demo-solver.md §8)
+			 */
+			game_state = CTRL_ACTION;
+			break;
+#endif
 			if (fb_fadeIn())
 			{
 				game_state = CTRL_ACTION;
@@ -708,6 +717,10 @@ static void game_cycle(void)
 
 		case FADEOUT__MAP_INTRO:
 
+#ifdef HEADLESS
+			game_state = MAP_INTRO;  /* no fade, see FADEIN__CTRL_ACTION */
+			break;
+#endif
 			if (fb_fadeOut())
 			{
 				game_state = MAP_INTRO;
@@ -776,6 +789,9 @@ static void game_cycle(void)
 #ifdef ENABLE_DEMO
 			/* the demo is over -- the hall of fame is entered by hand. idempotent. */
 			demo_end();
+#endif
+#ifdef HEADLESS
+			return;  /* the game is over: stay here, game_hlStep reports it */
 #endif
 			if (fb_fadeOut())
 				game_state = GAMEOVER;
@@ -1089,6 +1105,18 @@ U32
 game_hlSteps(void)
 {
 	return hl_steps;
+}
+
+/*
+ * this file's statics that are game state, for snapshots -- kb/demo-solver.md §3.
+ * tm/tmx and game_period are timing only.
+ */
+void
+game_hlRegions(hl_region_f f)
+{
+	f(&game_state, sizeof(game_state), "game_state");
+	f(&save_map_row, sizeof(save_map_row), "save_map_row");
+	f(&hl_steps, sizeof(hl_steps), "hl_steps");
 }
 #endif
 

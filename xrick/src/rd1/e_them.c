@@ -1005,6 +1005,24 @@ e_them_t3_action(U8 e)
   }
 }
 
+
+
+#ifdef HEADLESS
+#include "headless/hl_state.h"
+
+/*
+ * xrick-core only (branch `solver`): the random generator, for snapshots --
+ * kb/demo-solver.md §3.
+ */
+void
+e_them_hlRegions(hl_region_f f)
+{
+#ifdef PLATFORM_ST
+	f(&st_rnd_a, sizeof(st_rnd_a), "st_rnd_a");
+	f(&st_rnd_b, sizeof(st_rnd_b), "st_rnd_b");
+#endif
+	f(&e_them_rndnbr, sizeof(e_them_rndnbr), "e_them_rndnbr");
+}
+#endif
+
 /* eof */
-
-
