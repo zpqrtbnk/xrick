@@ -532,6 +532,19 @@ ent_action(void)
         e_them_t3_action(i);
       else
 	ent_actf[k](i);
+#ifdef PLATFORM_ST
+      /*
+       * ST render_sprites despawns, after the handler, any entity with x < -8
+       * (0x4B098 `cmp.w #-8,D1w / bge`) or x > 0xF0 (0x4B0A6), via
+       * despawn_offscreen_entity (0x4AC3E: wType = 0, placement untouched).
+       * Applied here to type-2 e_them only, the one handler that can walk past
+       * the left edge on the ST -- kb/demo-solver.md F6. The other types keep
+       * their own bounds (F8).
+       */
+      if ((k == 0x06 || k == 0x09 || k == 0x0c || k == 0x0f) &&
+	  ent_ents[i].n && ent_ents[i].x < -8)
+	ent_ents[i].n = 0;
+#endif
     }
   }
 }

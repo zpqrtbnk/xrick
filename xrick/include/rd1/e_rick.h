@@ -20,6 +20,7 @@
 #define E_RICK_ENT ent_ents[E_RICK_NO]
 
 extern U8 e_rick_state, e_rick_atExit;
+extern U8 e_rick_exitDir;  /* LEFT / RIGHT: the edge rick left by (PC [0x7D77]) */
 extern U16 e_rick_stop_x, e_rick_stop_y;
 
 #define E_RICK_STSTOP 0x01
