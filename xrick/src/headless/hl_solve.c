@@ -485,7 +485,12 @@ walls_present(void)
     if (map_marks[m].ent & MAP_MARK_NACT)
       continue;
     r0 = (map_marks[m].row & 0xf8) + (map_marks[m].xy & 0x07);
-    if (r0 < map_frow || r0 >= map_frow + 0x28 || (ent_ents[0].n && ent_ents[0].mark == m))
+    /* in view it stands while in slot 0 AND at its spawn point: submap 0x07's
+       mark 72 is not blown up but set sliding, and once moved it no longer
+       closes the passage it stood in */
+    if (r0 < map_frow || r0 >= map_frow + 0x28 ||
+	(ent_ents[0].n && ent_ents[0].mark == m &&
+	 ent_ents[0].x == (S16)ent_ents[0].xsave && ent_ents[0].y == (S16)ent_ents[0].ysave))
       bits |= 1 << w;
   }
   return bits;
@@ -527,6 +532,12 @@ static int g_stuck_cell = -1;
  */
 #define CREDIT 8
 #define CREDIT_LETHAL 32
+#define BOMB_CLEAR 32
+/*
+ * No value on bombs held. Tried 24 per bomb (6 tiles) when submap 0x07 spent its
+ * only bomb before its exit wall: 0x03 (three bombs needed) and 0x06 then failed.
+ * What fixed 0x07 was ranking bomb states by clearance (bomb_rank), not this.
+ */
 
 /* this submap's placements done (killed, collected, triggered once) */
 static int
@@ -594,10 +605,13 @@ field_rick(void)
  * actions: small programs of (mask, steps) segments.
  * - every mask of act_mask held 2, 4 or 8 steps
  * - dynamite: stand (no control, 2 steps), drop it (FIRE+DOWN), run left or right
- *   12 or 24 steps, then stand until 58 steps in all. ST e_bomb.h: 34 fuse ticks
- *   + 20 explosion ticks, lethal for the first 7 of those -- the blast is over
- *   before the program ends. A beam that scores by distance would never keep the
- *   retreat on its own: it moves away from the exit. The first 2 steps let rick
+ *   12 or 24 steps, then stand until 36 steps in all -- just before the blast
+ *   (ST e_bomb.h: 34 fuse ticks, then 20 of explosion, lethal for 7). The search
+ *   takes over there: submap 0x07's wall slides along its row when blown and has
+ *   to be jumped over right then (retreat 18-24, jump at 36-39: found by hand);
+ *   an earlier version stood still to step 58 and was crushed. A beam that scores
+ *   by distance would never keep the retreat on its own: it moves away from the
+ *   exit. The first 2 steps let rick
  *   stand up: e_rick.c only fires when he was not crawling the step before
  *   (`if (scrawl || !FIRE) goto firing_not`), and FIRE+DOWN from a crawl just
  *   crawls on -- submap 0x03's stone head is reached crawling.
@@ -612,7 +626,7 @@ static const U8 act_mask[] = {
 static const U8 act_len[] = { 2, 4, 8 };
 #define N_MASK ((int)sizeof(act_mask))
 #define N_LEN ((int)sizeof(act_len))
-#define BOMB_STEPS 58
+#define BOMB_STEPS 36
 
 typedef struct {
   U8 n;          /* segments */
@@ -621,15 +635,19 @@ typedef struct {
   U8 steps;      /* sum of len */
 } prog_t;
 
-#define N_ACT (N_MASK * N_LEN + 4)
+
+#define N_ACT (N_MASK * N_LEN + 8)
+/* (drop-and-escape programs, run up/down/sideways then hand back, were tried for
+   submap 0x07: with them 0x06 and 0x07 failed, without them both solve) */
 static prog_t progs[N_ACT];
 
 static void
 progs_init(void)
 {
-  int a = 0, m, l, d, r;
+  int a = 0, m, l, d, r, e;
   static const U8 dirs[2] = { CONTROL_LEFT, CONTROL_RIGHT };
   static const U8 runs[2] = { 12, 24 };
+  static const U8 ends[2] = { BOMB_STEPS, 58 };  /* before the blast, after it */
 
   for (l = 0; l < N_LEN; l++)
     for (m = 0; m < N_MASK; m++, a++)
@@ -639,6 +657,7 @@ progs_init(void)
       progs[a].len[0] = act_len[l];
       progs[a].steps = act_len[l];
     }
+  for (e = 0; e < 2; e++)  /* 0x07 needs the short one, 0x03 the long one */
   for (d = 0; d < 2; d++)
     for (r = 0; r < 2; r++, a++)
     {
@@ -647,8 +666,8 @@ progs_init(void)
       progs[a].mask[1] = CONTROL_FIRE|CONTROL_DOWN; progs[a].len[1] = 2;
       progs[a].mask[2] = dirs[d];                   progs[a].len[2] = runs[r];
       progs[a].mask[3] = 0;
-      progs[a].len[3] = (U8)(BOMB_STEPS - 4 - runs[r]);
-      progs[a].steps = BOMB_STEPS;
+      progs[a].len[3] = (U8)(ends[e] - 4 - runs[r]);
+      progs[a].steps = ends[e];
     }
 }
 
@@ -676,6 +695,8 @@ typedef struct {
   U32 toggles;  /* control changes from the start */
   U32 f;
   U16 cell;     /* rick's tile, row * 0x20 + col, for beam diversity */
+  U8 bomb;      /* a bomb in play (ticking or exploding): its own quota, see bucket_put */
+  U8 bclear;    /* then: tiles between rick and the bomb, at most 8 */
 } node_t;
 
 /* at most this many states per rick tile in a beam, so it cannot collapse onto
@@ -700,6 +721,9 @@ node_new(int parent, U8 act, U8 len, U32 g, U32 toggles, U32 f)
   nodes[n_nodes].g = g;
   nodes[n_nodes].toggles = toggles;
   nodes[n_nodes].f = f;
+  nodes[n_nodes].cell = 0;
+  nodes[n_nodes].bomb = 0;
+  nodes[n_nodes].bclear = 0;
   return n_nodes++;
 }
 
@@ -773,10 +797,22 @@ typedef struct {
   U8 **snap;
 } bucket_t;
 
+/*
+ * rank within a class: f, and for bomb-in-play states f - BOMB_CLEAR per tile
+ * clear of the bomb (compared only with each other, see search)
+ */
+static long
+bomb_rank(int node)
+{
+  return (long)nodes[node].f - (nodes[node].bomb ? (long)BOMB_CLEAR * nodes[node].bclear : 0L);
+}
+
 static void
 bucket_put(bucket_t *b, int node, size_t sz)
 {
   int i, w;
+
+  int nb, cls;
 
   if (b->n < b->cap)
   {
@@ -786,10 +822,23 @@ bucket_put(bucket_t *b, int node, size_t sz)
     b->n++;
     return;
   }
-  for (w = 0, i = 1; i < b->n; i++)
-    if (nodes[b->node[i]].f > nodes[b->node[w]].f)
+  /*
+   * full: evict the worst f -- of the newcomer's class while that class holds
+   * its quota (bomb-in-play states: a quarter), else of the other class. A bomb
+   * state is usually far from the exit (it ran from the blast) and would lose to
+   * every state idling at the wall; submap 0x07 needs one to live on to jump.
+   */
+  for (nb = 0, i = 0; i < b->n; i++)
+    nb += nodes[b->node[i]].bomb;
+  cls = nodes[node].bomb ? (nb >= b->cap / 4) : (b->n - nb >= b->cap - b->cap / 4);
+  cls = cls ? nodes[node].bomb : !nodes[node].bomb;  /* the class to evict from */
+  for (w = -1, i = 0; i < b->n; i++)
+    if (nodes[b->node[i]].bomb == cls &&
+	(w < 0 || bomb_rank(b->node[i]) > bomb_rank(b->node[w])))
       w = i;
-  if (nodes[node].f >= nodes[b->node[w]].f)
+  if (w < 0)
+    return;
+  if (nodes[b->node[w]].bomb == nodes[node].bomb && bomb_rank(node) >= bomb_rank(b->node[w]))
     return;
   b->node[w] = node;
   hl_stateSave(b->snap[w]);
@@ -799,7 +848,7 @@ static int
 search(const hl_solveopt_t *o, const U8 *start, U8 *seq, int max, int attempt)
 {
   size_t sz = hl_stateSize();
-  int nb = o->maxsteps + BOMB_STEPS + 1;
+  int nb = o->maxsteps + 58 + 1;  /* + the longest program */
   bucket_t *bk = calloc((size_t)nb, sizeof(bucket_t));
   int *order = malloc((size_t)o->beam * BUCKET_CAP * sizeof(int));
   int *keep = malloc((size_t)o->beam * BUCKET_CAP * sizeof(int));
@@ -838,10 +887,29 @@ search(const hl_solveopt_t *o, const U8 *start, U8 *seq, int max, int attempt)
       order[k] = x;
     }
     memset(cellcount, 0, (size_t)d_rows * 0x20);
-    for (i = 0, n_keep = 0; i < b->n && n_keep < o->beam; i++)
+    /* first up to a quarter of the beam for bomb-in-play states (see bucket_put),
+       then the rest by f */
+    for (n_keep = 0; n_keep < o->beam / 4; )
+    {
+      /* the best bomb_rank not taken yet, cell cap respected */
+      int best = -1, c;
+      for (i = 0; i < b->n; i++)
+      {
+	int nd = b->node[i];
+	if (nodes[nd].bomb != 1 || cellcount[nodes[nd].cell] >= CELL_CAP) continue;
+	if (best < 0 || bomb_rank(nd) < bomb_rank(b->node[best]))
+	  best = i;
+      }
+      if (best < 0) break;
+      c = nodes[b->node[best]].cell;
+      cellcount[c]++;
+      keep[n_keep++] = best;
+      nodes[b->node[best]].bomb = 2;  /* taken */
+    }
+    for (i = 0; i < b->n && n_keep < o->beam; i++)
     {
       int c = nodes[b->node[order[i]]].cell;
-      if (cellcount[c] >= CELL_CAP) continue;
+      if (nodes[b->node[order[i]]].bomb == 2 || cellcount[c] >= CELL_CAP) continue;
       cellcount[c]++;
       keep[n_keep++] = order[i];
     }
@@ -887,9 +955,23 @@ search(const hl_solveopt_t *o, const U8 *start, U8 *seq, int max, int attempt)
 	   what dynamite buys is otherwise invisible to the distance */
 	f = 4L * h + 2L * (long)nodes[k].toggles - (long)CREDIT * marks_done() -
 	  (long)CREDIT_LETHAL * defused() + 0x10000L;
+	/*
+	 * a bomb in play: how clear of it rick is, for ranking bomb states AMONG
+	 * THEMSELVES (bomb_rank). Submap 0x07: the states that stayed by the wall
+	 * filled the bomb quota and all died in the blast; the one that ran 24 steps,
+	 * and jumps the sliding wall, ranked below them. Folded into f instead, it
+	 * made any bomb dropped anywhere look good, and the one bomb was spent early.
+	 */
+	if (E_BOMB_ENT.n)
+	{
+	  int dx = (E_RICK_ENT.x - E_BOMB_ENT.x) / 8, dy = (E_RICK_ENT.y - E_BOMB_ENT.y) / 8;
+	  int t = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+	  nodes[k].bclear = (U8)(t > 8 ? 8 : t);
+	}
 	nodes[k].f = (U32)(f < 0 ? 0 : f);
 	cell = rick_cell();
 	nodes[k].cell = (U16)(cell < 0 ? 0 : cell);
+	nodes[k].bomb = E_BOMB_ENT.n != 0;
 	if (visits[nodes[k].cell] < 0xffff)
 	  visits[nodes[k].cell]++;
 	bucket_put(&bk[g + len], k, sz);
@@ -903,9 +985,21 @@ search(const hl_solveopt_t *o, const U8 *start, U8 *seq, int max, int attempt)
     }
     if (o->verbose > 1 || (o->verbose && g % 100 == 0))
     {
+      int nbk = 0;
+      for (i = 0; i < n_keep; i++)
+      {
+	nbk += nodes[b->node[keep[i]]].bomb != 0;
+	if (o->verbose > 2 && nodes[b->node[keep[i]]].bomb)
+	{
+	  hl_stateLoad(b->snap[keep[i]]);
+	  fprintf(stderr, "  bomb state: x %d row %d f %lu act %d\n", (int)E_RICK_ENT.x,
+		  (E_RICK_ENT.y >> 3) + map_frow, (unsigned long)nodes[b->node[keep[i]]].f,
+		  nodes[b->node[keep[i]]].act);
+	}
+      }
       hl_stateLoad(b->snap[order[0]]);
-      fprintf(stderr, "solve: attempt %d step %d, %d states, best dist %d, "
-	      "rick x %d row %d\n", attempt, g, b->n, best_h,
+      fprintf(stderr, "solve: attempt %d step %d, %d states (%d kept, %d with a bomb), "
+	      "best dist %d, rick x %d row %d\n", attempt, g, b->n, n_keep, nbk, best_h,
 	      (int)E_RICK_ENT.x, (E_RICK_ENT.y >> 3) + map_frow);
     }
     if (found < 0 && g - best_g > STUCK_STEPS)

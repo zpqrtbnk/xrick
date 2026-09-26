@@ -490,6 +490,8 @@ main(int argc, char *argv[])
     if (sysarg_args_demo && !demo_active) { why = "end of demo"; break; }
   }
 
+  if (save && !snap_file(save, 1))  /* -save after a plain run too */
+    return 2;
   if (distance)
   {
     int w, t = sopt.target == HL_SOLVE_AUTO ? hl_solveTarget() : sopt.target;
