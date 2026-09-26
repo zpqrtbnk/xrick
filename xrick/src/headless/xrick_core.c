@@ -310,7 +310,7 @@ static int
 solve(int chain, hl_solveopt_t *o, const char *out, const char *load, const char *save)
 {
   static U8 *seg_snap[SEG_MAX + 1], *seg_seq[SEG_MAX];
-  static int seg_n[SEG_MAX], seg_need[SEG_MAX];
+  static int seg_n[SEG_MAX], seg_need[SEG_MAX + 1];  /* zero: static */
   size_t sz = hl_stateSize(), n_all = 0;
   int s = 0, n, n2, r, target, runs, jitter, i, k, backtracks = 0;
   U16 sm;
@@ -344,10 +344,13 @@ solve(int chain, hl_solveopt_t *o, const char *out, const char *load, const char
       printf("solve: submap %#04x -> %d: NOT FOUND (keeping %d bomb(s), beam %d, %.1f s)\n",
 	     (unsigned int)sm, target, seg_need[s], o->beam, t1 - t0);
       /* the previous submap leaves one more bomb, and on from there */
-      if (s == 0 || backtracks == BACKTRACK_MAX || seg_need[s - 1] == 6)
+      if (s == 0 || backtracks == BACKTRACK_MAX || seg_need[s - 1] >= 6)
 	break;
       backtracks++;
-      seg_need[--s]++;
+      s--;
+      if (seg_need[s] < seg_need[s + 1])  /* what s+1 must keep, s must keep too */
+	seg_need[s] = seg_need[s + 1];
+      seg_need[s]++;
       continue;
     }
     n2 = hl_solvePolish(seg_seq[s], n, target);
@@ -373,8 +376,10 @@ solve(int chain, hl_solveopt_t *o, const char *out, const char *load, const char
     if (!seg_snap[s])
       seg_snap[s] = malloc(sz);
     hl_stateSave(seg_snap[s]);  /* the next submap's tick 0 */
-    if (s < SEG_MAX)
-      seg_need[s] = 0;
+    /* seg_need[s] is kept, not reset: a requirement raised by a backtrack holds
+       for every submap in between (arriving at 0x06 with a bomb means 0x04 and
+       0x05 must keep it too). Resetting it made the chain spend the bomb again
+       and cycle through the same four submaps until out of backtracks. */
     if (game_hlStatus() != GAME_HL_STEP)
       break;  /* game completed */
   }
