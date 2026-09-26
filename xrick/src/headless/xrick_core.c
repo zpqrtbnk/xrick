@@ -23,6 +23,8 @@
  * -log       with -fuzz: before each round, write the inputs a plain game would
  *            play to reach the end of that round (one CONTROL_* byte per step).
  * -inputs    play <file>, one CONTROL_* byte per step (e.g. a -log file).
+ * -record    as xrick -record: write the controls played as src/rd1/dat_demo.c
+ *            (with -reseed -inputs <solution>: the solver's demo, T43 phase 10).
  * -dump      at the end, print the game state as JSON on stdout (T43 phase 5,
  *            hl_dump.c) instead of the summary line.
  * -list      print the snapshot regions.
@@ -298,7 +300,7 @@ solve(int chain, hl_solveopt_t *o, const char *out, const char *load, const char
 {
   static U8 seq[SOLVE_MAX], all[1 << 18];
   size_t n_all = 0;
-  int s, n, n2, r, target, runs, i, solved = 0;
+  int s, n, n2, r, target, runs, jitter, i, k, solved = 0;
   U16 sm;
   double t0, t1;
   FILE *f;
@@ -323,12 +325,19 @@ solve(int chain, hl_solveopt_t *o, const char *out, const char *load, const char
       break;
     }
     n2 = hl_solvePolish(seq, n, target);
-    for (runs = 1, i = 1; i < n2; i++)
-      runs += seq[i] != seq[i - 1];
+    /* runs of one mask; jitter = runs under 4 steps, a first "natural look" measure
+       (a hand on a joystick rarely changes it faster than every 4 logic steps) */
+    for (runs = 1, jitter = 0, k = 0, i = 1; i <= n2; i++)
+      if (i == n2 || seq[i] != seq[i - 1])
+      {
+	if (i - k < 4) jitter++;
+	if (i < n2) runs++;
+	k = i;
+      }
     r = hl_solveReplay(seq, n2, target);
-    printf("solve: submap %#04x -> %d: %d steps (%d before polish), %d runs, "
-	   "search %.1f s, polish %.1f s%s\n",
-	   (unsigned int)sm, target, n2, n, runs, t1 - t0, now() - t1,
+    printf("solve: submap %#04x -> %d: %d steps (%d before polish), %d runs "
+	   "(%d under 4 steps), search %.1f s, polish %.1f s%s\n",
+	   (unsigned int)sm, target, n2, n, runs, jitter, t1 - t0, now() - t1,
 	   r == n2 ? "" : " -- REPLAY FAILED");
     if (r != n2)
       return 1;
@@ -367,6 +376,8 @@ main(int argc, char *argv[])
   {
     if (!strcmp(argv[a], "-demo"))
       sysarg_args_demo = 1;
+    else if (!strcmp(argv[a], "-record") && a + 1 < argc)
+      sysarg_args_record = argv[++a];  /* demo.c writes the C file at exit */
     else if (!strcmp(argv[a], "-trace") && a + 1 < argc)
       sysarg_args_trace = argv[++a];
     else if (!strcmp(argv[a], "-steps") && a + 1 < argc)
