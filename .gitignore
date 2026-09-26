@@ -10,3 +10,4 @@ vcpkg_installed/
 x64/
 build.core/
 /xrick/xrick-core
+build.mcp/

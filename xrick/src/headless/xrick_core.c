@@ -172,6 +172,8 @@ static int fuzz_verbose = 0;          /* -v: name each submap on stderr */
 static U8 tl[1 << 20];                /* the inputs played since the game started */
 static size_t tl_n;
 
+static int minbombs;  /* -minbombs */
+
 static int
 fuzz(int rounds, int only)
 {
@@ -327,7 +329,7 @@ solve(int chain, hl_solveopt_t *o, const char *out, const char *load, const char
     return 2;
   seg_snap[0] = malloc(sz);
   hl_stateSave(seg_snap[0]);
-  seg_need[0] = 0;
+  seg_need[0] = minbombs;  /* -minbombs: what the first submap must keep */
 
   while (s < chain)
   {
@@ -408,7 +410,7 @@ int
 main(int argc, char *argv[])
 {
   unsigned long steps = 100000, scramble = 0, i;
-  int a, rounds = 0, only = 0, c, dump = 0, chain = 0, distance = 0;
+  int a, rounds = 0, only = 0, c, dump = 0, chain = -1, distance = 0;
   const char *load = NULL, *save = NULL;
   U8 r = GAME_HL_STEP;
   const char *why, *inputs = NULL, *out = NULL;
@@ -461,6 +463,20 @@ main(int argc, char *argv[])
       save = argv[++a];
     else if (!strcmp(argv[a], "-load") && a + 1 < argc)
       load = argv[++a];
+    else if (!strcmp(argv[a], "-waypoint") && a + 1 < argc)
+    {
+      int wr, wc;
+      if (sscanf(argv[++a], "%d,%d", &wr, &wc) != 2) usage();
+      hl_solveWaypoint(wr, wc);
+    }
+    else if (!strcmp(argv[a], "-forbid") && a + 1 < argc)
+    {
+      int r0, c0, r1, c1;
+      if (sscanf(argv[++a], "%d,%d,%d,%d", &r0, &c0, &r1, &c1) != 4) usage();
+      hl_solveForbid(r0, c0, r1, c1);
+    }
+    else if (!strcmp(argv[a], "-minbombs") && a + 1 < argc)
+      minbombs = atoi(argv[++a]);
     else if (!strcmp(argv[a], "-noclosures"))
       sopt.closures = 0;
     else if (!strcmp(argv[a], "-out") && a + 1 < argc)
@@ -476,7 +492,7 @@ main(int argc, char *argv[])
 
   if (rounds)
     return fuzz(rounds, only);
-  if (chain)
+  if (chain >= 0)  /* -chain 0: settle at tick 0 (then -save), the MCP new_game */
   {
     sopt.verbose = fuzz_verbose;
     return solve(chain, &sopt, out, load, save);
@@ -506,6 +522,7 @@ main(int argc, char *argv[])
     fclose(fl);
     hl_stateLoad(snap);
     free(snap);
+    steps += game_hlSteps();  /* -steps counts from the loaded state */
   }
 
   if (inputs && !(f = fopen(inputs, "rb")))

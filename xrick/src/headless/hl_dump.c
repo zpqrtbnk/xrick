@@ -121,7 +121,9 @@ hl_dump(FILE *f)
 	  (unsigned int)ent_ents[1].w, (unsigned int)ent_ents[1].h,
 	  game_dir == LEFT ? "left" : "right");
   rick_state(f, e_rick_state);
-  fprintf(f, ", \"at_exit\": %s},\n", e_rick_atExit ? "true" : "false");
+  /* anchor: the submap (row, col) the solver works in -- waypoints and -forbid use it */
+  fprintf(f, ", \"at_exit\": %s, \"anchor\": [%d, %d]},\n", e_rick_atExit ? "true" : "false",
+	  (ent_ents[1].y >> 3) + map_frow, (ent_ents[1].x + 4) >> 3);
 
   /* live entities, rick excepted */
   fprintf(f, "  \"entities\": [");

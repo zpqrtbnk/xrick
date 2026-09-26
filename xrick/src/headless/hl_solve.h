@@ -34,6 +34,8 @@ extern int hl_solvePolish(U8 *seq, int n, int target);        /* new length */
 extern int hl_solveReplay(const U8 *seq, int n, int target);  /* steps to the goal, or -1 */
 extern int hl_solveDistance(int target, int *walls);          /* tile distance now */
 extern void hl_solveMinBombs(int);  /* bombs to keep at the exit (default 0) */
+extern void hl_solveWaypoint(int row, int col);  /* solve to this anchor; -1: the exit */
+extern void hl_solveForbid(int r0, int c0, int r1, int c1);  /* close anchors; r0 < 0: clear */
 
 #endif
 

@@ -48,6 +48,12 @@ static U16 g_submap, g_map;       /* where the search started */
 static U8 g_lives;
 static int g_died;                /* the last R_FAIL was rick dying */
 static int g_minbombs;            /* bombs rick must still hold at the exit */
+/* hints from outside (the MCP): a waypoint to reach instead of the exit, and
+   anchor rectangles closed from the start -- hl_solveWaypoint / hl_solveForbid */
+static int g_wp_row = -1, g_wp_col = -1;
+#define FORBID_MAX 16
+static int g_forbid[FORBID_MAX][4], g_n_forbid;
+static int rick_cell(void);
 
 #define R_RUN 0   /* nothing decided yet */
 #define R_GOAL 1  /* reached the target */
@@ -67,9 +73,17 @@ judge(U8 status)
   }
   if (env_submap != g_submap)
   {
-    if ((int)env_submap != g_target)
+    if ((int)env_submap != g_target || g_wp_row >= 0)
       return R_FAIL;
     return env_bombs >= g_minbombs ? R_GOAL : R_FAIL;  /* see hl_solveMinBombs */
+  }
+  if (g_wp_row >= 0)
+  {
+    /* a waypoint (hl_solveWaypoint): rick's anchor within one tile of it */
+    int cell = rick_cell(), r = cell / 0x20, c = cell % 0x20;
+    if (cell >= 0 && r >= g_wp_row - 1 && r <= g_wp_row + 1 &&
+	c >= g_wp_col - 1 && c <= g_wp_col + 1)
+      return R_GOAL;
   }
   return R_RUN;
 }
@@ -358,8 +372,18 @@ field_build(void)
     U16 *f = fk[j] = malloc((size_t)n * NK * sizeof(U16));
     for (k = 0; k < n * NK; k++) f[k] = DIST_INF;
     hp_n = 0;
-    /* seeds: the target connectors' rows, at the edge they leave by, any k */
-    for (cn = map_submaps[g_submap].connect; map_connect[cn].dir != 0xff; cn++)
+    /* seeds: a waypoint's 3x3 anchors, any k (hl_solveWaypoint) ... */
+    if (g_wp_row >= 0)
+      for (r = g_wp_row - 1; r <= g_wp_row + 1; r++)
+	for (c = g_wp_col - 1; c <= g_wp_col + 1; c++)
+	  if (r >= 0 && r < d_rows && c >= 0 && c < 0x20)
+	    for (k = 0; k < NK; k++)
+	    {
+	      f[(r * 0x20 + c) * NK + k] = 0;
+	      hp_push(0, (r * 0x20 + c) * NK + k);
+	    }
+    /* ... else the target connectors' rows, at the edge they leave by, any k */
+    for (cn = map_submaps[g_submap].connect; g_wp_row < 0 && map_connect[cn].dir != 0xff; cn++)
     {
       int to = map_connect[cn].submap == 0xff ? HL_SOLVE_NEXTMAP : map_connect[cn].submap;
       if (to != g_target) continue;
@@ -1075,6 +1099,17 @@ hl_solve(const hl_solveopt_t *o, U8 *seq, int max)
   deaths = calloc((size_t)n, sizeof(U16));
   visits = calloc((size_t)n, sizeof(U16));
   blocked = calloc((size_t)n, 1);
+  if (g_n_forbid)
+  {
+    /* hl_solveForbid: closed from the start, as a death closure would */
+    int q, r, c;
+    for (q = 0; q < g_n_forbid; q++)
+      for (r = g_forbid[q][0]; r <= g_forbid[q][2]; r++)
+	for (c = g_forbid[q][1]; c <= g_forbid[q][3]; c++)
+	  if (r >= 0 && r < d_rows && c >= 0 && c < 0x20)
+	    blocked[r * 0x20 + c] = 1;
+    field_build();
+  }
 
   for (attempt = 0; attempt < (o->closures ? MAX_ATTEMPTS : 1); attempt++)
   {
@@ -1278,6 +1313,37 @@ void
 hl_solveMinBombs(int n)
 {
   g_minbombs = n;
+}
+
+
+/*
+ * hints from outside the search (the MCP server, an LLM reading the state):
+ * a waypoint -- solve to reach anchor (row, col), submap rows and columns as
+ * -dump / -distance give them, instead of the exit; -1 clears it -- and anchor
+ * rectangles closed from the start (at most FORBID_MAX; clear with r0 < 0).
+ */
+void
+hl_solveWaypoint(int row, int col)
+{
+  g_wp_row = row;
+  g_wp_col = col;
+}
+
+void
+hl_solveForbid(int r0, int c0, int r1, int c1)
+{
+  if (r0 < 0)
+  {
+    g_n_forbid = 0;
+    return;
+  }
+  if (g_n_forbid == FORBID_MAX)
+    return;
+  g_forbid[g_n_forbid][0] = r0;
+  g_forbid[g_n_forbid][1] = c0;
+  g_forbid[g_n_forbid][2] = r1;
+  g_forbid[g_n_forbid][3] = c1;
+  g_n_forbid++;
 }
 
 /* eof */
