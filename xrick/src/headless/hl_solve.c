@@ -108,7 +108,23 @@ hl_solveTarget(void)
 
 #define DIST_INF 0xffff
 
-static U16 *dist;
+static U16 *dist;       /* tile distance to the exit, walls ignored (best over k) */
+static U16 *dist_wall;  /* the same, every wall standing (best over k) */
+/*
+ * wall entities (ENT_FLG_STOPRICK placements): at most MAXW tracked, each with
+ * its bit; wallcell holds, per anchor, the bits of the walls its footprint
+ * touches. One distance field per subset of standing walls (walls_present), a
+ * wall's cells costing WALL_COST more to enter while it stands.
+ */
+#define MAXW 4
+static U8 *wallcell;
+static U16 wall_mark[MAXW];
+static int n_walls;
+/* extra cost of passing a wall: about a dynamite program, 58 steps = 14 tiles */
+#define WALL_COST 16
+static void dijkstra(U16 *, int);
+static void walls_build(void);
+static int walls_present(void);
 static int d_rows;
 
 static U8
@@ -253,12 +269,64 @@ hp_pop(void)
   return top;
 }
 
+/*
+ * Jumps. The field's states are (anchor, k), k = rows risen since rick last stood
+ * on something or held a ladder. A jump starts at offsy -0x580 and gravity adds
+ * 0x80 a step (e_rick.c), so rick rises for 11 steps, 33 px: 4.1 tiles. (3 made
+ * submap 0x06 unreachable -- some ledges do need all of it.)
+ * Without this the field sent him up open shafts he cannot jump (submap 0x06).
+ */
+#define JUMP_ROWS 4
+#define NK (JUMP_ROWS + 1)
+
+/* per subset of standing walls, per (anchor, k): [walls][anchor * NK + k] */
+static U16 *fk[1 << MAXW];
+
+/* rick at anchor (row, col) stands on something, or holds a ladder */
+static int
+grounded(int row, int col)
+{
+  int c;
+
+  if (fp_any(row, col, MAP_EFLG_CLIMB|MAP_EFLG_VERT))
+    return 1;
+  for (c = col; c < col + FP_W; c++)
+    if (row + FP_H >= d_rows ||
+	(submap_eflg(row + FP_H, c) & (MAP_EFLG_SOLID|MAP_EFLG_SPAD|MAP_EFLG_WAYUP|
+				       MAP_EFLG_CLIMB|MAP_EFLG_VERT)))
+      return 1;
+  return 0;
+}
+
+/* k after the forward move (ra,ca),ka -> (rb,cb); -1 if rick cannot make it */
+static int
+k_after(int ra, int ca, int ka, int rb, int cb)
+{
+  int k;
+
+  if (rb < ra)
+  {
+    if (fp_any(ra, ca, MAP_EFLG_CLIMB|MAP_EFLG_VERT) ||
+	fp_any(rb, cb, MAP_EFLG_CLIMB|MAP_EFLG_VERT))
+      k = 0;              /* climbing */
+    else if (ka >= JUMP_ROWS)
+      return -1;          /* no higher without a ladder */
+    else
+      k = ka + 1;
+  }
+  else if (rb > ra)
+    k = JUMP_ROWS;        /* falling: no rising again before landing */
+  else
+    k = ka;               /* drifting sideways */
+  return grounded(rb, cb) ? 0 : k;
+}
+
 static void
 field_build(void)
 {
   U16 next = g_submap + 1 < MAP_NBR_SUBMAPS ?
     map_submaps[g_submap + 1].bnum : MAP_NBR_BNUMS;
-  int n, cell, r, c, k, d, r1, c1, dr, dc, mc;
+  int n, r, c, k, j;
   U16 cn;
 
   /*
@@ -271,33 +339,69 @@ field_build(void)
   if (d_rows > (MAP_NBR_BNUMS - map_submaps[g_submap].bnum) / 8 * 4)
     d_rows = (MAP_NBR_BNUMS - map_submaps[g_submap].bnum) / 8 * 4;
   n = d_rows * 0x20;
-  free(dist); free(hp_cell); free(hp_key);
+  free(dist); free(dist_wall);
+  for (j = 0; j < (1 << MAXW); j++) { free(fk[j]); fk[j] = NULL; }
+  free(hp_cell); free(hp_key);
   dist = malloc((size_t)n * sizeof(U16));
-  hp_cell = malloc((size_t)n * 4 * sizeof(int));
-  hp_key = malloc((size_t)n * 4 * sizeof(U16));
-  for (k = 0; k < n; k++) dist[k] = DIST_INF;
-  hp_n = 0;
+  dist_wall = malloc((size_t)n * sizeof(U16));
+  hp_cell = malloc((size_t)n * NK * 4 * sizeof(int));
+  hp_key = malloc((size_t)n * NK * 4 * sizeof(U16));
+  walls_build();
 
-  /* seeds: the target connectors' rows, at the edge they leave by */
-  for (cn = map_submaps[g_submap].connect; map_connect[cn].dir != 0xff; cn++)
+  for (j = 0; j < (1 << n_walls); j++)
   {
-    int to = map_connect[cn].submap == 0xff ? HL_SOLVE_NEXTMAP : map_connect[cn].submap;
-    if (to != g_target) continue;
-    for (r = map_connect[cn].rowout; r < map_connect[cn].rowout + 3 && r < d_rows; r++)
-      for (k = 0; k < 2; k++)
-      {
-	/* anchors at the edge: x ~ 0 -> col 0..1; x ~ 0xE6 -> col 0x1d..0x1e */
-	c = map_connect[cn].dir == LEFT ? k : 0x20 - FP_W - k;
-	dist[r * 0x20 + c] = 0;
-	hp_push(0, r * 0x20 + c);
-      }
+    U16 *f = fk[j] = malloc((size_t)n * NK * sizeof(U16));
+    for (k = 0; k < n * NK; k++) f[k] = DIST_INF;
+    hp_n = 0;
+    /* seeds: the target connectors' rows, at the edge they leave by, any k */
+    for (cn = map_submaps[g_submap].connect; map_connect[cn].dir != 0xff; cn++)
+    {
+      int to = map_connect[cn].submap == 0xff ? HL_SOLVE_NEXTMAP : map_connect[cn].submap;
+      if (to != g_target) continue;
+      for (r = map_connect[cn].rowout; r < map_connect[cn].rowout + 3 && r < d_rows; r++)
+	for (c = 0; c < 2; c++)
+	{
+	  /* anchors at the edge: x ~ 0 -> col 0..1; x ~ 0xE6 -> col 0x1d..0x1e */
+	  int cc = map_connect[cn].dir == LEFT ? c : 0x20 - FP_W - c;
+	  for (k = 0; k < NK; k++)
+	  {
+	    f[(r * 0x20 + cc) * NK + k] = 0;
+	    hp_push(0, (r * 0x20 + cc) * NK + k);
+	  }
+	}
+    }
+    dijkstra(f, j);
   }
 
-  /* Dijkstra backwards: dist(a) = min over moves a -> b of cost(a, b) + dist(b) */
+  /* per anchor, the best over k: what the death map and -v prints look at */
+  for (k = 0; k < n; k++)
+  {
+    U16 *all = fk[(1 << n_walls) - 1];
+    dist[k] = dist_wall[k] = DIST_INF;
+    for (j = 0; j < NK; j++)
+    {
+      if (fk[0][k * NK + j] < dist[k]) dist[k] = fk[0][k * NK + j];
+      if (all[k * NK + j] < dist_wall[k]) dist_wall[k] = all[k * NK + j];
+    }
+  }
+}
+
+/*
+ * Dijkstra backwards over (anchor, k) from the states pushed on the heap:
+ * f(a,ka) = min over moves (a,ka) -> (b,kb) of cost + f(b,kb). With <walls>,
+ * entering an anchor whose footprint touches a wall entity costs WALL_COST more
+ * (see walls_build).
+ */
+static void
+dijkstra(U16 *f, int walls)
+{
+  int s, cell, kb, r, c, k, ka, d, r1, c1, dr, dc, mc;
+
   while (hp_n)
   {
-    cell = hp_pop();
-    r = cell / 0x20; c = cell % 0x20; d = dist[cell];
+    s = hp_pop();
+    cell = s / NK; kb = s % NK;
+    r = cell / 0x20; c = cell % 0x20; d = f[s];
     for (k = 0; k < 4; k++)
     {
       dr = k == 0 ? -1 : k == 1 ? 1 : 0;
@@ -306,13 +410,85 @@ field_build(void)
       if (r1 < 0 || r1 >= d_rows || c1 < 0 || c1 >= 0x20) continue;
       if (!passable(r1, c1)) continue;
       mc = move_cost(r1, c1, r, c);
-      if (mc && d + mc < dist[r1 * 0x20 + c1])
+      if (!mc) continue;
       {
-	dist[r1 * 0x20 + c1] = (U16)(d + mc);
-	hp_push(dist[r1 * 0x20 + c1], r1 * 0x20 + c1);
+	/* into a standing wall from outside it: once per wall, not per cell (the
+	   stone head's tunnel crosses about five) */
+	int in = (wallcell[cell] & walls) & ~wallcell[r1 * 0x20 + c1], b;
+	for (b = 0; b < MAXW; b++)
+	  if (in & (1 << b))
+	    mc += WALL_COST;
+      }
+      for (ka = 0; ka < NK; ka++)
+      {
+	int sa = (r1 * 0x20 + c1) * NK + ka;
+	if (k_after(r1, c1, ka, r, c) != kb) continue;
+	if (d + mc < f[sa])
+	{
+	  f[sa] = (U16)(d + mc);
+	  hp_push(f[sa], sa);
+	}
       }
     }
   }
+}
+
+
+/*
+ * wall entities (ENT_FLG_STOPRICK placements, e.g. submap 0x03's stone head,
+ * 0x06's mark 58): the anchors whose footprint touches one. Placement position
+ * as ents.c ent_actvis decodes it; size from ent_entdata.
+ */
+static void
+walls_build(void)
+{
+  U16 m;
+  int r0, c0, hr, wc, r, c;
+
+  free(wallcell);
+  wallcell = calloc((size_t)d_rows * 0x20, 1);
+  n_walls = 0;
+  for (m = map_submaps[g_submap].mark; map_marks[m].row != 0xff; m++)
+  {
+    if (!(map_marks[m].flags & ENT_FLG_STOPRICK) || n_walls == MAXW)
+      continue;
+    wall_mark[n_walls++] = m;
+    r0 = (map_marks[m].row & 0xf8) + (map_marks[m].xy & 0x07);
+    c0 = (map_marks[m].xy & 0xf8) >> 3;
+    hr = (ent_entdata[map_marks[m].ent & 0x7f].h + 7) >> 3;
+    wc = (ent_entdata[map_marks[m].ent & 0x7f].w + 7) >> 3;
+    for (r = r0 - FP_H + 1; r < r0 + hr; r++)
+      for (c = c0 - FP_W + 1; c < c0 + wc; c++)
+	if (r >= 0 && r < d_rows && c >= 0 && c < 0x20)
+	  wallcell[r * 0x20 + c] |= (U8)(1 << (n_walls - 1));
+  }
+}
+
+/*
+ * which walls still stand, as walls_build's bits? A wall placement in view
+ * (spawned rows: frow .. frow + 0x27, ents.c ent_actvis) stands while its entity
+ * is in slot 0. Out of view it stands: it respawns when scrolled back in -- an
+ * ONCE trap that has run is despawned, not marked done, on the ST too
+ * (scripted_trap_update PATH_END, kb/algo-entities.md). A wall off the way on,
+ * e.g. submap 0x03's mark 30 once passed, then costs nothing: only its own bit's
+ * cells are dearer.
+ */
+static int
+walls_present(void)
+{
+  U16 m;
+  int r0, w, bits = 0;
+
+  for (w = 0; w < n_walls; w++)
+  {
+    m = wall_mark[w];
+    if (map_marks[m].ent & MAP_MARK_NACT)
+      continue;
+    r0 = (map_marks[m].row & 0xf8) + (map_marks[m].xy & 0x07);
+    if (r0 < map_frow || r0 >= map_frow + 0x28 || (ent_ents[0].n && ent_ents[0].mark == m))
+      bits |= 1 << w;
+  }
+  return bits;
 }
 
 /* the field, for -v -v -v: # no footprint, E exit, + reaches the exit, . does not */
@@ -321,12 +497,22 @@ field_print(void)
 {
   int r, c;
 
+  static const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+
   for (r = 0; r < d_rows; r++)
   {
     fprintf(stderr, "field %3d ", r);
     for (c = 0; c < 0x20; c++)
       fputc(!passable(r, c) ? '#' : dist[r * 0x20 + c] == 0 ? 'E' :
 	    dist[r * 0x20 + c] != DIST_INF ? '+' : '.', stderr);
+    /* and the wall field grounded (k = 0), distance / 4 in base 36, W = wall */
+    fputc(' ', stderr);
+    for (c = 0; c < 0x20; c++)
+    {
+      U16 v = fk[(1 << n_walls) - 1][(r * 0x20 + c) * NK];
+      fputc(!passable(r, c) ? '#' : wallcell[r * 0x20 + c] ? 'W' :
+	    v == DIST_INF ? '.' : digits[v / 4 < 35 ? v / 4 : 35], stderr);
+    }
     fputc('\n', stderr);
   }
 }
@@ -341,18 +527,6 @@ static int g_stuck_cell = -1;
  */
 #define CREDIT 8
 #define CREDIT_LETHAL 32
-/*
- * f penalty while a wall entity (ENT_FLG_STOPRICK, slot 0) stands: 64 = 16 tiles.
- * Submap 0x03's stone head (mark 35) blocks the way on until dynamite removes it,
- * and removing it only empties slot 0 -- no placement done, no distance gained.
- */
-#define WALL_PENALTY 64
-
-static int
-wall_penalty(void)
-{
-  return (ent_ents[0].n && (ent_ents[0].flags & ENT_FLG_STOPRICK)) ? WALL_PENALTY : 0;
-}
 
 /* this submap's placements done (killed, collected, triggered once) */
 static int
@@ -400,11 +574,17 @@ rick_cell(void)
 static int
 field_rick(void)
 {
-  int cell = rick_cell();
+  int cell = rick_cell(), k;
+  U16 *f = fk[walls_present()];
 
-  if (cell < 0 || dist[cell] == DIST_INF)
+  if (cell < 0)
     return 1000;
-  return dist[cell];
+  /* k: 0 on the ground or a ladder; in the air it is not known from the state
+     here (offsy is e_rick.c's), so half a jump */
+  k = grounded(cell / 0x20, cell % 0x20) ? 0 : JUMP_ROWS / 2;
+  if (f[cell * NK + k] == DIST_INF)
+    return 1000;
+  return f[cell * NK + k];
 }
 
 /* ----------------------------------------------------------------------- */
@@ -413,11 +593,14 @@ field_rick(void)
 /*
  * actions: small programs of (mask, steps) segments.
  * - every mask of act_mask held 2, 4 or 8 steps
- * - dynamite: drop it (FIRE+DOWN), run left or right 12 or 24 steps, then stand
- *   until 56 steps in all. ST e_bomb.h: 34 fuse ticks + 20 explosion ticks,
- *   lethal for the first 7 of those -- the blast is over before the program
- *   ends. A beam that scores by distance would never keep the retreat on its
- *   own: it moves away from the exit.
+ * - dynamite: stand (no control, 2 steps), drop it (FIRE+DOWN), run left or right
+ *   12 or 24 steps, then stand until 58 steps in all. ST e_bomb.h: 34 fuse ticks
+ *   + 20 explosion ticks, lethal for the first 7 of those -- the blast is over
+ *   before the program ends. A beam that scores by distance would never keep the
+ *   retreat on its own: it moves away from the exit. The first 2 steps let rick
+ *   stand up: e_rick.c only fires when he was not crawling the step before
+ *   (`if (scrawl || !FIRE) goto firing_not`), and FIRE+DOWN from a crawl just
+ *   crawls on -- submap 0x03's stone head is reached crawling.
  */
 static const U8 act_mask[] = {
   0, CONTROL_LEFT, CONTROL_RIGHT, CONTROL_UP, CONTROL_DOWN,
@@ -429,12 +612,12 @@ static const U8 act_mask[] = {
 static const U8 act_len[] = { 2, 4, 8 };
 #define N_MASK ((int)sizeof(act_mask))
 #define N_LEN ((int)sizeof(act_len))
-#define BOMB_STEPS 56
+#define BOMB_STEPS 58
 
 typedef struct {
   U8 n;          /* segments */
-  U8 mask[3];
-  U8 len[3];
+  U8 mask[4];
+  U8 len[4];
   U8 steps;      /* sum of len */
 } prog_t;
 
@@ -459,11 +642,12 @@ progs_init(void)
   for (d = 0; d < 2; d++)
     for (r = 0; r < 2; r++, a++)
     {
-      progs[a].n = 3;
-      progs[a].mask[0] = CONTROL_FIRE|CONTROL_DOWN; progs[a].len[0] = 2;
-      progs[a].mask[1] = dirs[d];                   progs[a].len[1] = runs[r];
-      progs[a].mask[2] = 0;
-      progs[a].len[2] = (U8)(BOMB_STEPS - 2 - runs[r]);
+      progs[a].n = 4;
+      progs[a].mask[0] = 0;                         progs[a].len[0] = 2;
+      progs[a].mask[1] = CONTROL_FIRE|CONTROL_DOWN; progs[a].len[1] = 2;
+      progs[a].mask[2] = dirs[d];                   progs[a].len[2] = runs[r];
+      progs[a].mask[3] = 0;
+      progs[a].len[3] = (U8)(BOMB_STEPS - 4 - runs[r]);
       progs[a].steps = BOMB_STEPS;
     }
 }
@@ -702,7 +886,7 @@ search(const hl_solveopt_t *o, const U8 *start, U8 *seq, int max, int attempt)
 	/* progress events -- a placement done, a trap defused -- earn credits:
 	   what dynamite buys is otherwise invisible to the distance */
 	f = 4L * h + 2L * (long)nodes[k].toggles - (long)CREDIT * marks_done() -
-	  (long)CREDIT_LETHAL * defused() + (long)wall_penalty() + 0x10000L;
+	  (long)CREDIT_LETHAL * defused() + 0x10000L;
 	nodes[k].f = (U32)(f < 0 ? 0 : f);
 	cell = rick_cell();
 	nodes[k].cell = (U16)(cell < 0 ? 0 : cell);
@@ -798,16 +982,38 @@ hl_solve(const hl_solveopt_t *o, U8 *seq, int max)
     found = search(o, start, seq, max, attempt);
     if (found >= 0)
       break;
-    /* a trap kills nearly everyone who gets there (>= 80% of the expansions that
-       end on the tile); an enemy's beat only some -- submap 0x01's bottom
-       corridor was closed at 50% and that cut the way on */
+    /*
+     * escalation: after the first failure only the dead end is closed (below);
+     * from the second on, deadly tiles too. Deadly = a trap kills nearly everyone
+     * who gets there (>= 80% of the expansions that end on the tile); an enemy's
+     * beat only some -- submap 0x01's bottom corridor was closed at 50% and that
+     * cut the way on. 0x01 needs these closures (its trap shaft); 0x06 fails if
+     * they come first (111 tiles closed, the start cut off).
+     */
     for (k = 0, closed = 0; k < n; k++)
-      if (!blocked[k] && deaths[k] >= DEATH_BLOCK && deaths[k] >= 4 * visits[k] &&
+      if (attempt >= 1 && !blocked[k] && deaths[k] >= DEATH_BLOCK && deaths[k] >= 4 * visits[k] &&
 	  dist[k] != 0)
       {
 	blocked[k] = 2;  /* 2 = closed by this attempt */
 	closed++;
       }
+    /*
+     * and the dead end itself: the anchors around the tile where the search got
+     * stuck (submap 0x06: a ledge 4 rows up the field counts on but rick never
+     * lands) -- the next attempt has to find another way
+     */
+    if (g_stuck_cell >= 0)
+    {
+      int sr = g_stuck_cell / 0x20, sc = g_stuck_cell % 0x20, r, c;
+      for (r = sr - 1; r <= sr + 1; r++)
+	for (c = sc - 1; c <= sc + 1; c++)
+	  if (r >= 0 && r < d_rows && c >= 0 && c < 0x20 &&
+	      !blocked[r * 0x20 + c] && dist[r * 0x20 + c] != 0)
+	  {
+	    blocked[r * 0x20 + c] = 2;
+	    closed++;
+	  }
+    }
     if (closed)
     {
       /*
@@ -943,6 +1149,23 @@ hl_solvePolish(U8 *seq, int n, int target)
   hl_stateLoad(start);
   free(start); free(try);
   return n;
+}
+
+
+/*
+ * rick's tile distance to <target>'s exit in the current state, the fields
+ * built for it; *walls: whether a wall entity still stands (the wall field is
+ * the one used). For -distance and the MCP observation.
+ */
+int
+hl_solveDistance(int target, int *walls)
+{
+  goal_set(target);
+  blocked = NULL;
+  field_build();
+  if (walls)
+    *walls = walls_present();
+  return field_rick();
 }
 
 /* eof */

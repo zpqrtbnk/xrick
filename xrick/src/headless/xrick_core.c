@@ -39,6 +39,7 @@
 #include "game.h"
 #include "env.h"
 #include "maps.h"
+#include "ents.h"
 #include "e_them.h"
 #include "demo.h"
 #include "hl_state.h"
@@ -355,7 +356,7 @@ int
 main(int argc, char *argv[])
 {
   unsigned long steps = 100000, scramble = 0, i;
-  int a, rounds = 0, only = 0, c, dump = 0, chain = 0;
+  int a, rounds = 0, only = 0, c, dump = 0, chain = 0, distance = 0;
   const char *load = NULL, *save = NULL;
   U8 r = GAME_HL_STEP;
   const char *why, *inputs = NULL, *out = NULL;
@@ -384,6 +385,8 @@ main(int argc, char *argv[])
       fuzz_log = argv[++a];
     else if (!strcmp(argv[a], "-inputs") && a + 1 < argc)
       inputs = argv[++a];
+    else if (!strcmp(argv[a], "-distance"))
+      distance = 1;
     else if (!strcmp(argv[a], "-dump"))
       dump = 1;
     else if (!strcmp(argv[a], "-reseed"))
@@ -476,6 +479,13 @@ main(int argc, char *argv[])
     if (sysarg_args_demo && !demo_active) { why = "end of demo"; break; }
   }
 
+  if (distance)
+  {
+    int w, t = sopt.target == HL_SOLVE_AUTO ? hl_solveTarget() : sopt.target;
+    int d = hl_solveDistance(t, &w);
+    printf("distance to %d: %d%s (rick x %d y %d)\n", t, d, w ? ", a wall stands" : "",
+	   (int)ent_ents[1].x, (int)ent_ents[1].y);
+  }
   if (dump)
   {
     hl_dump(stdout);  /* stdout is the JSON alone */
