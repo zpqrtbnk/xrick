@@ -151,6 +151,28 @@ hl_stateHash(void)
   return hash_h;
 }
 
+/*
+ * the state as a search key: the snapshot minus the counters and the held
+ * controls, which do not change what can happen next (control_status is set
+ * anew by every game_hlStep, control_last only matters for CONTROL_EXIT)
+ */
+static void
+key_f(void *p, size_t n, const char *s)
+{
+  if (!strcmp(s, "hl_steps") || !strcmp(s, "hl_segments") ||
+      !strcmp(s, "control_status") || !strcmp(s, "control_last"))
+    return;
+  hash_f(p, n, s);
+}
+
+unsigned long long
+hl_stateKey(void)
+{
+  hash_h = 0xcbf29ce484222325ULL;
+  regions(key_f);
+  return hash_h;
+}
+
 void
 hl_stateList(void)
 {

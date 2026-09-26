@@ -132,6 +132,8 @@ static void game_save(void);
 #ifdef HEADLESS
 #include "headless/hl_state.h"
 static U32 hl_steps = 0;  /* CTRL_ACTION passes since game_hlStart */
+static U8 hl_reseed = FALSE;  /* reseed on every segment entry, as a demo does */
+static U32 hl_segments = 0;   /* segment entries (submap entries and restarts) */
 #endif
 #ifdef ENABLE_DEMO
 static void game_enterSegment(void);
@@ -478,10 +480,12 @@ static void game_cycle(void)
 #ifdef HEADLESS
 			/*
 			 * fades only set the gamma, but their counters are statics inside
-			 * fb.c that a snapshot cannot hold: skip them (kb/demo-solver.md §8)
+			 * fb.c that a snapshot cannot hold: skip them (kb/demo-solver.md §8).
+			 * return, not break: this frame ends here, so every game_hlStep runs
+			 * exactly one CTRL_ACTION, a new map's tick 0 included
 			 */
 			game_state = CTRL_ACTION;
-			break;
+			return;
 #endif
 			if (fb_fadeIn())
 			{
@@ -1019,6 +1023,11 @@ game_enterSegment(void)
   U32 a, b;
 
   demo_enterSegment(env_submap);
+#ifdef HEADLESS
+  hl_segments++;
+  if (hl_reseed)
+    e_them_rndreset();  /* what the demo hook does while a script plays (T43 D1) */
+#endif
   if (trace_f)
   {
     e_them_rndstate(&a, &b);
@@ -1122,6 +1131,33 @@ game_hlSteps(void)
 }
 
 /*
+ * reseed the random generator on every segment entry, as a playing or
+ * recording demo does -- the solver needs it, so its scripts replay (T43 D1)
+ */
+void
+game_hlReseed(U8 on)
+{
+	hl_reseed = on;
+}
+
+U32
+game_hlSegments(void)
+{
+	return hl_segments;
+}
+
+/*
+ * run frames until the next CTRL_ACTION is pending, without running it: after
+ * game_hlStart, this is the first submap's tick 0 -- where a solver starts
+ */
+void
+game_hlSettle(void)
+{
+	while (game_state != CTRL_ACTION && game_hlStatus() == GAME_HL_STEP)
+		game_cycle();
+}
+
+/*
  * this file's statics that are game state, for snapshots -- kb/demo-solver.md §3.
  * tm/tmx and game_period are timing only.
  */
@@ -1131,6 +1167,7 @@ game_hlRegions(hl_region_f f)
 	f(&game_state, sizeof(game_state), "game_state");
 	f(&save_map_row, sizeof(save_map_row), "save_map_row");
 	f(&hl_steps, sizeof(hl_steps), "hl_steps");
+	f(&hl_segments, sizeof(hl_segments), "hl_segments");
 }
 #endif
 

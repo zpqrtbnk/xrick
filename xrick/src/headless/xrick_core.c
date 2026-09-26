@@ -43,6 +43,7 @@
 #include "demo.h"
 #include "hl_state.h"
 #include "hl_dump.h"
+#include "hl_solve.h"
 
 static void
 usage(void)
@@ -261,13 +262,104 @@ fuzz(int rounds, int only)
   return bad ? 1 : 0;
 }
 
+/*
+ * solve
+ *
+ * T43 phase 6: from a new game (or -submap), solve <chain> submaps in a row with
+ * the generator reseeded at each entry, as a demo plays them. Per submap: search,
+ * polish, replay -- the replay moves the game on to the next submap's tick 0.
+ * -out writes every step's control mask, a file `xrick-core -reseed -inputs`
+ * replays.
+ */
+#define SOLVE_MAX 0x4000
+
+/* read / write a snapshot file (same build only) */
+static int
+snap_file(const char *path, int write)
+{
+  U8 *snap = malloc(hl_stateSize());
+  FILE *f = fopen(path, write ? "wb" : "rb");
+  int ok;
+
+  if (write) hl_stateSave(snap);
+  ok = f && (write ? fwrite(snap, 1, hl_stateSize(), f) :
+	     fread(snap, 1, hl_stateSize(), f)) == hl_stateSize();
+  if (f) fclose(f);
+  if (ok && !write) hl_stateLoad(snap);
+  free(snap);
+  if (!ok)
+    fprintf(stderr, "xrick-core: cannot %s '%s'\n", write ? "write" : "read", path);
+  return ok;
+}
+
+static int
+solve(int chain, hl_solveopt_t *o, const char *out, const char *load, const char *save)
+{
+  static U8 seq[SOLVE_MAX], all[1 << 18];
+  size_t n_all = 0;
+  int s, n, n2, r, target, runs, i, solved = 0;
+  U16 sm;
+  double t0, t1;
+  FILE *f;
+
+  game_hlReseed(TRUE);
+  game_hlStart();
+  game_hlSettle();
+  /* -load: start from a submap's tick 0, e.g. what an earlier -save wrote */
+  if (load && !snap_file(load, 0))
+    return 2;
+  for (s = 0; s < chain; s++)
+  {
+    sm = env_submap;
+    target = o->target == HL_SOLVE_AUTO ? hl_solveTarget() : o->target;
+    t0 = now();
+    n = hl_solve(o, seq, SOLVE_MAX);
+    t1 = now();
+    if (n < 0)
+    {
+      printf("solve: submap %#04x -> %d: NOT FOUND (beam %d, %.1f s)\n",
+	     (unsigned int)sm, target, o->beam, t1 - t0);
+      break;
+    }
+    n2 = hl_solvePolish(seq, n, target);
+    for (runs = 1, i = 1; i < n2; i++)
+      runs += seq[i] != seq[i - 1];
+    r = hl_solveReplay(seq, n2, target);
+    printf("solve: submap %#04x -> %d: %d steps (%d before polish), %d runs, "
+	   "search %.1f s, polish %.1f s%s\n",
+	   (unsigned int)sm, target, n2, n, runs, t1 - t0, now() - t1,
+	   r == n2 ? "" : " -- REPLAY FAILED");
+    if (r != n2)
+      return 1;
+    memcpy(all + n_all, seq, (size_t)n2);
+    n_all += (size_t)n2;
+    solved++;
+    if (game_hlStatus() != GAME_HL_STEP)
+      break;  /* game completed */
+  }
+  printf("solve: %d submap(s), %lu steps, now at submap %#04x, lives %u, score %lu\n",
+	 solved, (unsigned long)n_all,
+	 (unsigned int)env_submap, (unsigned int)env_lives, (unsigned long)env_score);
+  if (out && (f = fopen(out, "wb")))
+  {
+    fwrite(all, 1, n_all, f);
+    fclose(f);
+  }
+  /* -save: the state reached -- the next submap's tick 0 when all went well */
+  if (save && !snap_file(save, 1))
+    return 2;
+  return 0;
+}
+
 int
 main(int argc, char *argv[])
 {
   unsigned long steps = 100000, scramble = 0, i;
-  int a, rounds = 0, only = 0, c, dump = 0;
+  int a, rounds = 0, only = 0, c, dump = 0, chain = 0;
+  const char *load = NULL, *save = NULL;
   U8 r = GAME_HL_STEP;
-  const char *why, *inputs = NULL;
+  const char *why, *inputs = NULL, *out = NULL;
+  hl_solveopt_t sopt = { 128, 3000, HL_SOLVE_AUTO, 0, 1, NULL };
   FILE *f = NULL;
 
   for (a = 1; a < argc; a++)
@@ -287,13 +379,35 @@ main(int argc, char *argv[])
     else if (!strcmp(argv[a], "-seed") && a + 1 < argc)
       rnd_s = (U32)strtoul(argv[++a], NULL, 0) | 1u;
     else if (!strcmp(argv[a], "-v"))
-      fuzz_verbose = 1;
+      fuzz_verbose++;
     else if (!strcmp(argv[a], "-log") && a + 1 < argc)
       fuzz_log = argv[++a];
     else if (!strcmp(argv[a], "-inputs") && a + 1 < argc)
       inputs = argv[++a];
     else if (!strcmp(argv[a], "-dump"))
       dump = 1;
+    else if (!strcmp(argv[a], "-reseed"))
+      game_hlReseed(TRUE);
+    else if (!strcmp(argv[a], "-solve"))
+      chain = 1;
+    else if (!strcmp(argv[a], "-chain") && a + 1 < argc)
+      chain = atoi(argv[++a]);
+    else if (!strcmp(argv[a], "-beam") && a + 1 < argc)
+      sopt.beam = atoi(argv[++a]);
+    else if (!strcmp(argv[a], "-maxsteps") && a + 1 < argc)
+      sopt.maxsteps = atoi(argv[++a]);
+    else if (!strcmp(argv[a], "-to") && a + 1 < argc)
+      sopt.target = atoi(argv[++a]);
+    else if (!strcmp(argv[a], "-stuck") && a + 1 < argc)
+      sopt.stuck = argv[++a];
+    else if (!strcmp(argv[a], "-save") && a + 1 < argc)
+      save = argv[++a];
+    else if (!strcmp(argv[a], "-load") && a + 1 < argc)
+      load = argv[++a];
+    else if (!strcmp(argv[a], "-noclosures"))
+      sopt.closures = 0;
+    else if (!strcmp(argv[a], "-out") && a + 1 < argc)
+      out = argv[++a];
     else if (!strcmp(argv[a], "-list"))
     {
       hl_stateList();
@@ -305,6 +419,11 @@ main(int argc, char *argv[])
 
   if (rounds)
     return fuzz(rounds, only);
+  if (chain)
+  {
+    sopt.verbose = fuzz_verbose;
+    return solve(chain, &sopt, out, load, save);
+  }
 
   for (i = 0; i < scramble; i++)
   {
@@ -316,6 +435,21 @@ main(int argc, char *argv[])
   }
 
   game_hlStart();
+  if (load)
+  {
+    /* -load: carry on from a snapshot (e.g. a solver's -stuck), same build only */
+    U8 *snap = malloc(hl_stateSize());
+    FILE *fl = fopen(load, "rb");
+    game_hlSettle();
+    if (!fl || fread(snap, 1, hl_stateSize(), fl) != hl_stateSize())
+    {
+      fprintf(stderr, "xrick-core: cannot load '%s'\n", load);
+      return 2;
+    }
+    fclose(fl);
+    hl_stateLoad(snap);
+    free(snap);
+  }
 
   if (inputs && !(f = fopen(inputs, "rb")))
   {

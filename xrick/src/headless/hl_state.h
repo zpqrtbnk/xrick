@@ -26,6 +26,7 @@ extern size_t hl_stateSize(void);          /* bytes a snapshot takes */
 extern void hl_stateSave(U8 *);            /* copy the state out, hl_stateSize bytes */
 extern void hl_stateLoad(const U8 *);      /* and back in */
 extern unsigned long long hl_stateHash(void);  /* FNV-1a 64 over state + guard tables */
+extern unsigned long long hl_stateKey(void);   /* search key: state minus counters/controls */
 extern void hl_stateList(void);            /* print the regions to stdout */
 extern void hl_stateDiff(const U8 *, const U8 *);  /* print where two snapshots differ */
 

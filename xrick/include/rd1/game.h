@@ -60,6 +60,9 @@ extern void game_hlStart(void);  /* new game, as set by sysarg_args_map/submap *
 extern U8 game_hlStep(U8);       /* one step with these CONTROL_* bits held */
 extern U32 game_hlSteps(void);   /* steps run since game_hlStart */
 extern U8 game_hlStatus(void);   /* GAME_HL_STEP while the game runs, else OVER / END */
+extern void game_hlReseed(U8);   /* reseed on every segment entry, as a demo does */
+extern U32 game_hlSegments(void); /* segment entries since the process started */
+extern void game_hlSettle(void);  /* run frames up to the next pending logic step */
 #endif
 
 #endif
