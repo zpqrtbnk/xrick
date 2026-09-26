@@ -47,6 +47,7 @@ static int g_target;              /* submap, or HL_SOLVE_NEXTMAP */
 static U16 g_submap, g_map;       /* where the search started */
 static U8 g_lives;
 static int g_died;                /* the last R_FAIL was rick dying */
+static int g_minbombs;            /* bombs rick must still hold at the exit */
 
 #define R_RUN 0   /* nothing decided yet */
 #define R_GOAL 1  /* reached the target */
@@ -65,7 +66,11 @@ judge(U8 status)
     return R_FAIL;
   }
   if (env_submap != g_submap)
-    return (int)env_submap == g_target ? R_GOAL : R_FAIL;
+  {
+    if ((int)env_submap != g_target)
+      return R_FAIL;
+    return env_bombs >= g_minbombs ? R_GOAL : R_FAIL;  /* see hl_solveMinBombs */
+  }
   return R_RUN;
 }
 
@@ -1260,6 +1265,19 @@ hl_solveDistance(int target, int *walls)
   if (walls)
     *walls = walls_present();
   return field_rick();
+}
+
+
+/*
+ * reaching the target submap counts only while rick still holds <n> bombs (a
+ * map exit refills them to 6, game.c NEXT_SUBMAP, so it is not checked there).
+ * The chain sets it when the next submap failed without dynamite (T43 phase 9:
+ * "arrive with >= k bombs"). Applies to hl_solve, hl_solvePolish, hl_solveReplay.
+ */
+void
+hl_solveMinBombs(int n)
+{
+  g_minbombs = n;
 }
 
 /* eof */

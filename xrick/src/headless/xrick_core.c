@@ -266,13 +266,11 @@ fuzz(int rounds, int only)
 }
 
 /*
- * solve
- *
- * T43 phase 6: from a new game (or -submap), solve <chain> submaps in a row with
+ * T43 phase 6: from a new game (or -load), solve <chain> submaps in a row with
  * the generator reseeded at each entry, as a demo plays them. Per submap: search,
  * polish, replay -- the replay moves the game on to the next submap's tick 0.
  * -out writes every step's control mask, a file `xrick-core -reseed -inputs`
- * replays.
+ * replays. See solve() below.
  */
 #define SOLVE_MAX 0x4000
 
@@ -295,64 +293,103 @@ snap_file(const char *path, int write)
   return ok;
 }
 
+
+/*
+ * solve
+ *
+ * submaps in a row, each started from the state the previous one's solution
+ * left (T43 D6). When submap s cannot be solved, the previous one is solved
+ * again keeping one more bomb at its exit (hl_solveMinBombs), up to 6, and the
+ * chain goes on from there -- T43 phase 9's "arrive with >= k bombs". Submap
+ * 0x06 needs dynamite; a chain that spent every bomb on 0x03 reached it with none.
+ */
+#define SEG_MAX 64
+#define BACKTRACK_MAX 12
+
 static int
 solve(int chain, hl_solveopt_t *o, const char *out, const char *load, const char *save)
 {
-  static U8 seq[SOLVE_MAX], all[1 << 18];
-  size_t n_all = 0;
-  int s, n, n2, r, target, runs, jitter, i, k, solved = 0;
+  static U8 *seg_snap[SEG_MAX + 1], *seg_seq[SEG_MAX];
+  static int seg_n[SEG_MAX], seg_need[SEG_MAX];
+  size_t sz = hl_stateSize(), n_all = 0;
+  int s = 0, n, n2, r, target, runs, jitter, i, k, backtracks = 0;
   U16 sm;
   double t0, t1;
   FILE *f;
 
+  if (chain > SEG_MAX)
+    chain = SEG_MAX;
   game_hlReseed(TRUE);
   game_hlStart();
   game_hlSettle();
   /* -load: start from a submap's tick 0, e.g. what an earlier -save wrote */
   if (load && !snap_file(load, 0))
     return 2;
-  for (s = 0; s < chain; s++)
+  seg_snap[0] = malloc(sz);
+  hl_stateSave(seg_snap[0]);
+  seg_need[0] = 0;
+
+  while (s < chain)
   {
+    hl_stateLoad(seg_snap[s]);
+    hl_solveMinBombs(seg_need[s]);
     sm = env_submap;
     target = o->target == HL_SOLVE_AUTO ? hl_solveTarget() : o->target;
+    seg_seq[s] = seg_seq[s] ? seg_seq[s] : malloc(SOLVE_MAX);
     t0 = now();
-    n = hl_solve(o, seq, SOLVE_MAX);
+    n = hl_solve(o, seg_seq[s], SOLVE_MAX);
     t1 = now();
     if (n < 0)
     {
-      printf("solve: submap %#04x -> %d: NOT FOUND (beam %d, %.1f s)\n",
-	     (unsigned int)sm, target, o->beam, t1 - t0);
-      break;
+      printf("solve: submap %#04x -> %d: NOT FOUND (keeping %d bomb(s), beam %d, %.1f s)\n",
+	     (unsigned int)sm, target, seg_need[s], o->beam, t1 - t0);
+      /* the previous submap leaves one more bomb, and on from there */
+      if (s == 0 || backtracks == BACKTRACK_MAX || seg_need[s - 1] == 6)
+	break;
+      backtracks++;
+      seg_need[--s]++;
+      continue;
     }
-    n2 = hl_solvePolish(seq, n, target);
+    n2 = hl_solvePolish(seg_seq[s], n, target);
     /* runs of one mask; jitter = runs under 4 steps, a first "natural look" measure
        (a hand on a joystick rarely changes it faster than every 4 logic steps) */
     for (runs = 1, jitter = 0, k = 0, i = 1; i <= n2; i++)
-      if (i == n2 || seq[i] != seq[i - 1])
+      if (i == n2 || seg_seq[s][i] != seg_seq[s][i - 1])
       {
 	if (i - k < 4) jitter++;
 	if (i < n2) runs++;
 	k = i;
       }
-    r = hl_solveReplay(seq, n2, target);
+    r = hl_solveReplay(seg_seq[s], n2, target);
     printf("solve: submap %#04x -> %d: %d steps (%d before polish), %d runs "
-	   "(%d under 4 steps), search %.1f s, polish %.1f s%s\n",
-	   (unsigned int)sm, target, n2, n, runs, jitter, t1 - t0, now() - t1,
+	   "(%d under 4 steps)%s, search %.1f s, polish %.1f s%s\n",
+	   (unsigned int)sm, target, n2, n, runs, jitter,
+	   seg_need[s] ? " keeping bombs" : "", t1 - t0, now() - t1,
 	   r == n2 ? "" : " -- REPLAY FAILED");
     if (r != n2)
       return 1;
-    memcpy(all + n_all, seq, (size_t)n2);
-    n_all += (size_t)n2;
-    solved++;
+    seg_n[s] = n2;
+    s++;
+    if (!seg_snap[s])
+      seg_snap[s] = malloc(sz);
+    hl_stateSave(seg_snap[s]);  /* the next submap's tick 0 */
+    if (s < SEG_MAX)
+      seg_need[s] = 0;
     if (game_hlStatus() != GAME_HL_STEP)
       break;  /* game completed */
   }
-  printf("solve: %d submap(s), %lu steps, now at submap %#04x, lives %u, score %lu\n",
-	 solved, (unsigned long)n_all,
-	 (unsigned int)env_submap, (unsigned int)env_lives, (unsigned long)env_score);
+  hl_solveMinBombs(0);
+
+  for (i = 0; i < s; i++)
+    n_all += (size_t)seg_n[i];
+  printf("solve: %d submap(s), %lu steps, %d backtrack(s), now at submap %#04x, "
+	 "lives %u, bombs %u, score %lu\n", s, (unsigned long)n_all, backtracks,
+	 (unsigned int)env_submap, (unsigned int)env_lives, (unsigned int)env_bombs,
+	 (unsigned long)env_score);
   if (out && (f = fopen(out, "wb")))
   {
-    fwrite(all, 1, n_all, f);
+    for (i = 0; i < s; i++)
+      fwrite(seg_seq[i], 1, (size_t)seg_n[i], f);
     fclose(f);
   }
   /* -save: the state reached -- the next submap's tick 0 when all went well */
@@ -360,6 +397,7 @@ solve(int chain, hl_solveopt_t *o, const char *out, const char *load, const char
     return 2;
   return 0;
 }
+
 
 int
 main(int argc, char *argv[])
