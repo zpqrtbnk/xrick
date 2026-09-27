@@ -263,6 +263,9 @@ e_rick_action2(void)
 	   Both sites return before the value is used as an index, so S16 is safe here. */
 	S16 x, y;
 	U32 i;
+#ifdef PLATFORM_ST
+	U8 stdiag = FALSE;  /* x already moved with y in one probe (F12) */
+#endif
 
 	E_RICK_STRST(E_RICK_STSTOP|E_RICK_STSHOOT);
 
@@ -315,6 +318,44 @@ e_rick_action2(void)
 	* VERTICAL MOVE
 	*/
 	E_RICK_STSET(E_RICK_STJUMP);
+#ifdef PLATFORM_ST
+	/*
+	 * ST: ONE probe for the diagonal step -- kb/demo-solver.md F12.
+	 * player_controller, airborne or walking alike:
+	 *   4C0F6-4C124  D2 = x -2 (LEFT) / +2 (RIGHT), D3 = new y
+	 *   4C12A        move D2,D6 / move D3,D7 / bsr probe_player_tile_collision (0x4CD70)
+	 *   4C132        bcs 4C168 -- blocked
+	 *   4C134-4C142  free: store x AND y, then gravity (4C148) and LADDER_CHECK
+	 *   4C168-4C176  blocked: retry at the OLD x with the new y
+	 * Lethal and climb are then read from the flags of the probe that succeeded.
+	 * The port (and the PC: vertical 0x1596/0x15AB, horizontal 0x166D/0x1673) move y at
+	 * the old x first, test lethal THERE, then move x. The difference is visible: on
+	 * submap 0x12 the drop past the corner spikes (row 35, cols 4-7) is survived in the
+	 * ST, which tests x=60 on the frame the body reaches row 35, while the port tested
+	 * x=58 and killed Rick.
+	 * Here: when LEFT/RIGHT is held and the step stays inside the submap, probe
+	 * (x +/- 2, new y) with the vertical test's own mask; if free, take x now and use
+	 * that probe's flags below, and skip the horizontal move. Otherwise fall through
+	 * unchanged -- the vertical move at the old x, then `horiz`, whose probe is that
+	 * same blocked (x +/- 2, new y), i.e. the ST's retry path.
+	 */
+	stdiag = FALSE;
+	if (control_status & (CONTROL_LEFT|CONTROL_RIGHT)) {
+		x = (S16)(E_RICK_ENT.x + ((control_status & CONTROL_LEFT) ? -2 : 2));
+		if (x >= 0 && x < 0xe8) {
+			U8 denv0, denv1;
+			u_envtest((U16)x, (U16)y, E_RICK_STTST(E_RICK_STCRAWL), &denv0, &denv1);
+			if (!(denv1 & (offsy < 0 ?
+							MAP_EFLG_VERT|MAP_EFLG_SOLID|MAP_EFLG_SPAD :
+							MAP_EFLG_VERT|MAP_EFLG_SOLID|MAP_EFLG_SPAD|MAP_EFLG_WAYUP))) {
+				E_RICK_ENT.x = x;
+				game_dir = (control_status & CONTROL_LEFT) ? LEFT : RIGHT;
+				env1 = denv1;
+				stdiag = TRUE;
+			}
+		}
+	}
+#endif
 	/* killed? */
 	if (env1 & MAP_EFLG_LETHAL) {
 		e_rick_gozombie();
@@ -361,6 +402,10 @@ e_rick_action2(void)
 	* HORIZONTAL MOVE
 	*/
 	horiz:
+#ifdef PLATFORM_ST
+	if (stdiag)  /* moved with y already, see F12 above */
+		return;
+#endif
 	/* should move? */
 	if (!(control_status & (CONTROL_LEFT|CONTROL_RIGHT))) {
 		seq = 2; /* no: reset seq and return */
