@@ -272,6 +272,23 @@ e_rick_action2(void)
 		return;
 	}
 
+#ifdef PLATFORM_ST
+	/*
+	 * ST re-arms the gun every frame unless UP and FIRE are BOTH held -- player_controller
+	 *   4C094  move.b joystick(0x4922B),D0 / move.b D0,D1
+	 *   4C09C  andi.b #0x81,D1 / cmp.b #0x81,D1 / beq.s 4C0AC
+	 *   4C0A6  clr.b shoot_debounce(0x4BF15)
+	 * after the death check, before the climb dispatch -- the same place as here.
+	 * So releasing FIRE (or UP) then pressing FIRE+UP shoots again. The PC's trigger
+	 * (0x7D86: read 0x175C, set 0x1766) is cleared only at 0x17C3, FIRE held without UP
+	 * while standing -- the port's `trigger = FALSE` below -- so there, after a shot,
+	 * FIRE+UP fires again only once FIRE alone / FIRE+DOWN was pressed on the ground.
+	 * kb/demo-solver.md F11.
+	 */
+	if ((control_status & (CONTROL_UP|CONTROL_FIRE)) != (CONTROL_UP|CONTROL_FIRE))
+		trigger = FALSE;
+#endif
+
 	/* climbing? */
 	if E_RICK_STTST(E_RICK_STCLIMB)
 		goto climbing;
