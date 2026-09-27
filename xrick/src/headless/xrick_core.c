@@ -28,6 +28,9 @@
  * -dump      at the end, print the game state as JSON on stdout (T43 phase 5,
  *            hl_dump.c) instead of the summary line.
  * -list      print the snapshot regions.
+ * -steplog   with -inputs: write one JSON line per step (hl_dumpStep: counters, rick,
+ *            live entities) to <file>; -every <n> writes every n-th step only, plus
+ *            the last one. For the MCP tools trace and repair.
  */
 
 #include <stdio.h>
@@ -54,7 +57,7 @@ usage(void)
   fprintf(stderr,
 	  "usage: xrick-core [-submap <n>] [-demo] [-trace <file>] [-steps <n>] [-scramble <n>]\n"
 	  "       xrick-core -fuzz <rounds> [-submap <n>] [-seed <n>] [-log <file>]\n"
-	  "       xrick-core [-submap <n>] -inputs <file>\n"
+	  "       xrick-core [-submap <n>] -inputs <file> [-steplog <file> [-every <n>]]\n"
 	  "       any run above but -fuzz: add -dump for the final state as JSON\n"
 	  "       xrick-core -list\n");
   exit(2);
@@ -415,7 +418,9 @@ main(int argc, char *argv[])
   U8 r = GAME_HL_STEP;
   const char *why, *inputs = NULL, *out = NULL;
   hl_solveopt_t sopt = { 128, 3000, HL_SOLVE_AUTO, 0, 1, NULL };
-  FILE *f = NULL;
+  FILE *f = NULL, *slog = NULL;
+  const char *steplog = NULL;
+  unsigned long every = 1;
 
   for (a = 1; a < argc; a++)
   {
@@ -441,6 +446,10 @@ main(int argc, char *argv[])
       fuzz_log = argv[++a];
     else if (!strcmp(argv[a], "-inputs") && a + 1 < argc)
       inputs = argv[++a];
+    else if (!strcmp(argv[a], "-steplog") && a + 1 < argc)
+      steplog = argv[++a];
+    else if (!strcmp(argv[a], "-every") && a + 1 < argc)
+      every = strtoul(argv[++a], NULL, 0) ? strtoul(argv[a], NULL, 0) : 1;
     else if (!strcmp(argv[a], "-distance"))
       distance = 1;
     else if (!strcmp(argv[a], "-dump"))
@@ -531,7 +540,14 @@ main(int argc, char *argv[])
     return 2;
   }
 
+  if (steplog && !(slog = fopen(steplog, "w")))
+  {
+    fprintf(stderr, "xrick-core: cannot write '%s'\n", steplog);
+    return 2;
+  }
+
   why = "step limit";
+  i = 0;
   while (game_hlSteps() < steps)
   {
     if (f)
@@ -542,6 +558,9 @@ main(int argc, char *argv[])
 	game_hlStart();
       else
 	game_hlStep((U8)c);
+      /* -steplog: one line per <every> inputs played, and the last one below */
+      if (slog && ++i % every == 0)
+	hl_dumpStep(slog);
       continue;
     }
     r = game_hlStep(0);
@@ -550,6 +569,12 @@ main(int argc, char *argv[])
     if (sysarg_args_demo && !demo_active) { why = "end of demo"; break; }
   }
 
+  if (slog)
+  {
+    if (i % every)
+      hl_dumpStep(slog);  /* the final state, when not already logged */
+    fclose(slog);
+  }
   if (save && !snap_file(save, 1))  /* -save after a plain run too */
     return 2;
   if (distance)

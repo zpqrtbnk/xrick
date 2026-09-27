@@ -11,6 +11,7 @@
 #include <stdio.h>
 
 extern void hl_dump(FILE *);
+extern void hl_dumpStep(FILE *);  /* one line, for xrick-core -steplog */
 
 #endif
 

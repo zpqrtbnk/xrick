@@ -95,6 +95,54 @@ rick_state(FILE *f, U8 s)
   fputc(']', f);
 }
 
+/*
+ * a scripted trap (e_them_t3, n 0x18..0x46): its movement script from
+ * ent_entdata[].sni, [frames, dx, dy] per step up to the 0xff end, then where it
+ * is in it -- asleep (c1 == 0, waiting for a trigger), or awake at step
+ * step_no - sni after c2 frames of it. At the end it loops back asleep to its
+ * spawn point, or is removed if flagged once (e_them.c e_them_t3_action2).
+ */
+static void
+script(FILE *f, ent_t *e, U8 t)
+{
+  U16 s, s0 = ent_entdata[t].sni;
+
+  fprintf(f, ", \"script\": {\"steps\": [");
+  for (s = s0; s < ENT_NBR_MVSTEP && ent_mvstep[s].count != 0xff; s++)
+    fprintf(f, "%s[%u, %d, %d]", s != s0 ? ", " : "", (unsigned int)ent_mvstep[s].count,
+	    (int)ent_mvstep[s].dx, (int)ent_mvstep[s].dy);
+  fprintf(f, "], \"awake\": %s", e->c1 ? "true" : "false");
+  if (e->c1)
+    fprintf(f, ", \"at\": [%d, %d]", (int)e->step_no - (int)s0, (int)e->c2);
+  fputc('}', f);
+}
+
+/* one line per step for traces (xrick-core -steplog): the moving parts only */
+void
+hl_dumpStep(FILE *f)
+{
+  U8 i, k;
+
+  fprintf(f, "{\"step\": %lu, \"sub\": %u, \"frow\": %u, \"lives\": %u, \"bombs\": %u, "
+	  "\"bullets\": %u, \"rick\": [%d, %d, ", (unsigned long)game_hlSteps(),
+	  (unsigned int)env_submap, (unsigned int)map_frow, (unsigned int)env_lives,
+	  (unsigned int)env_bombs, (unsigned int)env_bullets,
+	  (int)ent_ents[1].x, (int)ent_ents[1].y);
+  rick_state(f, e_rick_state);
+  fprintf(f, ", %d, %d], \"ents\": [", (ent_ents[1].y >> 3) + map_frow,
+	  (ent_ents[1].x + 4) >> 3);
+  for (i = 0, k = 0; i < ENT_ENTSNUM; i++)
+  {
+    ent_t *e = &ent_ents[i];
+
+    if (i == 1 || !e->n)
+      continue;
+    fprintf(f, "%s[%u, \"%s\", %d, %d, %d]", k++ ? ", " : "", (unsigned int)i,
+	    kind((U8)(e->n & 0x7f)), (int)e->x, (int)e->y, (e->n & ENT_LETHAL) ? 1 : 0);
+  }
+  fprintf(f, "]}\n");
+}
+
 void
 hl_dump(FILE *f)
 {
@@ -149,6 +197,8 @@ hl_dump(FILE *f)
 	      (unsigned int)e->trig_x, (unsigned int)e->trig_y,
 	      (unsigned int)(e->trig_x + (ent_entdata[t].trig_w << 3)),
 	      (unsigned int)(e->trig_y + (ent_entdata[t].trig_h << 3)));
+    if (t >= 0x18 && t != 0x47)
+      script(f, e, t);
     fputc('}', f);
   }
   fprintf(f, "\n  ],\n");
