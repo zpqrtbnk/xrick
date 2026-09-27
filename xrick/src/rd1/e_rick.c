@@ -519,7 +519,19 @@ e_rick_action2(void)
    */
  firing_not:
   if (control_status & CONTROL_UP) {  /* jump or climb */
+    /*
+     * ST: a rick crouching on a ladder JUMPS -- 0x4C318 `tst.b crouching / bne 0x4C370`
+     * skips START_CLIMB, then ACTION (0x4C38C) uncrouches and sets nVelY = -0x580.
+     * scrawl is last frame's crawl, i.e. the ST's crouching flag at 0x4C318 (the
+     * stand-up above has already cleared STCRAWL). The PC has no such path: its UP
+     * test (0x1808 test dh,8 / test cl,2) climbs after the stand-up at 0x1596.
+     * Needed to leave the ladder top on submap 0x09 (kb/demo-solver.md F10).
+     */
+#ifdef PLATFORM_ST
+    if ((env1 & MAP_EFLG_CLIMB) && !scrawl) {  /* climb */
+#else
     if (env1 & MAP_EFLG_CLIMB) {  /* climb */
+#endif
       E_RICK_STSET(E_RICK_STCLIMB);
       return;
     }
