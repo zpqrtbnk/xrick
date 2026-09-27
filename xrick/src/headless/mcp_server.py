@@ -354,9 +354,12 @@ def t_validate(a):
 
 
 def _goal_reached(new, old, parent_submap):
-    """a replayed leg still does its job: same submap and lives, and inside a submap
-       rick within one tile of where the old leg ended"""
+    """a replayed leg still does its job: same submap and lives, no fewer bombs or
+       bullets (a leg that spends more leaves the next ones short), and inside a
+       submap rick within one tile of where the old leg ended"""
     if new["submap"] != old["submap"] or new["lives"] < old["lives"]:
+        return False
+    if new["bombs"] < old["bombs"] or new["bullets"] < old["bullets"]:
         return False
     if old["submap"] != parent_submap:
         return True  # an exit leg: reaching the next submap is the job
@@ -397,7 +400,7 @@ def t_repair(a):
         exit_leg = old["submap"] != start["submap"]
         if not exit_leg:
             hints["waypoint"] = old["anchor"]
-        hints.setdefault("min_bombs", old["bombs"] if exit_leg else 0)
+        hints.setdefault("min_bombs", old["bombs"])  # keep the old leg's budget
         for k in ("beam", "timeout"):
             if k in a:
                 hints[k] = a[k]
