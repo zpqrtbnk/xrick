@@ -86,7 +86,7 @@ judge(U8 status)
     if (cell >= 0 && !E_RICK_STTST(E_RICK_STJUMP|E_RICK_STCLIMB) &&
 	r >= g_wp_row - 1 && r <= g_wp_row + 1 &&
 	c >= g_wp_col - 1 && c <= g_wp_col + 1)
-      return R_GOAL;
+      return env_bombs >= g_minbombs ? R_GOAL : R_FAIL;  /* as at the exit */
   }
   return R_RUN;
 }
