@@ -79,9 +79,12 @@ judge(U8 status)
   }
   if (g_wp_row >= 0)
   {
-    /* a waypoint (hl_solveWaypoint): rick's anchor within one tile of it */
+    /* a waypoint (hl_solveWaypoint): rick's anchor within one tile of it, and
+       rick on the ground -- a state taken mid-jump can be doomed (0x09: falling
+       onto an enemy), and the next solve starts from it */
     int cell = rick_cell(), r = cell / 0x20, c = cell % 0x20;
-    if (cell >= 0 && r >= g_wp_row - 1 && r <= g_wp_row + 1 &&
+    if (cell >= 0 && !E_RICK_STTST(E_RICK_STJUMP|E_RICK_STCLIMB) &&
+	r >= g_wp_row - 1 && r <= g_wp_row + 1 &&
 	c >= g_wp_col - 1 && c <= g_wp_col + 1)
       return R_GOAL;
   }
