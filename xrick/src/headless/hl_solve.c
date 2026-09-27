@@ -569,7 +569,13 @@ static int g_stuck_cell = -1;
  * No value on bombs held. Tried 24 per bomb (6 tiles) when submap 0x07 spent its
  * only bomb before its exit wall: 0x03 (three bombs needed) and 0x06 then failed.
  * What fixed 0x07 was ranking bomb states by clearance (bomb_rank), not this.
+ *
+ * Bullets held: 2 each (half a tile). Since F11 (the ST re-arms the gun every
+ * frame), FIRE+UP runs in a path fire for real; without a value the beam spent
+ * 0x0D's last bullet on nothing and met enemy 155 unarmed. A kill (CREDIT 8)
+ * still pays for its bullet; a crate from 1 to 6 is worth 10.
  */
+#define BULLET_VALUE 2
 
 /* this submap's placements done (killed, collected, triggered once) */
 static int
@@ -986,7 +992,7 @@ search(const hl_solveopt_t *o, const U8 *start, U8 *seq, int max, int attempt)
 	/* progress events -- a placement done, a trap defused -- earn credits:
 	   what dynamite buys is otherwise invisible to the distance */
 	f = 4L * h + 2L * (long)nodes[k].toggles - (long)CREDIT * marks_done() -
-	  (long)CREDIT_LETHAL * defused() + 0x10000L;
+	  (long)CREDIT_LETHAL * defused() - (long)BULLET_VALUE * env_bullets + 0x10000L;
 	/*
 	 * a bomb in play: how clear of it rick is, for ranking bomb states AMONG
 	 * THEMSELVES (bomb_rank). Submap 0x07: the states that stayed by the wall
