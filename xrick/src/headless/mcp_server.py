@@ -166,6 +166,8 @@ def t_solve(a):
         args += ["-maxsteps", str(int(a["max_steps"]))]
     if "min_bombs" in a:
         args += ["-minbombs", str(int(a["min_bombs"]))]
+    if "to" in a:  # a submap other than the forward one (castle loops, map 3)
+        args += ["-to", str(int(a["to"]))]
     if a.get("waypoint"):
         args += ["-waypoint", "%d,%d" % tuple(int(v) for v in a["waypoint"])]
     for r in a.get("forbid", []):
@@ -185,7 +187,7 @@ def t_solve(a):
         return {"found": False, "solver": lines, "progress": progress}
     steps = os.path.getsize(_inputs_path(sid))
     hints = {k: a[k] for k in ("waypoint", "forbid", "min_bombs", "beam", "max_steps",
-                               "no_closures") if k in a}
+                               "no_closures", "to") if k in a}
     _save_meta(sid, {"parent": src, "steps": steps, "note": a.get("note", "solve"),
                      "solve": hints})
     res = _observe(sid, a.get("full", False))
@@ -467,11 +469,12 @@ TOOLS = [
     ("solve", t_solve,
      "Run the solver from a state to the forward exit (the next submap's tick 0), or to "
      "'waypoint' [row, col] (submap tiles, rick's anchor within one tile) when given. "
-     "Hints: min_bombs (bombs to still hold at the exit), forbid (list of [r0, c0, r1, "
+     "Hints: to (target submap, default the forward one -- map 3's castle loops back), "
+     "min_bombs (bombs to still hold at the exit), forbid (list of [r0, c0, r1, "
      "c1] anchor rectangles to avoid), beam (128), max_steps (3000), no_closures. "
      "Returns found, the solver's lines, and the new state.",
      {"state": {"type": "string"}, "waypoint": {"type": "array"}, "forbid": {"type": "array"},
-      "min_bombs": {"type": "integer"}, "beam": {"type": "integer"},
+      "min_bombs": {"type": "integer"}, "beam": {"type": "integer"}, "to": {"type": "integer"},
       "max_steps": {"type": "integer"}, "no_closures": {"type": "boolean"},
       "timeout": {"type": "integer"}, "note": {"type": "string"},
       "full": {"type": "boolean"}}, ["state"]),
