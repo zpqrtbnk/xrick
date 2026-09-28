@@ -8,7 +8,8 @@ data.zip
 /xrick/xrick
 vcpkg_installed/
 x64/
-# all build output goes under build/, never sources: build.sh (build/win, build/web)
-# and, on branch solver, `make core` (build/core) and the MCP server's states (build/mcp)
+# all build output goes under build/, never sources: build.sh (build/win, build/web),
+# the WSL Makefile (build/wsl) and, on branch solver, `make core` (build/core) and the
+# MCP server's states (build/mcp)
 /build/
 __pycache__/
