@@ -5,10 +5,10 @@
 # builds the same sources against the system SDL3 (T20) so the review can compile,
 # warn and run on Linux/WSL.
 #
-# Targets:
-#   make            release-ish build with the full warning set
+# Targets (output under ../build/wsl, see OUTDIR):
+#   make            release-ish build with the full warning set -> ../build/wsl/xrick
 #   make warn       syntax-only pass over the game logic (the R0.1 evidence)
-#   make clean
+#   make clean      removes ../build/wsl
 
 CC      ?= gcc
 CXX     ?= g++
@@ -51,8 +51,14 @@ CSRC := $(filter-out src/rd1/dat_picsPC.c src/rd1/dat_spritesPC.c src/rd1/dat_ti
 
 CXXSRC := $(wildcard src/audio_engine/*.cpp) $(wildcard src/audio_engine/external/Musashi/*.cpp)
 
-OBJ := $(CSRC:.c=.o) $(CXXSRC:.cpp=.o)
-BIN := xrick
+# All build output goes under the repo's build/ (git-ignored, never sources; build.sh
+# uses build/win and build/web): the binary is build/wsl/xrick, objects in
+# build/wsl/obj/, the `make warn` log build/wsl/warn.log. PLATFORM=ST and PLATFORM=PC
+# share this tree, so `make clean` when switching.
+OUTDIR := ../build/wsl
+OBJ := $(CSRC:%.c=$(OUTDIR)/obj/%.o) $(CXXSRC:%.cpp=$(OUTDIR)/obj/%.o)
+BIN := $(OUTDIR)/xrick
+WARNLOG := $(OUTDIR)/warn.log
 
 # Game logic only — no generated tables, no SDL layer, no vendored library. This is the
 # set that review-plan.md phases 2-3 actually read.
@@ -65,21 +71,24 @@ all: $(BIN)
 $(BIN): $(OBJ)
 	$(CXX) $(LDFLAGS) -o $@ $(OBJ) $(LIBS)
 
-%.o: %.c
+$(OUTDIR)/obj/%.o: %.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-%.o: %.cpp
+$(OUTDIR)/obj/%.o: %.cpp
+	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # R0.1 evidence: warnings over the logic surface, without linking.
 warn:
-	@: > warn.log
-	@for f in $(LOGIC); do $(CC) -fsyntax-only $(INC) $(SDL_CFLAGS) $(WARN) $$f 2>> warn.log; done
+	@mkdir -p $(OUTDIR)
+	@: > $(WARNLOG)
+	@for f in $(LOGIC); do $(CC) -fsyntax-only $(INC) $(SDL_CFLAGS) $(WARN) $$f 2>> $(WARNLOG); done
 	@echo "=== warning census ==="
-	@grep -oE '\[-W[a-z-]+\]' warn.log | sort | uniq -c | sort -rn
-	@echo "total: $$(grep -c 'warning:' warn.log) warnings, $$(grep -c 'error:' warn.log) errors"
+	@grep -oE '\[-W[a-z-]+\]' $(WARNLOG) | sort | uniq -c | sort -rn
+	@echo "total: $$(grep -c 'warning:' $(WARNLOG)) warnings, $$(grep -c 'error:' $(WARNLOG)) errors"
 
 clean:
-	rm -f $(OBJ) $(BIN) warn.log
+	rm -rf $(OUTDIR)
 
 .PHONY: all warn clean
