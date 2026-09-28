@@ -55,7 +55,10 @@ WARN="-Wall -Wextra -Wconversion -Wsign-conversion -Wtype-limits"
 CFLAGS="$INC $WARN -fcommon -O2 -DPLATFORM_$PLATFORM -sUSE_SDL=3"
 CXXFLAGS="$INC -O2 -std=c++17 -sUSE_SDL=3"
 # INVOKE_RUN=0 + callMain: the page starts the game on a click (audio unlock, wasm.md W1.5)
-LDFLAGS="-O2 -sUSE_SDL=3 -sINVOKE_RUN=0 -sEXPORTED_RUNTIME_METHODS=callMain,FS -sALLOW_MEMORY_GROWTH=1"
+# EXIT_RUNTIME: exit() and emscripten_force_exit() really end the runtime, flush stdio and
+# call Module.onExit (the page shows why the game stopped). _fflush: the page flushes the
+# -trace file before reading it from MEMFS while the game runs (wasm.md W1.7).
+LDFLAGS="-O2 -sUSE_SDL=3 -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sEXPORTED_RUNTIME_METHODS=callMain,FS -sEXPORTED_FUNCTIONS=_main,_fflush -sALLOW_MEMORY_GROWTH=1"
 
 cd "$SRCDIR"
 CSRC=$(ls src/*.c src/rd1/*.c src/rd2/*.c | grep -v -E 'src/rd1/dat_(pics|sprites|tiles)PC\.c')
