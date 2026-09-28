@@ -244,15 +244,16 @@ static void game_exit(void)
 #ifdef __EMSCRIPTEN__
 /*
  * web main loop (wasm.md W1.3). the 2019 build ran game_loop at a fixed
- * (24 * GAME_PERIOD) / game_period fps, set once at start: 24 fps at the default,
- * where the native loop runs one frame per GAME_PERIOD = 75 ms (13.3 fps) -- the
- * web game played ~1.8x too fast, and the screens that change game_period at run
- * time (scr_imain.c, scr_gameover.c) kept the start speed.
+ * (24 * GAME_PERIOD) / game_period fps, set once at start, so the screens that
+ * change game_period at run time (scr_imain.c, scr_gameover.c) kept the start
+ * speed.
  *
  * here: accumulate real time and run game_loop once per elapsed game_period, read
- * afresh every step, so the web runs at the native rate. game_loop does not sleep
- * on the web. after a stall (hidden tab) at most WEB_CATCHUP steps are run and the
- * rest of the backlog is dropped, as a native build would drop time it never saw.
+ * afresh every step -- the same schedule as the native loop below (one frame per
+ * game_period; GAME_PERIOD 40 ms = the ST's 25 gameplay steps/s, game.h).
+ * game_loop does not sleep on the web. after a stall (hidden tab) at most
+ * WEB_CATCHUP steps are run and the rest of the backlog is dropped, as the native
+ * loop restarts its schedule after a late frame.
  */
 #define WEB_CATCHUP 4
 
