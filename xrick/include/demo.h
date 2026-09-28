@@ -2,7 +2,7 @@
  * xrick/include/demo.h
  *
  * Demo mode, shared by both games: -demo plays a recorded control script, -record
- * writes one. A script is split in segments -- RD1: one per submap, RD2: one per map
+ * writes one. A script is split in segments -- RD1: one per submap visit, RD2: one per map
  * -- and a game adapter tells the core when a segment starts and when a tick passes.
  *
  * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
@@ -73,7 +73,7 @@ typedef struct {
 
 #define DEMO_MAXSEG 0x40
 
-extern demoscript_t demo_scripts[];      /* RD1, src/rd1/dat_demo.c, indexed by env_submap */
+extern demoscript_t demo_scripts[];      /* RD1, src/rd1/dat_demo.c, indexed by submap visit */
 extern demoscript_t rd2_demo_scripts[];  /* RD2, src/rd2/dat_rd2_script.c, indexed by map - 1 */
 
 extern U8 demo_active;  /* TRUE while -demo playback is on */

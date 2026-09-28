@@ -48,11 +48,20 @@
 #ifdef ENABLE_DEMO
 #include "demo.h"
 
-/* the RD1 demo scripts: one per submap, written back as src/rd1/dat_demo.c */
+/*
+ * the RD1 demo scripts, written back as src/rd1/dat_demo.c: one take per submap
+ * VISIT, in the order the game enters them (game_enterSegment), not one per
+ * submap -- map 3's castle is entered twice through 0x15/0x16 (kb/demo-solver.md
+ * §14), and a per-submap table can only hold one of the two. a death re-enters
+ * the same visit, so it replays (or, recording, restarts) the same take.
+ */
 static const demoset_t demoset = {
-  demo_scripts, MAP_NBR_SUBMAPS, "xrick/src/rd1/dat_demo.c", "submap", "env_submap",
-  "#include \"maps.h\"\n", "demo_scripts", "MAP_NBR_SUBMAPS", NULL, e_them_rndreset
+  demo_scripts, DEMO_MAXSEG, "xrick/src/rd1/dat_demo.c", "visit", "submap visit order",
+  "", "demo_scripts", "DEMO_MAXSEG", NULL, e_them_rndreset
 };
+
+static U16 demo_visit = 0;             /* current take, see game_enterSegment */
+static U16 demo_visitSubmap = 0xffff;  /* submap of that take; 0xffff = none yet */
 #endif
 
 
@@ -68,6 +77,9 @@ typedef enum {
   INIT,
   INIT_MAP, INIT_SUBMAP,
   FADEIN__CTRL_ACTION, FADEOUT__MAP_INTRO, FADEOUT__GAMEOVER,
+#ifdef ENABLE_DEMO
+  FADEOUT__DEMO_LOOP,
+#endif
   PAUSE_PRESSED1, PAUSE_PRESSED1B, PAUSED, PAUSE_PRESSED2,
   CTRL_ACTION, CTRL_PAUSE, CTRL_RICK, PAINT, CTRL_SCROLL,
   NEXT_SUBMAP, NEXT_MAP,
@@ -454,6 +466,16 @@ static void game_cycle(void)
 				sysarg_args_map = 0; // FIXME game completed, start all over. fine, but... ack...
 				sysarg_args_submap = 0;
 				game_state = FADEOUT__GAMEOVER;
+#ifdef ENABLE_DEMO
+				/*
+				 * a demo that plays the whole game loops: back to the title
+				 * screens, whose demo path starts the next game by itself
+				 * (scr_imain.c), and the takes restart from the first visit
+				 * (init). no game over, no hall of fame.
+				 */
+				if (demo_playing())
+					game_state = FADEOUT__DEMO_LOOP;
+#endif
 			}
 			else
 			{
@@ -803,6 +825,16 @@ static void game_cycle(void)
 
 
 
+#ifdef ENABLE_DEMO
+		case FADEOUT__DEMO_LOOP:
+
+			if (fb_fadeOut())
+				game_state = XRICK_CLR;
+			return;
+#endif
+
+
+
 		case GAMEOVER:
 
 			switch (screen_gameover())
@@ -856,6 +888,11 @@ init(void)
   U8 i;
 
   E_RICK_STRST(0xff);
+
+#ifdef ENABLE_DEMO
+  demo_visit = 0;               /* a new game replays the takes from the first */
+  demo_visitSubmap = 0xffff;
+#endif
 
   env_lives = 6;
   env_bombs = 6;
@@ -1016,13 +1053,24 @@ trace_tick(void)
 /*
  * every (re)entry of a submap: the demo clock and, while a script plays or
  * records, the random generator restart here (demo.c, T43 D1).
+ *
+ * the demo segment is the submap VISIT (see demoset): it moves on when a
+ * different submap is entered and stays put when the same one is re-entered --
+ * the only way to re-enter the current submap is restart(), after a death.
+ * init() rewinds it for every new game.
  */
 static void
 game_enterSegment(void)
 {
   U32 a, b;
 
-  demo_enterSegment(env_submap);
+  if (env_submap != demo_visitSubmap)
+  {
+    if (demo_visitSubmap != 0xffff)
+      demo_visit++;
+    demo_visitSubmap = env_submap;
+  }
+  demo_enterSegment(demo_visit);
 #ifdef HEADLESS
   hl_segments++;
   if (hl_reseed)
