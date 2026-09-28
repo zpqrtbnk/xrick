@@ -11,5 +11,7 @@ been extended to also play Rick Dangerous II, with the same demanding level of f
 
 **This repository contains the source code for xrick.**
 
+The complete Rick Dangerous code knowledge base is available in its [own repository](https://github.com/zpqrtbnk/xrick).
+
 For more details about Rick Dangerous, documentation, how-tos, history, and even play online, browse to the
 project's home page at [rick-dangerous.org](https://www.rick-dangerous.org/).
