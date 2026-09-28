@@ -8,5 +8,5 @@ data.zip
 /xrick/xrick
 vcpkg_installed/
 x64/
-/build/web/
-/build/win/
+# build.sh output (build/win, build/web): the whole directory is output, never sources
+/build/

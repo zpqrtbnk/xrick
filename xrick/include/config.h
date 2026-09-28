@@ -47,7 +47,7 @@
 #endif
 
 /* logging (write to console). on the web it goes to the browser console, and
-   the page shows the last line when the game stops (build/emsdk/player.js) */
+   the page shows the last line when the game stops (xrick/emsdk/player.js) */
 #define ENABLE_LOG
 
 /* joystick support */

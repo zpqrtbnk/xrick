@@ -351,7 +351,7 @@ static void game_loop(void)
 		sys_shutdown();
 		/*
 		 * a real exit, not just emscripten_cancel_main_loop: the runtime is built
-		 * with EXIT_RUNTIME (build/emsdk/build.sh), so this flushes stdio (-trace)
+		 * with EXIT_RUNTIME (build.sh at the top of the repo), so this flushes stdio (-trace)
 		 * and calls the page's Module.onExit, which says the game has ended.
 		 */
 		emscripten_force_exit(0);

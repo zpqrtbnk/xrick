@@ -22,19 +22,19 @@
 #   emsdk     EMSDK_DIR, default /d/d/EmSdk: emsdk_env.sh and upstream/emscripten/emcc
 #   python    EMSDK_PYTHON, default the one bundled in EMSDK_DIR (plain `python` can be
 #             the Windows Store alias, which breaks emsdk_env.sh)
-#   page      build/emsdk/index.html and player.js (the web page sources)
+#   page      xrick/emsdk/index.html and player.js (the web page sources)
 # PLATFORM (ST default, or PC) selects the web build's game behaviour, as in the
 # Makefile; the desktop project always builds PLATFORM_ST (kb/build.md §3).
 #
 # Serve build/web/ over http to play the web version (e.g. `emrun build/web/index.html`);
-# .wasm must be served as application/wasm. build/emsdk/ holds the page sources (tracked);
-# build/web/ and build/win/ are outputs (git-ignored).
+# .wasm must be served as application/wasm. build/ is output only and fully git-ignored;
+# the web page sources live with the other sources, in xrick/emsdk/.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRCDIR="$ROOT/xrick"
 WEB="$ROOT/build/web"
 WIN="$ROOT/build/win"
-PAGE="$ROOT/build/emsdk"
+PAGE="$SRCDIR/emsdk"
 PLATFORM="${PLATFORM:-ST}"
 
 fail() { echo "error: $*" >&2; exit 1; }
@@ -62,7 +62,7 @@ fi
 [ -f "$MSBUILD" ] || fail "MSBuild not found: $MSBUILD"
 echo "msbuild: $MSBUILD"
 
-# the web page sources (tracked in build/emsdk/)
+# the web page sources (xrick/emsdk/)
 for p in index.html player.js; do
   [ -f "$PAGE/$p" ] || fail "web page source missing: $PAGE/$p"
 done
