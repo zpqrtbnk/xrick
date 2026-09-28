@@ -194,6 +194,9 @@ void game_toggleCheat(U8 nbr)
 /* prototype */
 static void game_loop(void);
 static void game_exit(void);
+#ifdef __EMSCRIPTEN__
+static void web_frame(void);
+#endif
 
 
 /*
@@ -217,20 +220,12 @@ game_run(void)
 
 	/* main loop */
 #ifdef __EMSCRIPTEN__
-	// callback, fps, simulate_infinite_loop
-	//
-	// "If called on the main browser thread, setting 0 or a negative value as the fps will
-	// use the browser�s requestAnimationFrame mechanism to call the main loop function."
-	// "This is HIGHLY recommended if you are doing rendering, as the browser�s
-	// requestAnimationFrame will make sure you render at a proper smooth rate that lines
-	// up properly with the browser and monitor."
-	//
-	// if fps == -1 then it uses the browser requestAnimatedFrame() period - what if I want
-	// to be slower? is it better to pass a fps here, or to just do nothing (NOT wait!) in
-	// game_loop?
-	// 
-	int fps = (24 * GAME_PERIOD) / game_period;
-	emscripten_set_main_loop(game_loop, fps, 1);
+	/*
+	 * the browser calls web_frame at its display rate (requestAnimationFrame, fps 0 --
+	 * what emscripten and SDL3 recommend); web_frame runs game_loop once per
+	 * game_period of real time. see web_frame.
+	 */
+	emscripten_set_main_loop(web_frame, 0, 1);
 #else
 	while (game_state != EXIT)
 	{
@@ -246,13 +241,61 @@ static void game_exit(void)
 	freeData(); /* free cached data */
 }
 
+#ifdef __EMSCRIPTEN__
+/*
+ * web main loop (wasm.md W1.3). the 2019 build ran game_loop at a fixed
+ * (24 * GAME_PERIOD) / game_period fps, set once at start: 24 fps at the default,
+ * where the native loop runs one frame per GAME_PERIOD = 75 ms (13.3 fps) -- the
+ * web game played ~1.8x too fast, and the screens that change game_period at run
+ * time (scr_imain.c, scr_gameover.c) kept the start speed.
+ *
+ * here: accumulate real time and run game_loop once per elapsed game_period, read
+ * afresh every step, so the web runs at the native rate. game_loop does not sleep
+ * on the web. after a stall (hidden tab) at most WEB_CATCHUP steps are run and the
+ * rest of the backlog is dropped, as a native build would drop time it never saw.
+ */
+#define WEB_CATCHUP 4
+
+static void web_frame(void)
+{
+	static U8 started = FALSE;
+	U32 now = sys_gettime();
+	U8 steps = 0;
+	U8 period;
+
+	if (!started)
+	{
+		started = TRUE;
+		tm = now;
+		tmx = 0;
+	}
+	tmx += now - tm;  /* tmx: real time not yet played, in ms */
+	tm = now;
+
+	for (;;)
+	{
+		period = game_period ? game_period : 1;
+		if (tmx < period)
+			break;
+		if (steps == WEB_CATCHUP)
+		{
+			tmx = 0;
+			break;
+		}
+		tmx -= period;
+		steps++;
+		game_loop();
+		if (game_state == EXIT)
+			return;  /* game_loop has cancelled the main loop */
+	}
+}
+#endif
+
 static void game_loop(void)
 {
 	/* timer */
 #ifdef __EMSCRIPTEN__
-	// nothing - emscripten should invoke the loop every game_period
-	// and we should not sys_sleep in emscripten apps
-	// (see game_run above)
+	/* nothing: web_frame decides when a game step is due, and a browser must not sleep */
 #else
 	// sys_gettime() and sys_sleep() use milliseconds
 	tmx = tm; tm = sys_gettime(); tmx = tm - tmx;
