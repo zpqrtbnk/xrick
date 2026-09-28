@@ -24,7 +24,17 @@
 #define LEFT 1
 #define RIGHT 0
 
-#define GAME_PERIOD 75
+/*
+ * ms per gameplay step. ST: 40 = the original's rate, measured in Hatari -- one
+ * main-loop iteration per 2 VBLs at 50 Hz, 25 steps/s (kb/hatari.md 2026-09-28).
+ * PC: not measured; 38 keeps the pace the port had (xrick's 75, which its old timer
+ * ran at about half period, game.c game_loop).
+ */
+#ifdef PLATFORM_ST
+#define GAME_PERIOD 40
+#else
+#define GAME_PERIOD 38
+#endif
 
 #define GAME_BOMBS_INIT 6
 #define GAME_BULLETS_INIT 6
