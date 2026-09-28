@@ -254,9 +254,26 @@ static void game_loop(void)
 	// and we should not sys_sleep in emscripten apps
 	// (see game_run above)
 #else
-	// sys_gettime() and sys_sleep() use milliseconds
-	tmx = tm; tm = sys_gettime(); tmx = tm - tmx;
-	if (tmx < game_period) sys_sleep(game_period - tmx);
+	/*
+	 * one frame per game_period (ms). tm is when the current frame was due.
+	 *
+	 * the original xrick code was `tmx = tm; tm = now; tmx = tm - tmx; if (tmx <
+	 * game_period) sleep(game_period - tmx)`: tm was taken BEFORE the sleep, so
+	 * the next measured interval included that sleep and frames alternated
+	 * between a full sleep and none -- on average one frame per game_period / 2
+	 * (measured: ~26 gameplay steps/s at GAME_PERIOD 75), and jittery. Here the
+	 * next frame is due one period after the previous one was due; when a frame
+	 * runs late, the schedule restarts from now instead of catching up
+	 * (wasm.md §8, kb/hatari.md 2026-09-28).
+	 */
+	tmx = sys_gettime() - tm;  /* time since this frame was due */
+	if (tmx < game_period)
+	{
+		sys_sleep((int)(game_period - tmx));
+		tm += game_period;
+	}
+	else
+		tm = sys_gettime();
 #endif
 
 	/* video */

@@ -30,7 +30,8 @@
 #include "demo.h"
 #endif
 
-#define IMAIN_PERIOD 50;
+/* xrick's 50, halved with game.c's timer fix so the title screens keep their pace */
+#define IMAIN_PERIOD 25;
 
 /*
  * Main introduction
