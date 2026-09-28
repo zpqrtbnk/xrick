@@ -61,8 +61,10 @@ char *sysarg_args_trace = NULL;
 #ifdef ENABLE_DEMO
 #define SYSARG_DEMOHELP \
 	"  -demo : Play the built-in demo script (attract mode). No keyboard needed.\n" \
-	"    Control returns to the keyboard once play reaches a submap that has no\n" \
-	"    script. Combines with -map / -submap to replay a single submap.\n" \
+	"    Control returns to the keyboard once play reaches a submap visit that has\n" \
+	"    no script. RD1 scripts are counted per submap visit from the start of the\n" \
+	"    game, so -map / -submap only match a script recorded from that same\n" \
+	"    start. At the end of the game the demo loops back to the title screens.\n" \
 	"    With -rd 2: one script per map, played from the level start of a game\n" \
 	"    started by hand; the run's end hands control back.\n" \
 	"  -record <file> : Record the controls played into <file>, as a ready to\n" \
