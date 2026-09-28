@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>xrick</title>
+<style>
+  :root { --bg: #111; --fg: #ddd; --dim: #888; --btn: #2a2a2a; --btn-on: #444; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+               font: 14px/1.4 system-ui, sans-serif; }
+  main { display: flex; flex-direction: column; align-items: center; padding: 12px; gap: 10px; }
+  #screen { position: relative; }
+  /* SDL3: the canvas must have no border and no padding (README-emscripten) */
+  #canvas { display: block; border: 0; padding: 0; outline: none; background: #000;
+            image-rendering: pixelated; max-width: 100vw; }
+  #start { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+           background: rgba(0,0,0,.75); cursor: pointer; font-size: 18px; text-align: center; }
+  #start[hidden] { display: none; }
+  #status { color: var(--dim); min-height: 1.4em; text-align: center; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  button { background: var(--btn); color: var(--fg); border: 1px solid #555; border-radius: 4px;
+           padding: 6px 10px; font: inherit; cursor: pointer; touch-action: manipulation; }
+  button:active { background: var(--btn-on); }
+  #touch { display: none; gap: 24px; align-items: center; }
+  body.touch #touch { display: flex; }
+  #pad { width: 150px; height: 150px; border-radius: 50%; background: var(--btn);
+         border: 1px solid #555; touch-action: none; }
+  #fire { width: 90px; height: 90px; border-radius: 50%; }
+  #help { color: var(--dim); font-size: 12px; text-align: center; max-width: 640px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="screen">
+    <canvas id="canvas" width="640" height="400" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+    <div id="start">loading…</div>
+  </div>
+  <div id="status"></div>
+  <div class="row" id="buttons">
+    <button data-code="F4"  data-key="F4">sound on/off</button>
+    <button data-code="F5"  data-key="F5">vol −</button>
+    <button data-code="F6"  data-key="F6">vol +</button>
+    <button data-code="KeyP" data-key="p">pause</button>
+    <button data-code="KeyE" data-key="e">end game</button>
+    <button data-code="F7"  data-key="F7">cheat: lives</button>
+    <button data-code="F8"  data-key="F8">cheat: invincible</button>
+    <button data-code="F9"  data-key="F9">cheat: highlight</button>
+    <button id="savetrace" hidden>download trace</button>
+  </div>
+  <div id="touch">
+    <div id="pad" title="move"></div>
+    <button id="fire" data-code="Space" data-key=" ">FIRE</button>
+  </div>
+  <div id="help">
+    Keys: arrows (or Z X O K) to move, Space to fire, P pause, E end game, Esc quit.
+    URL options: <code>?demo</code> attract demo, <code>?speed=N</code>, <code>?zoom=N</code>,
+    <code>?keys=L-R-U-D-F</code>, <code>?nosound</code>.
+  </div>
+</main>
+<script src="player.js"></script>
+<script src="xrick.js" async></script>
+</body>
+</html>
