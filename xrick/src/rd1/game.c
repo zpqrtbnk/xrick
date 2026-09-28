@@ -37,8 +37,8 @@
 #include "tiles.h"
 #include "draw.h"
 
-#ifdef EMSCRIPTEN
-#include "emscripten.h"
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
 #endif
 
 #ifdef ENABLE_DEVTOOLS
@@ -216,7 +216,7 @@ game_run(void)
 #endif
 
 	/* main loop */
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 	// callback, fps, simulate_infinite_loop
 	//
 	// "If called on the main browser thread, setting 0 or a negative value as the fps will
@@ -249,7 +249,7 @@ static void game_exit(void)
 static void game_loop(void)
 {
 	/* timer */
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 	// nothing - emscripten should invoke the loop every game_period
 	// and we should not sys_sleep in emscripten apps
 	// (see game_run above)
@@ -283,7 +283,7 @@ static void game_loop(void)
 	 */
 	game_cycle();
 
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 	if (game_state == EXIT)
 	{
 		game_exit();

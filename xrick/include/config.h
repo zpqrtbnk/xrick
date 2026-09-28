@@ -48,7 +48,7 @@
 
 /* logging (write to console) */
 #define ENABLE_LOG
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 #undef ENABLE_LOG
 #endif
 

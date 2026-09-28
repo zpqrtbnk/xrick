@@ -145,7 +145,7 @@ syssnd_init(void)
 		return;
 	}
 
-#ifndef EMSCRIPTEN
+#ifndef __EMSCRIPTEN__
 	sndlock = SDL_CreateMutex();
 	if (sndlock == NULL) {
 		IFDEBUG_AUDIO(sys_printf("xrick/audio: can not create lock\n"););
