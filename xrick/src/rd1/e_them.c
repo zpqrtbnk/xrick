@@ -933,7 +933,12 @@ e_them_t3_action2(U8 e)
 
       if (ent_ents[e].flags & ENT_FLG_TRIGRICK) {  /* reacts to rick */
 	/* wake up if triggered by rick */
-	if (u_trigbox(e, E_RICK_ENT.x + 0x0C, E_RICK_ENT.y + 0x0A))
+	/*
+	 * RICK_PROBE_DX, not 0x0C -- kb/demo-solver.md F13. ST scripted_trap_update
+	 * 0x4D19A: move.w nPosX,D0 / addi.w #0xb,D0 / ... bsr 0x4D986. The PC's
+	 * 0x27B1 is ADD AL,0x0C, so the constant was PC-only here.
+	 */
+	if (u_trigbox(e, E_RICK_ENT.x + RICK_PROBE_DX, E_RICK_ENT.y + 0x0A))
 	  goto wakeup;
       }
 
