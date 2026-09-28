@@ -46,7 +46,7 @@ screen_gameover(void)
 		tiles_setBank(0);
 		seq = 1;
 		period = game_period; /* save period, */
-		game_period = 50;     /* and use our own */
+		game_period = 25;     /* and use our own (xrick's 50, halved with game.c's timer fix) */
 #ifdef ENABLE_SOUND
 		sounds_setMusic(SND_TRACK_GAMEOVER, 0);
 #endif

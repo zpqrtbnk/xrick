@@ -46,11 +46,9 @@
 #error "define exactly one of PLATFORM_ST / PLATFORM_PC"
 #endif
 
-/* logging (write to console) */
+/* logging (write to console). on the web it goes to the browser console, and
+   the page shows the last line when the game stops (xrick/emsdk/player.js) */
 #define ENABLE_LOG
-#ifdef EMSCRIPTEN
-#undef ENABLE_LOG
-#endif
 
 /* joystick support */
 #undef ENABLE_JOYSTICK

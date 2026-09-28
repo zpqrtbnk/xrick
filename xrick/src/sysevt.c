@@ -239,7 +239,7 @@ sysevt_wait(void)
   // SDL_WaitEvent locks emscripten
   // this is only for pause really
 
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
   if (SDL_PollEvent(&event))
 #else
   SDL_WaitEvent(&event);

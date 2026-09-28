@@ -37,8 +37,8 @@
 #include "tiles.h"
 #include "draw.h"
 
-#ifdef EMSCRIPTEN
-#include "emscripten.h"
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
 #endif
 
 #ifdef ENABLE_DEVTOOLS
@@ -200,6 +200,9 @@ void game_toggleCheat(U8 nbr)
 /* prototype */
 static void game_loop(void);
 static void game_exit(void);
+#ifdef __EMSCRIPTEN__
+static void web_frame(void);
+#endif
 
 
 /*
@@ -222,21 +225,13 @@ game_run(void)
 #endif
 
 	/* main loop */
-#ifdef EMSCRIPTEN
-	// callback, fps, simulate_infinite_loop
-	//
-	// "If called on the main browser thread, setting 0 or a negative value as the fps will
-	// use the browser�s requestAnimationFrame mechanism to call the main loop function."
-	// "This is HIGHLY recommended if you are doing rendering, as the browser�s
-	// requestAnimationFrame will make sure you render at a proper smooth rate that lines
-	// up properly with the browser and monitor."
-	//
-	// if fps == -1 then it uses the browser requestAnimatedFrame() period - what if I want
-	// to be slower? is it better to pass a fps here, or to just do nothing (NOT wait!) in
-	// game_loop?
-	// 
-	int fps = (24 * GAME_PERIOD) / game_period;
-	emscripten_set_main_loop(game_loop, fps, 1);
+#ifdef __EMSCRIPTEN__
+	/*
+	 * the browser calls web_frame at its display rate (requestAnimationFrame, fps 0 --
+	 * what emscripten and SDL3 recommend); web_frame runs game_loop once per
+	 * game_period of real time. see web_frame.
+	 */
+	emscripten_set_main_loop(web_frame, 0, 1);
 #else
 	while (game_state != EXIT)
 	{
@@ -252,17 +247,83 @@ static void game_exit(void)
 	freeData(); /* free cached data */
 }
 
+#ifdef __EMSCRIPTEN__
+/*
+ * web main loop (wasm.md W1.3). the 2019 build ran game_loop at a fixed
+ * (24 * GAME_PERIOD) / game_period fps, set once at start, so the screens that
+ * change game_period at run time (scr_imain.c, scr_gameover.c) kept the start
+ * speed.
+ *
+ * here: accumulate real time and run game_loop once per elapsed game_period, read
+ * afresh every step -- the same schedule as the native loop below (one frame per
+ * game_period; GAME_PERIOD 40 ms = the ST's 25 gameplay steps/s, game.h).
+ * game_loop does not sleep on the web. after a stall (hidden tab) at most
+ * WEB_CATCHUP steps are run and the rest of the backlog is dropped, as the native
+ * loop restarts its schedule after a late frame.
+ */
+#define WEB_CATCHUP 4
+
+static void web_frame(void)
+{
+	static U8 started = FALSE;
+	U32 now = sys_gettime();
+	U8 steps = 0;
+	U8 period;
+
+	if (!started)
+	{
+		started = TRUE;
+		tm = now;
+		tmx = 0;
+	}
+	tmx += now - tm;  /* tmx: real time not yet played, in ms */
+	tm = now;
+
+	for (;;)
+	{
+		period = game_period ? game_period : 1;
+		if (tmx < period)
+			break;
+		if (steps == WEB_CATCHUP)
+		{
+			tmx = 0;
+			break;
+		}
+		tmx -= period;
+		steps++;
+		game_loop();
+		if (game_state == EXIT)
+			return;  /* game_loop has cancelled the main loop */
+	}
+}
+#endif
+
 static void game_loop(void)
 {
 	/* timer */
-#ifdef EMSCRIPTEN
-	// nothing - emscripten should invoke the loop every game_period
-	// and we should not sys_sleep in emscripten apps
-	// (see game_run above)
+#ifdef __EMSCRIPTEN__
+	/* nothing: web_frame decides when a game step is due, and a browser must not sleep */
 #else
-	// sys_gettime() and sys_sleep() use milliseconds
-	tmx = tm; tm = sys_gettime(); tmx = tm - tmx;
-	if (tmx < game_period) sys_sleep(game_period - tmx);
+	/*
+	 * one frame per game_period (ms). tm is when the current frame was due.
+	 *
+	 * the original xrick code was `tmx = tm; tm = now; tmx = tm - tmx; if (tmx <
+	 * game_period) sleep(game_period - tmx)`: tm was taken BEFORE the sleep, so
+	 * the next measured interval included that sleep and frames alternated
+	 * between a full sleep and none -- on average one frame per game_period / 2
+	 * (measured: ~26 gameplay steps/s at GAME_PERIOD 75), and jittery. Here the
+	 * next frame is due one period after the previous one was due; when a frame
+	 * runs late, the schedule restarts from now instead of catching up
+	 * (wasm.md §8, kb/hatari.md 2026-09-28).
+	 */
+	tmx = sys_gettime() - tm;  /* time since this frame was due */
+	if (tmx < game_period)
+	{
+		sys_sleep((int)(game_period - tmx));
+		tm += game_period;
+	}
+	else
+		tm = sys_gettime();
 #endif
 
 	/* video */
@@ -289,12 +350,17 @@ static void game_loop(void)
 	 */
 	game_cycle();
 
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 	if (game_state == EXIT)
 	{
 		game_exit();
 		sys_shutdown();
-		emscripten_cancel_main_loop();
+		/*
+		 * a real exit, not just emscripten_cancel_main_loop: the runtime is built
+		 * with EXIT_RUNTIME (build.sh at the top of the repo), so this flushes stdio (-trace)
+		 * and calls the page's Module.onExit, which says the game has ended.
+		 */
+		emscripten_force_exit(0);
 	}
 #endif
 }

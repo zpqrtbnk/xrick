@@ -17,7 +17,10 @@
 #define SCROLL_RUNNING 1
 #define SCROLL_DONE 0
 
-#define SCROLL_PERIOD 24
+/* 12 ms per scroll step: xrick's 24, halved when game.c's timer was fixed so the
+   scroll keeps the pace it had (the old timer ran about half period). Not measured
+   on the ST. */
+#define SCROLL_PERIOD 12
 
 extern U8 scroll_up(void);
 extern U8 scroll_down(void);

@@ -21,8 +21,11 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CORE = os.environ.get("XRICK_CORE", os.path.join(HERE, "..", "..", "xrick-core"))
-WORK = os.environ.get("XRICK_MCP_WORK", os.path.join(HERE, "..", "..", "build.mcp"))
+# all build output lives under the repo's build/ (git-ignored): the core built by
+# `make core`, and this server's states (snapshots, inputs, metadata)
+BUILD = os.path.join(HERE, "..", "..", "..", "build")
+CORE = os.environ.get("XRICK_CORE", os.path.join(BUILD, "core", "xrick-core"))
+WORK = os.environ.get("XRICK_MCP_WORK", os.path.join(BUILD, "mcp"))
 os.makedirs(WORK, exist_ok=True)
 
 CONTROLS = {"UP": 0x08, "DOWN": 0x04, "LEFT": 0x02, "RIGHT": 0x01, "FIRE": 0x10}

@@ -230,6 +230,15 @@ sysarg_init(int argc, char **argv)
       sysarg_args_rd = atoi(argv[i]);
       if (sysarg_args_rd != 1 && sysarg_args_rd != 2)
 	sysarg_fail("invalid game number");
+#ifdef __EMSCRIPTEN__
+      /*
+       * the RD2 engine waits for the VBL in loops that never return to the
+       * browser (rd2_sys_pump sleeps), so it would freeze the page. web phase W2
+       * (wasm.md §5) has to make it yield first.
+       */
+      if (sysarg_args_rd == 2)
+	sysarg_fail("Rick Dangerous 2 is not available in the web build yet");
+#endif
     }
 #ifdef ENABLE_DEMO
     else if (!strcmp(argv[i], "-demo")) {

@@ -82,24 +82,26 @@ warn:
 # T43 phase 3: xrick-core, the RD1 game logic headless -- no SDL, no sound engine.
 # Same sources as the game minus the host layer (sys*.c, xrick.c, rd1/syssnd.c) and
 # RD2, plus src/headless/. Built with -DHEADLESS into its own object tree, since
-# game.c differs.
+# game.c differs. Output goes under the repo's build/ (git-ignored, all build output
+# lives there): build/core/xrick-core, objects in build/core/obj/.
+CORE_DIR := ../build/core
 CORE_SRC := $(filter-out $(wildcard src/sys*.c) src/xrick.c src/rd1/syssnd.c \
 	src/rd1/dat_picsPC.c src/rd1/dat_spritesPC.c src/rd1/dat_tilesPC.c, \
 	$(wildcard src/*.c) $(wildcard src/rd1/*.c)) $(wildcard src/headless/*.c)
-CORE_OBJ := $(CORE_SRC:%.c=build.core/%.o)
-CORE_BIN := xrick-core
+CORE_OBJ := $(CORE_SRC:%.c=$(CORE_DIR)/obj/%.o)
+CORE_BIN := $(CORE_DIR)/xrick-core
 
 core: $(CORE_BIN)
 
 $(CORE_BIN): $(CORE_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $(CORE_OBJ) -lm
 
-build.core/%.o: %.c
+$(CORE_DIR)/obj/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(INC) $(WARN) -fcommon -O2 -g -DPLATFORM_$(PLATFORM) -DHEADLESS -c -o $@ $<
 
 clean:
 	rm -f $(OBJ) $(BIN) warn.log
-	rm -rf build.core $(CORE_BIN)
+	rm -rf $(CORE_DIR)
 
 .PHONY: all core warn clean
