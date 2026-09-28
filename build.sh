@@ -1,9 +1,9 @@
 #!/bin/bash
 # xrick build: the Windows desktop version AND the web (WebAssembly) version, every time.
 #
-#   desktop  MSBuild xrick/xrick.vcxproj, Release x64 -> xrick/bin/Release/xrick.exe
-#            (kb/build.md §2; SDL3 from vcpkg, manifest mode)
-#   web      emscripten, RD1 only for now -> build.web/ (index.html, player.js,
+#   desktop  MSBuild xrick/xrick.vcxproj, Release x64 -> build/win/ (xrick.exe, SDL3.dll;
+#            objects in build/win/obj/) (kb/build.md §2; SDL3 from vcpkg, manifest mode)
+#   web      emscripten, RD1 only for now -> build/web/ (index.html, player.js,
 #            xrick.js, xrick.wasm; kb/build.md §4, wasm.md). Mirrors xrick/Makefile:
 #            same sources, include paths and PLATFORM switch, SDL3 from emscripten's
 #            own port (-sUSE_SDL=3).
@@ -12,7 +12,7 @@
 #   ./build.sh            incremental builds
 #   ./build.sh clean      rebuild both from scratch (needed for the web build after a
 #                         header change: its incremental check only compares .c/.cpp dates)
-#   ./build.sh gz         also write gzip-compressed copies of the web files to build.web/gz/
+#   ./build.sh gz         also write gzip-compressed copies of the web files to build/web/gz/
 #
 # Before building anything, the script checks that it can find what it needs and stops
 # with a message otherwise:
@@ -22,15 +22,18 @@
 #   emsdk     EMSDK_DIR, default /d/d/EmSdk: emsdk_env.sh and upstream/emscripten/emcc
 #   python    EMSDK_PYTHON, default the one bundled in EMSDK_DIR (plain `python` can be
 #             the Windows Store alias, which breaks emsdk_env.sh)
+#   page      build/emsdk/index.html and player.js (the web page sources)
 # PLATFORM (ST default, or PC) selects the web build's game behaviour, as in the
 # Makefile; the desktop project always builds PLATFORM_ST (kb/build.md §3).
 #
-# Serve build.web/ over http to play the web version (e.g. `emrun build.web/index.html`);
-# .wasm must be served as application/wasm.
+# Serve build/web/ over http to play the web version (e.g. `emrun build/web/index.html`);
+# .wasm must be served as application/wasm. build/emsdk/ holds the page sources (tracked);
+# build/web/ and build/win/ are outputs (git-ignored).
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRCDIR="$ROOT/xrick"
-OUT="$ROOT/build.web"
+WEB="$ROOT/build/web"
+WIN="$ROOT/build/win"
 PAGE="$ROOT/build/emsdk"
 PLATFORM="${PLATFORM:-ST}"
 
@@ -58,6 +61,11 @@ if [ -z "$MSBUILD" ]; then
 fi
 [ -f "$MSBUILD" ] || fail "MSBuild not found: $MSBUILD"
 echo "msbuild: $MSBUILD"
+
+# the web page sources (tracked in build/emsdk/)
+for p in index.html player.js; do
+  [ -f "$PAGE/$p" ] || fail "web page source missing: $PAGE/$p"
+done
 
 # SDL3 for the desktop build (vcpkg manifest mode, x64-windows)
 [ -f "$SRCDIR/vcpkg_installed/x64-windows/include/SDL3/SDL.h" ] || \
@@ -96,23 +104,29 @@ set -e
 # --- 2. desktop build (MSBuild, Release x64) --------------------------------------------------
 echo
 echo "=== desktop (MSBuild) ==="
-# -t:/-p: rather than /t: /p: -- Git Bash would take a leading slash for a path
+# -t:/-p: rather than /t: /p: -- Git Bash would take a leading slash for a path.
+# OutDir/IntDir override the project's bin\<Config>\ and obj\...\ so that the exe (plus the
+# SDL3.dll the post-build step copies to $(OutDir)) and its objects all land in build/win/.
 TARGET=Build; [ -n "$CLEAN" ] && TARGET=Rebuild
+[ -n "$CLEAN" ] && rm -rf "$WIN"
+mkdir -p "$WIN"
+WINW="$(cygpath -w "$WIN")"
 MSLOG="$(mktemp)"
 if ! "$MSBUILD" "$(cygpath -w "$SRCDIR/xrick.vcxproj")" -t:$TARGET -p:Configuration=Release -p:Platform=x64 \
-     -nologo -v:minimal >"$MSLOG" 2>&1; then
+     "-p:OutDir=$WINW\\" "-p:IntDir=$WINW\\obj\\" -nologo -v:minimal >"$MSLOG" 2>&1; then
   grep -E "error|Error" "$MSLOG" | tail -20 >&2
   rm -f "$MSLOG"
   fail "desktop build failed"
 fi
 grep -E "^ *[0-9]+ Warning\(s\)|^ *[0-9]+ Error\(s\)|warning [A-Z]+[0-9]+" "$MSLOG" | sed 's/^/  /' | tail -8
 rm -f "$MSLOG"
-ls -la "$SRCDIR/bin/Release/xrick.exe"
+[ -f "$WIN/SDL3.dll" ] || fail "desktop build: SDL3.dll was not copied next to the exe in $WIN"
+ls -la "$WIN/xrick.exe" "$WIN/SDL3.dll"
 
 # --- 3. web build (emscripten) -----------------------------------------------------------------
 echo
 echo "=== web (emscripten) ==="
-[ -n "$CLEAN" ] && rm -rf "$OUT"
+[ -n "$CLEAN" ] && rm -rf "$WEB"
 
 INC="-Iinclude -Iinclude/rd1 -Iinclude/rd2 -Isrc -Isrc/rd1 -Isrc/rd2"
 WARN="-Wall -Wextra -Wconversion -Wsign-conversion -Wtype-limits"
@@ -128,12 +142,12 @@ cd "$SRCDIR"
 CSRC=$(ls src/*.c src/rd1/*.c src/rd2/*.c | grep -v -E 'src/rd1/dat_(pics|sprites|tiles)PC\.c')
 CXXSRC=$(ls src/audio_engine/*.cpp src/audio_engine/external/Musashi/*.cpp)
 
-mkdir -p "$OUT/obj"
-: > "$OUT/warn.log"
+mkdir -p "$WEB/obj"
+: > "$WEB/warn.log"
 OBJS=""
 n=0
 for f in $CSRC $CXXSRC; do
-  o="$OUT/obj/$(echo "$f" | tr '/' '_').o"
+  o="$WEB/obj/$(echo "$f" | tr '/' '_').o"
   OBJS="$OBJS $o"
   if [ ! -f "$o" ] || [ "$f" -nt "$o" ]; then
     case "$f" in
@@ -141,29 +155,27 @@ for f in $CSRC $CXXSRC; do
       *.cpp) cc=em++; flags="$CXXFLAGS" ;;
     esac
     # diagnostics go to warn.log; on an error, show them rather than stop silently
-    if ! $cc -c "$f" -o "$o" $flags 2>>"$OUT/warn.log"; then
+    if ! $cc -c "$f" -o "$o" $flags 2>>"$WEB/warn.log"; then
       echo "error: $cc failed on $f:" >&2
-      grep -A3 "error:" "$OUT/warn.log" | tail -20 >&2
+      grep -A3 "error:" "$WEB/warn.log" | tail -20 >&2
       exit 1
     fi
     n=$((n+1))
   fi
 done
-echo "compiled: $n file(s), warnings this run: $(grep -c 'warning:' "$OUT/warn.log")"
+echo "compiled: $n file(s), warnings this run: $(grep -c 'warning:' "$WEB/warn.log")"
 
 echo "linking..."
-em++ $OBJS -o "$OUT/xrick.js" $LDFLAGS
+em++ $OBJS -o "$WEB/xrick.js" $LDFLAGS
 
-for p in index.html player.js; do
-  if [ -f "$PAGE/$p" ]; then cp "$PAGE/$p" "$OUT/"; fi
-done
+cp "$PAGE/index.html" "$PAGE/player.js" "$WEB/"
 
 if [ -n "$GZ" ]; then
-  rm -rf "$OUT/gz" && mkdir -p "$OUT/gz"
-  for f in index.html player.js xrick.js xrick.wasm; do gzip -c -9 "$OUT/$f" > "$OUT/gz/$f"; done
+  rm -rf "$WEB/gz" && mkdir -p "$WEB/gz"
+  for f in index.html player.js xrick.js xrick.wasm; do gzip -c -9 "$WEB/$f" > "$WEB/gz/$f"; done
   echo "gz/: serve with Content-Encoding: gzip (and application/wasm for xrick.wasm)"
 fi
-ls -la "$OUT/xrick.js" "$OUT/xrick.wasm"
+ls -la "$WEB/xrick.js" "$WEB/xrick.wasm"
 
 echo
-echo "done: desktop $SRCDIR/bin/Release/xrick.exe, web $OUT"
+echo "done: desktop $WIN/xrick.exe, web $WEB"
