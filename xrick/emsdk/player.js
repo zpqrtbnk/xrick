@@ -10,7 +10,7 @@
 //
 //   <script>window.xrickPlayer = { start: '#xrick', label: '#xrick span',
 //     status: '#player_console', buttons: '#controls1 div[data-code]',
-//     wasmUrl: '/media/1vqhdi1t/xrick.wasm' };</script>
+//     selector: '#xrick-select', wasmUrl: '/media/1vqhdi1t/xrick.wasm' };</script>
 //   <script src="player.js"></script>
 //   <script src="xrick.js" async></script>
 
@@ -33,6 +33,9 @@ var defaults = {
   pad: '#pad',
   // "download trace" button shown with ?trace; optional
   saveTrace: '#savetrace',
+  // container for the map and starting-room drop-downs; optional (without it, ?map=N
+  // and ?submap=N in the URL still choose the start)
+  selector: '#select',
   // where xrick.wasm is served from; null = next to xrick.js (emscripten's default)
   wasmUrl: null
 };
@@ -42,11 +45,14 @@ var cfg = Object.assign({}, defaults, window.xrickPlayer || {});
 // ---- arguments ----------------------------------------------------------------------------
 // query string -> xrick command line: ?demo -> -demo, ?speed=3 -> -speed 3, ...
 // (only options the game knows; -data is gone since assets are compiled in)
+// With the map selector on the page, the start point (-map / -submap / -rd) comes from
+// it instead (selectionArgs); the URL's values only pre-select it.
 function buildArgs() {
   var q = new URLSearchParams(window.location.search);
   var args = [];
   var flags = ['demo', 'nosound', 'fullscreen'];
-  var values = ['speed', 'zoom', 'keys', 'vol', 'map', 'submap', 'rd'];
+  var values = ['speed', 'zoom', 'keys', 'vol'];
+  if (!mapSelect) values = values.concat(['map', 'submap', 'rd']);
   flags.forEach(function (k) { if (q.has(k)) args.push('-' + k); });
   values.forEach(function (k) { if (q.get(k)) args.push('-' + k, q.get(k)); });
   if (cfg.startInDemo && args.indexOf('-demo') < 0) args.push('-demo');
@@ -120,6 +126,82 @@ function bindPad(pad) {
   pad.addEventListener('touchend', stop, { passive: false });
   pad.addEventListener('touchcancel', stop, { passive: false });
 }
+
+// ---- map selector ---------------------------------------------------------------------------
+// One list of "<game> - <map>" entries, then the starting room within that map: "start of
+// map" (the map's own start, with its intro) or one of its other submaps. Chosen before
+// the game starts, then locked: a new choice means reloading the page. Submap numbers are
+// the game's own (env_submap, 0-based); on the command line -map and -submap are 1-based
+// and a map's first submap is the start of that map (sysarg.c). Every RD1 submap is a
+// valid start point (each has a rightward entry in map_connect). RD2 entries come later,
+// with game 'rd2' (-rd 2).
+var MAPS = [
+  { game: 'rd1', name: 'RD1 - South America',         map: 1, first: 0x00, last: 0x08 },
+  { game: 'rd1', name: 'RD1 - Egypt',                 map: 2, first: 0x09, last: 0x13 },
+  { game: 'rd1', name: 'RD1 - Schwarzendumpf Castle', map: 3, first: 0x14, last: 0x25 },
+  { game: 'rd1', name: 'RD1 - Missile Base',          map: 4, first: 0x26, last: 0x2E }
+];
+var mapSelect = null, subSelect = null;
+
+function hex2(n) { return '0x' + (n < 16 ? '0' : '') + n.toString(16).toUpperCase(); }
+
+function option(value, text) {
+  var o = document.createElement('option');
+  o.value = value;
+  o.textContent = text;
+  return o;
+}
+
+function fillSubmaps(m) {
+  subSelect.innerHTML = '';
+  subSelect.appendChild(option('', 'start of map'));
+  for (var s = m.first + 1; s <= m.last; s++)
+    subSelect.appendChild(option(String(s), 'room ' + (s - m.first + 1) + ' (submap ' + hex2(s) + ')'));
+}
+
+function buildSelector(box) {
+  mapSelect = document.createElement('select');
+  mapSelect.setAttribute('aria-label', 'map');
+  subSelect = document.createElement('select');
+  subSelect.setAttribute('aria-label', 'starting room');
+  MAPS.forEach(function (m, i) { mapSelect.appendChild(option(String(i), m.name)); });
+
+  // pre-select from the URL: ?submap=N or ?map=N, 1-based as on the command line
+  var q = new URLSearchParams(window.location.search);
+  var qs = parseInt(q.get('submap'), 10), qm = parseInt(q.get('map'), 10);
+  var game = q.get('rd') === '2' ? 'rd2' : 'rd1';
+  var mi = 0, sub = null;
+  MAPS.forEach(function (m, i) {
+    if (m.game !== game) return;
+    if (qs >= 1 && qs - 1 >= m.first && qs - 1 <= m.last) { mi = i; sub = qs - 1; }
+    else if (!(qs >= 1) && qm === m.map) mi = i;
+  });
+  mapSelect.value = String(mi);
+  fillSubmaps(MAPS[mi]);
+  if (sub !== null && sub !== MAPS[mi].first) subSelect.value = String(sub);
+
+  mapSelect.addEventListener('change', function () { fillSubmaps(MAPS[mapSelect.value]); });
+  box.appendChild(mapSelect);
+  box.appendChild(subSelect);
+}
+
+// the selection as command-line arguments
+function selectionArgs() {
+  var m = MAPS[mapSelect.value], s = subSelect.value;
+  var args = m.game === 'rd2' ? ['-rd', '2'] : [];
+  if (s === '') args.push('-map', String(m.map));
+  else args.push('-submap', String(parseInt(s, 10) + 1));
+  return args;
+}
+
+function lockSelector() {
+  if (!mapSelect) return;
+  mapSelect.disabled = true;
+  subSelect.disabled = true;
+}
+
+var selectBox = find(cfg.selector);
+if (selectBox) buildSelector(selectBox);
 
 findAll(cfg.buttons).forEach(bindButton);
 var padEl = find(cfg.pad);
@@ -200,8 +282,8 @@ if (saveBtn && new URLSearchParams(window.location.search).has('trace')) {
 }
 
 // ---- emscripten Module ---------------------------------------------------------------------
-var xrickArgs = buildArgs();   // given to callMain only (not Module.arguments)
-
+// the command line is built when the game starts (the map selector is read then) and
+// given to callMain only (not Module.arguments)
 var Module = {
   canvas: canvas,
   // xrick.js asks this first for every file it loads: serve xrick.wasm from cfg.wasmUrl
@@ -231,10 +313,14 @@ var Module = {
 
 function start() {
   unlockAudio();                       // inside the tap: iOS playback audio
+  var args = buildArgs();
+  if (mapSelect) args = args.concat(selectionArgs());
+  lockSelector();                      // a new choice needs a page reload
   if (startBox) startBox.style.display = 'none';
   canvas.style.display = 'block';      // pages may keep the canvas hidden until now
   canvas.focus();
-  Module.callMain(xrickArgs);
+  window.xrickStartArgs = args;        // for checking what the game was started with
+  Module.callMain(args);
   resumeSdlAudio();
 }
 

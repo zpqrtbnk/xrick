@@ -27,10 +27,14 @@
          border: 1px solid #555; touch-action: none; }
   #fire { width: 90px; height: 90px; border-radius: 50%; }
   #help { color: var(--dim); font-size: 12px; text-align: center; max-width: 640px; }
+  select { background: var(--btn); color: var(--fg); border: 1px solid #555; border-radius: 4px;
+           padding: 6px 8px; font: inherit; }
+  select:disabled { opacity: .6; }
 </style>
 </head>
 <body>
 <main>
+  <div class="row" id="select"></div>
   <div id="screen">
     <canvas id="canvas" width="640" height="400" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
     <div id="start">loading…</div>
@@ -54,7 +58,8 @@
   <div id="help">
     Keys: arrows (or Z X O K) to move, Space to fire, P pause, E end game, Esc quit.
     URL options: <code>?demo</code> attract demo, <code>?speed=N</code>, <code>?zoom=N</code>,
-    <code>?keys=L-R-U-D-F</code>, <code>?nosound</code>.
+    <code>?keys=L-R-U-D-F</code>, <code>?nosound</code>. Pick the map and starting room above
+    before starting; reload the page to choose again.
   </div>
 </main>
 <script src="player.js"></script>
