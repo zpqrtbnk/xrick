@@ -145,6 +145,18 @@ void sysvid_setDisplayPalette(void)
 		pald[i].g = pals[i].g * vid_gamma / 255;
 		pald[i].b = pals[i].b * vid_gamma / 255;
 	}
+
+	/*
+	 * opaque pixels, all 256 entries: sysvid_update copies .a into the ARGB
+	 * texture. it used to stay 0, which the texture's SDL_BLENDMODE_NONE hid on
+	 * the desktop, but on the web SDL3 creates the WebGL canvas with an alpha
+	 * channel (gl_config.alpha_size 8) and premultiplied alpha, so every frame
+	 * was colour with alpha 0 -- shown as fully transparent by Chrome on Apple
+	 * silicon (a black page background behind an invisible canvas), while
+	 * Chrome/Windows and iOS Safari happened to display the colours.
+	 */
+	for (i = 0; i < 256; i++)
+		pald[i].a = 255;
 }
 
 
@@ -285,11 +297,13 @@ IFDEBUG_VIDEO(
 	// per-texture scale mode (SDL_SCALEMODE_LINEAR is also the SDL3 default).
 	SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
 
-	// This is an opaque raster framebuffer -- pald[].a is never populated (always
-	// 0) since alpha was never meant to carry anything here. SDL2 apparently
-	// defaulted new textures to a blend mode that ignores it; SDL3 renders an
-	// all-zero alpha channel as fully transparent by default, which blended the
-	// whole frame down to the black SDL_RenderClear() color underneath it.
+	// This is an opaque raster framebuffer. pald[].a used to be left at 0; SDL2
+	// apparently defaulted new textures to a blend mode that ignores it; SDL3
+	// renders an all-zero alpha channel as fully transparent by default, which
+	// blended the whole frame down to the black SDL_RenderClear() color
+	// underneath it. Blending stays off, and since 2026-09-29 the palette's alpha
+	// is 255 as well (sysvid_setDisplayPalette): with alpha 0 the web canvas
+	// itself came out transparent on Chrome/macOS.
 	SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
 
 	SDL_UpdateTexture(texture, NULL, pixels, fb_width * sizeof(U32));
