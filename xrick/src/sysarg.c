@@ -217,7 +217,7 @@ sysarg_init(int argc, char **argv)
     else if (!strcmp(argv[i], "-vol")) {
       if (++i == argc) sysarg_fail("missing volume");
       sysarg_args_vol = atoi(argv[i]) - 1;
-      if (sysarg_args_submap < 0 || sysarg_args_submap >= SYSSND_MAXVOL)
+      if (sysarg_args_vol < 0 || sysarg_args_vol >= SYSSND_MAXVOL)
 	sysarg_fail("invalid volume");
     }
 
