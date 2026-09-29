@@ -155,8 +155,8 @@ syssnd_init(void)
 	}
 #endif
 
-	if (sysarg_args_vol != 0)
-		sndUVol = sysarg_args_vol;
+	if (sysarg_args_vol >= 0)  /* -vol given: 0 (silence) .. SYSSND_MAXVOL */
+		sndUVol = (U8)sysarg_args_vol;
 
 	machine = atari_machine_create((unsigned int)SYSSND_FREQ);
 	if (!machine) {

@@ -51,7 +51,7 @@ int sysarg_args_submap = 0;
 int sysarg_args_fullscreen = 0;
 int sysarg_args_zoom = 0;
 int sysarg_args_nosound = 0;
-int sysarg_args_vol = 0;
+int sysarg_args_vol = -1;  /* -vol: 0 (silence) .. SYSSND_MAXVOL; -1 = not given */
 int sysarg_args_rd = 1;   /* -rd: 1 = Rick Dangerous, 2 = Rick Dangerous 2 */
 #ifdef ENABLE_DEMO
 int sysarg_args_demo = 0;
@@ -216,8 +216,8 @@ sysarg_init(int argc, char **argv)
 #ifdef ENABLE_SOUND
     else if (!strcmp(argv[i], "-vol")) {
       if (++i == argc) sysarg_fail("missing volume");
-      sysarg_args_vol = atoi(argv[i]) - 1;
-      if (sysarg_args_vol < 0 || sysarg_args_vol >= SYSSND_MAXVOL)
+      sysarg_args_vol = atoi(argv[i]);
+      if (sysarg_args_vol < 0 || sysarg_args_vol > SYSSND_MAXVOL)
 	sysarg_fail("invalid volume");
     }
 
