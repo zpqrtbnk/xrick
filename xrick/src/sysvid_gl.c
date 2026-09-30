@@ -393,8 +393,7 @@ SDL_Window *sysvid_gl_init(const char *title, int win_w, int win_h, SDL_WindowFl
 	orig = new_texture(orig_w, orig_h);
 	GL(glPixelStorei)(GL_UNPACK_ALIGNMENT, 4);
 
-	sys_printf("xrick/video: shader chain ready, %d pass(es)\n", NPASSES);
-	return window;
+	return window; /* silent on success; failures above are logged */
 
 fail:
 	sys_printf("xrick/video: shaders unavailable (%s), falling back to SDL_Renderer\n", SDL_GetError());

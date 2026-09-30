@@ -58,7 +58,6 @@ void
 sys_init(int argc, char** argv)
 {
 	setConsole();
-	sys_printf("xrick\n");
 
 	sysarg_init(argc, argv);
 
