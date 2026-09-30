@@ -136,7 +136,7 @@ CXXFLAGS="$INC -O2 -std=c++17 -sUSE_SDL=3"
 # EXIT_RUNTIME: exit() and emscripten_force_exit() really end the runtime, flush stdio and
 # call Module.onExit (the page shows why the game stopped). _fflush: the page flushes the
 # -trace file before reading it from MEMFS while the game runs (wasm.md W1.7).
-LDFLAGS="-O2 -sUSE_SDL=3 -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sEXPORTED_RUNTIME_METHODS=callMain,FS -sEXPORTED_FUNCTIONS=_main,_fflush -sALLOW_MEMORY_GROWTH=1"
+LDFLAGS="-O2 -sUSE_SDL=3 -sMAX_WEBGL_VERSION=2 -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sEXPORTED_RUNTIME_METHODS=callMain,FS -sEXPORTED_FUNCTIONS=_main,_fflush -sALLOW_MEMORY_GROWTH=1"
 
 cd "$SRCDIR"
 CSRC=$(ls src/*.c src/rd1/*.c src/rd2/*.c | grep -v -E 'src/rd1/dat_(pics|sprites|tiles)PC\.c')

@@ -139,6 +139,7 @@
     <ClInclude Include="include\syskbd.h" />
     <ClInclude Include="include\system.h" />
     <ClInclude Include="include\sysvid.h" />
+    <ClInclude Include="include\sysvid_gl.h" />
     <ClInclude Include="include\rd1\dat_sndh_engine.h" />
     <ClInclude Include="include\rd1\devtools.h" />
     <ClInclude Include="include\rd1\draw.h" />
@@ -200,6 +201,7 @@
     <ClCompile Include="src\syskbd.c" />
     <ClCompile Include="src\system.c" />
     <ClCompile Include="src\sysvid.c" />
+    <ClCompile Include="src\sysvid_gl.c" />
     <ClCompile Include="src\xrick.c" />
     <ClCompile Include="src\rd1\dat_demo.c" />
     <ClCompile Include="src\rd1\dat_ents.c" />

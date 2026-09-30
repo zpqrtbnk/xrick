@@ -32,6 +32,7 @@
 #include "debug.h"
 #include "fb.h"
 #include "img.h"
+#include "sysvid_gl.h"
 
 
 #ifdef __MSVC__
@@ -67,6 +68,12 @@ static U16 fb_width, fb_height;
 static U8 zoom = 0; /* actual zoom level */
 static U8 wmzoom = SYSVID_ZOOM; /* window mode zoom level */
 static U8 mxzoom = SYSVID_ZOOM * 2; /* max zoom level */
+
+#ifdef ENABLE_SHADERS
+/* the frame goes through the GL shader chain (sysvid_gl.c) instead of the renderer.
+   pixels then holds the whole frame as RGBA bytes, which is what GL uploads */
+static U8 use_gl = 0;
+#endif
 
 
 
@@ -268,6 +275,23 @@ IFDEBUG_VIDEO(
 	// FIXME free pixels!
 	pixels = (U32*)malloc(fb_width * fb_height * sizeof(U32));
 
+#ifdef ENABLE_SHADERS
+	/* the GL shader chain creates its own (GL) window; on failure it has released
+	   everything and the renderer path below runs as without shaders */
+	screen = sysvid_gl_init("xrick", fb_width * zoom, fb_height * zoom, videoFlags,
+		fb_width, fb_height);
+	if (screen)
+	{
+		use_gl = 1;
+		memset(pixels, 0, fb_width * fb_height * sizeof(U32));
+		SDL_SetWindowIcon(screen, s);
+		SDL_DestroySurface(s);
+		sysvid_gl_present((U8 *)pixels);
+		IFDEBUG_VIDEO(sys_printf("xrick/video: ready\n"););
+		return;
+	}
+#endif
+
 	// create window/screen
 	// SDL3 SDL_CreateWindow drops the x/y position args (always undefined-position
 	// equivalent; use SDL_SetWindowPosition if a specific spot is ever needed).
@@ -341,6 +365,15 @@ sysvid_shutdown(void)
 	free(pixels);
 	pixels = NULL;
 
+#ifdef ENABLE_SHADERS
+	if (use_gl)
+	{
+		sysvid_gl_shutdown(); /* also destroys the window */
+		use_gl = 0;
+		screen = NULL;
+		return;
+	}
+#endif
 	SDL_DestroyWindow(screen);
 }
 
@@ -360,6 +393,34 @@ sysvid_update(rect_t *rects)
 
 	if (rects == NULL) /* nothing to do? */
 		return;
+
+#ifdef ENABLE_SHADERS
+	if (use_gl)
+	{
+		/* dirty rects into the RGBA copy of the frame, then the whole frame
+		   through the shader chain (shaders look at neighbouring pixels, and
+		   the window is redrawn in full anyway) */
+		for (rect = rects; rect; rect = rect->next)
+		{
+			for (int y = rect->y; y < rect->y + rect->height; y++)
+			{
+				U8 *srcx = ((U8 *)&fb) + rect->x + y * fb_width;
+				U8 *dstx = (U8 *)(pixels + rect->x + y * fb_width);
+
+				for (int x = 0; x < rect->width; x++)
+				{
+					*dstx++ = pald[*srcx].r;
+					*dstx++ = pald[*srcx].g;
+					*dstx++ = pald[*srcx].b;
+					*dstx++ = pald[*srcx].a;
+					srcx++;
+				}
+			}
+		}
+		sysvid_gl_present((U8 *)pixels);
+		return;
+	}
+#endif
 
 	n = 0;
 	rect = rects;

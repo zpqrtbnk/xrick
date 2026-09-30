@@ -66,6 +66,9 @@
     <ClInclude Include="include\sysvid.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\sysvid_gl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="include\rd1\dat_sndh_engine.h">
       <Filter>Header Files\rd1</Filter>
     </ClInclude>
@@ -243,6 +246,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\sysvid.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\sysvid_gl.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\xrick.c">

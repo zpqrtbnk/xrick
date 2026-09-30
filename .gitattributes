@@ -1,3 +1,4 @@
 # bash scripts must keep LF: with core.autocrlf they would be checked out as CRLF,
 # and bash fails on the carriage returns
 build.sh text eol=lf
+xrick/src/shaders/embed.sh text eol=lf
