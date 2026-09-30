@@ -109,13 +109,13 @@ processEvent()
 		}
 #endif
 		/* F7-F9: rd1 cheats; rd2 has none yet (PLAN.md), so they must not reach rd1 state */
-		else if (key == SDL_SCANCODE_F7 && sysarg_args_rd != 2) {
+		else if (key == SDL_SCANCODE_F7 && sysarg_args_game != 2) {
 			game_toggleCheat(1);
 		}
-		else if (key == SDL_SCANCODE_F8 && sysarg_args_rd != 2) {
+		else if (key == SDL_SCANCODE_F8 && sysarg_args_game != 2) {
 			game_toggleCheat(2);
 		}
-		else if (key == SDL_SCANCODE_F9 && sysarg_args_rd != 2) {
+		else if (key == SDL_SCANCODE_F9 && sysarg_args_game != 2) {
 			game_toggleCheat(3);
 		}
 		break;

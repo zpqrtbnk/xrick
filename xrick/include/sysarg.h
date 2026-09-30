@@ -24,7 +24,7 @@ extern int sysarg_args_zoom;
 #ifdef ENABLE_SOUND
 extern int sysarg_args_nosound;
 extern int sysarg_args_vol;
-extern int sysarg_args_rd;
+extern int sysarg_args_game;
 #endif
 #ifdef ENABLE_DEMO
 extern int sysarg_args_demo;

@@ -45,7 +45,7 @@ var cfg = Object.assign({}, defaults, window.xrickPlayer || {});
 // ---- arguments ----------------------------------------------------------------------------
 // query string -> xrick command line: ?demo -> -demo, ?speed=3 -> -speed 3, ...
 // (only options the game knows; -data is gone since assets are compiled in)
-// With the map selector on the page, the start point (-map / -submap / -rd) comes from
+// With the map selector on the page, the start point (-map / -submap / -game) comes from
 // it instead (selectionArgs); the URL's values only pre-select it.
 function buildArgs() {
   var q = new URLSearchParams(window.location.search);
@@ -135,7 +135,7 @@ function bindPad(pad) {
 // the game's own (env_submap, 0-based); on the command line -map and -submap are 1-based
 // and a map's first submap is the start of that map (sysarg.c). Every RD1 submap is a
 // valid start point (each has a rightward entry in map_connect). RD2 entries come later,
-// with game 'rd2' (-rd 2).
+// with game 'rd2' (-game 2).
 var MAPS = [
   { game: '1', name: 'RD1 - South America',         map: 1, first: 0x00, last: 0x08 },
   { game: '1', name: 'RD1 - Egypt',                 map: 2, first: 0x09, last: 0x13 },
@@ -189,7 +189,7 @@ function buildSelector(box) {
 // the selection as command-line arguments
 function selectionArgs() {
   var m = MAPS[mapSelect.value], s = subSelect.value;
-  var args = m.game === 'rd2' ? ['-rd', '2'] : [];
+  var args = m.game === 'rd2' ? ['-game', '2'] : [];
   if (s === '') args.push('-map', String(m.map)); // FIXME first submap?
   else args.push('-submap', String(parseInt(s, 10) + 1));
   return args;
@@ -301,7 +301,7 @@ var Module = {
     else start();   // no start element: nothing to click, but then no sound on most browsers
   },
   onExit: function (status) {
-    // an argument the game refuses (e.g. -rd 2 on the web, W1.4) ends in sysarg_fail,
+    // an argument the game refuses (e.g. -game 2 on the web, W1.4) ends in sysarg_fail,
     // whose first line is "xrick [version #...]: <reason>"; Esc (quit) exits with 0
     var fail = lastLines.filter(function (l) { return /^xrick \[version #[^\]]*\]: /.test(l); }).pop();
     var why = fail ? fail.replace(/^xrick \[version #[^\]]*\]: /, '') : '';

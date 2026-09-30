@@ -107,7 +107,7 @@ void rd2_17c06(void);  /* game over, rd2_flow.c */
 void rd2_17f22(void);  /* hall-of-fame entry, rd2_flow.c */
 
 /* ---- entry point */
-void rd2_game_run(void);   /* boot $10000 + game_main $10992, replaces rd1's game_run() when -rd 2 (P6) */
+void rd2_game_run(void);   /* boot $10000 + game_main $10992, replaces rd1's game_run() when -game 2 (P6) */
 
 #endif /* _RD2_GAME_H */
 

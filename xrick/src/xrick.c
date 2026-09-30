@@ -82,7 +82,7 @@ sys_init(int argc, char** argv)
 #endif
 #ifdef ENABLE_SOUND
 	if (sysarg_args_nosound == 0) {
-		if (sysarg_args_rd == 2)
+		if (sysarg_args_game == 2)
 			rd2_snd_init();
 		else
 			syssnd_init();
@@ -103,7 +103,7 @@ void
 sys_shutdown(void)
 {
 #ifdef ENABLE_SOUND
-	if (sysarg_args_rd == 2)
+	if (sysarg_args_game == 2)
 		rd2_snd_shutdown();
 	else
 		syssnd_shutdown();
@@ -126,7 +126,7 @@ main(int argc, char *argv[])
 {
 	sys_init(argc, argv);
 
-	if (sysarg_args_rd == 2)
+	if (sysarg_args_game == 2)
 		rd2_game_run();
 	else
 		game_run();
