@@ -39,6 +39,7 @@
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
+#include "splash.h"
 #endif
 
 #ifdef ENABLE_DEVTOOLS
@@ -72,7 +73,7 @@ typedef enum {
 #ifdef ENABLE_DEVTOOLS
   DEVTOOLS,
 #endif
-  XRICK, XRICK_CLR,
+  XRICK_CLR,
   MAIN_INTRO, MAP_INTRO,
   INIT,
   INIT_MAP, INIT_SUBMAP,
@@ -162,7 +163,7 @@ void game_toggleCheat(U8 nbr)
 #ifdef ENABLE_DEVTOOLS
 		game_state != DEVTOOLS &&
 #endif
-		game_state != XRICK && game_state != EXIT)
+		game_state != EXIT)
 	{
 		switch (nbr)
 		{
@@ -211,7 +212,7 @@ game_run(void)
 
 	game_period = sysarg_args_period ? sysarg_args_period : GAME_PERIOD;
 	tm = sys_gettime();
-	game_state = XRICK;
+	game_state = XRICK_CLR; /* the xrick splash now runs before the game, src/splash.c */
 
 #ifdef ENABLE_DEMO
 	demo_init(&demoset);
@@ -263,6 +264,9 @@ static void web_frame(void)
 	U32 now = sys_gettime();
 	U8 steps = 0;
 	U8 period;
+
+	if (!splash_done())  /* xrick.c started the splash; the game begins after it */
+		return;
 
 	if (!started)
 	{
@@ -398,23 +402,6 @@ static void game_cycle(void)
 			}
 		break;
 #endif
-
-
-		case XRICK:
-
-			switch(screen_xrick())
-			{
-				case SCREEN_RUNNING:
-					return;
-				case SCREEN_DONE:
-					game_state = XRICK_CLR;
-					return;
-				case SCREEN_EXIT:
-					game_state = EXIT;
-					return;
-			}
-		break;
-
 
 
 		case XRICK_CLR:

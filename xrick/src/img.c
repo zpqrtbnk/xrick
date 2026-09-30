@@ -16,10 +16,6 @@
 
 
 
-img_t *IMG_SPLASH;
-
-
-
 /*
  * paints an image of size <width>,<height> with data in <pic> at
  * position <x>,<y> (fb/px).
@@ -48,25 +44,6 @@ void img_paintPic(U16 x, U16 y, U16 width, U16 height, U32 *pic)
 	}
 }
 #endif
-
-
-
-/*
- * paints image <img> onto the frame buffer.
- * the image must have the appropriate size.
- * also manages palettes.
- */
-void img_paintImg(img_t *img)
-{
-	U16 k;
-	U8 *fb;
-
-	fb = fb_at(0, 0);
-
-	fb_setPaletteFromImg(img);
-	for (k = 0; k < FB_WIDTH * FB_HEIGHT; k++)
-		fb[k] = img->pixels[k];
-}
 
 
 

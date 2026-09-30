@@ -69,6 +69,9 @@
     <ClInclude Include="include\sysvid_gl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\splash.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="include\rd1\dat_sndh_engine.h">
       <Filter>Header Files\rd1</Filter>
     </ClInclude>
@@ -251,6 +254,9 @@
     <ClCompile Include="src\sysvid_gl.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\splash.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\xrick.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -336,9 +342,6 @@
       <Filter>Source Files\rd1</Filter>
     </ClCompile>
     <ClCompile Include="src\rd1\scr_pause.c">
-      <Filter>Source Files\rd1</Filter>
-    </ClCompile>
-    <ClCompile Include="src\rd1\scr_xrick.c">
       <Filter>Source Files\rd1</Filter>
     </ClCompile>
     <ClCompile Include="src\rd1\scroller.c">

@@ -21,6 +21,9 @@ extern SDL_Window *sysvid_gl_init(const char *title, int win_w, int win_h, SDL_W
 	int fb_w, int fb_h);
 /* runs the chain over one full frame of RGBA8 bytes and presents it */
 extern void sysvid_gl_present(const Uint8 *rgba);
+/* presents a w x h RGBA8 picture (rows <pitch> bytes apart) scaled to the letterboxed
+   window area, linear filtering, without the chain */
+extern void sysvid_gl_showImage(const Uint8 *rgba, int w, int h, int pitch);
 extern void sysvid_gl_shutdown(void);
 
 #endif /* ENABLE_SHADERS */

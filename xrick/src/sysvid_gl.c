@@ -180,6 +180,9 @@ static SDL_Window *window;
 static SDL_GLContext context;
 static pass_t passes[NPASSES];
 static GLuint vao, vbo, orig; /* orig: the game frame */
+/* plain copy for sysvid_gl_showImage: pictures that are not the game frame skip the chain */
+static const shader_pass_t image_pass = { "image", stock, 1, SCALE_VIEWPORT, 1.0f, 0 };
+static GLuint image_prog;
 static int orig_w, orig_h;
 static int frame_count;
 
@@ -400,6 +403,8 @@ SDL_Window *sysvid_gl_init(const char *title, int win_w, int win_h, SDL_WindowFl
 	for (i = 0; i < NPASSES; i++)
 		if (!(passes[i].prog = build_program(&chain[i])))
 			goto fail;
+	if (!(image_prog = build_program(&image_pass)))
+		goto fail;
 
 	GL(glGenVertexArrays)(1, &vao);
 	GL(glBindVertexArray)(vao);
@@ -425,27 +430,89 @@ fail:
  *
  * see sysvid_gl.h
  */
+/*
+ * the window's drawable size <dw> x <dh> and, inside it, the letterboxed area
+ * <vx>,<vy> <vw> x <vh>: the game frame scaled to fit, aspect kept. FALSE when the
+ * window has no area (minimised)
+ */
+static int letterbox(int *dw, int *dh, int *vx, int *vy, int *vw, int *vh)
+{
+	SDL_GetWindowSizeInPixels(window, dw, dh);
+	if (*dw <= 0 || *dh <= 0)
+		return 0;
+	if ((long)*dw * orig_h <= (long)*dh * orig_w)
+	{
+		*vw = *dw;
+		*vh = (int)((long)*dw * orig_h / orig_w);
+	}
+	else
+	{
+		*vh = *dh;
+		*vw = (int)((long)*dh * orig_w / orig_h);
+	}
+	*vx = (*dw - *vw) / 2;
+	*vy = (*dh - *vh) / 2;
+	return 1;
+}
+
+/* target the window: cleared to black, drawing into the letterboxed area only */
+static void begin_window(int dw, int dh, int vx, int vy, int vw, int vh)
+{
+	GL(glBindFramebuffer)(GL_FRAMEBUFFER, 0);
+	GL(glViewport)(0, 0, dw, dh);
+	GL(glClearColor)(0, 0, 0, 1);
+	GL(glClear)(GL_COLOR_BUFFER_BIT);
+	GL(glViewport)(vx, vy, vw, vh);
+	/* the window stays opaque whatever alpha the shader writes: on the web
+	   the canvas has an alpha channel (see sysvid_setDisplayPalette) */
+	GL(glColorMask)(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+}
+
+/* make <prog> current with the quad and the uniforms that do not depend on inputs */
+static void use_program(GLuint prog, const GLfloat *mvp, int ow, int oh, int vw, int vh)
+{
+	GLuint a;
+	GLint loc;
+
+	GL(glUseProgram)(prog);
+	for (a = 0; a < MAX_ATTRIBS; a++)
+		GL(glDisableVertexAttribArray)(a);
+	if ((loc = GL(glGetAttribLocation)(prog, "VertexCoord")) >= 0)
+	{
+		GL(glEnableVertexAttribArray)((GLuint)loc);
+		GL(glVertexAttribPointer)((GLuint)loc, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), NULL);
+	}
+	if ((loc = GL(glGetAttribLocation)(prog, "COLOR")) >= 0)
+		GL(glVertexAttrib4f)((GLuint)loc, 1, 1, 1, 1);
+	if ((loc = GL(glGetAttribLocation)(prog, "Color")) >= 0)
+		GL(glVertexAttrib4f)((GLuint)loc, 1, 1, 1, 1);
+
+	if ((loc = GL(glGetUniformLocation)(prog, "MVPMatrix")) >= 0)
+		GL(glUniformMatrix4fv)(loc, 1, GL_FALSE, mvp);
+	if ((loc = GL(glGetUniformLocation)(prog, "FrameCount")) >= 0)
+		GL(glUniform1i)(loc, frame_count);
+	if ((loc = GL(glGetUniformLocation)(prog, "FrameDirection")) >= 0)
+		GL(glUniform1i)(loc, 1);
+	if ((loc = GL(glGetUniformLocation)(prog, "OutputSize")) >= 0)
+		GL(glUniform2f)(loc, (GLfloat)ow, (GLfloat)oh);
+	if ((loc = GL(glGetUniformLocation)(prog, "FinalViewportSize")) >= 0)
+		GL(glUniform2f)(loc, (GLfloat)vw, (GLfloat)vh);
+}
+
+
+
+/*
+ * sysvid_gl_present
+ *
+ * see sysvid_gl.h
+ */
 void sysvid_gl_present(const Uint8 *rgba)
 {
 	int dw, dh, vw, vh, vx, vy, in_w, in_h, i;
 	GLuint in_tex;
 
-	/* letterboxed viewport: the frame scaled to fit the window, aspect kept */
-	SDL_GetWindowSizeInPixels(window, &dw, &dh);
-	if (dw <= 0 || dh <= 0)
+	if (!letterbox(&dw, &dh, &vx, &vy, &vw, &vh))
 		return;
-	if ((long)dw * orig_h <= (long)dh * orig_w)
-	{
-		vw = dw;
-		vh = (int)((long)dw * orig_h / orig_w);
-	}
-	else
-	{
-		vh = dh;
-		vw = (int)((long)dh * orig_w / orig_h);
-	}
-	vx = (dw - vw) / 2;
-	vy = (dh - vh) / 2;
 
 	GL(glActiveTexture)(GL_TEXTURE0);
 	GL(glBindTexture)(GL_TEXTURE_2D, orig);
@@ -463,22 +530,14 @@ void sysvid_gl_present(const Uint8 *rgba)
 		pass_t *p = &passes[i];
 		int last = i == NPASSES - 1;
 		int ow, oh, j;
-		GLuint unit, a;
-		GLint loc;
+		GLuint unit;
 		char name[32];
 
 		if (last)
 		{
 			ow = vw;
 			oh = vh;
-			GL(glBindFramebuffer)(GL_FRAMEBUFFER, 0);
-			GL(glViewport)(0, 0, dw, dh);
-			GL(glClearColor)(0, 0, 0, 1);
-			GL(glClear)(GL_COLOR_BUFFER_BIT);
-			GL(glViewport)(vx, vy, vw, vh);
-			/* the window stays opaque whatever alpha the shader writes: on the web
-			   the canvas has an alpha channel (see sysvid_setDisplayPalette) */
-			GL(glColorMask)(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+			begin_window(dw, dh, vx, vy, vw, vh);
 		}
 		else
 		{
@@ -510,29 +569,7 @@ void sysvid_gl_present(const Uint8 *rgba)
 			GL(glViewport)(0, 0, ow, oh);
 		}
 
-		GL(glUseProgram)(p->prog);
-		for (a = 0; a < MAX_ATTRIBS; a++)
-			GL(glDisableVertexAttribArray)(a);
-		if ((loc = GL(glGetAttribLocation)(p->prog, "VertexCoord")) >= 0)
-		{
-			GL(glEnableVertexAttribArray)((GLuint)loc);
-			GL(glVertexAttribPointer)((GLuint)loc, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), NULL);
-		}
-		if ((loc = GL(glGetAttribLocation)(p->prog, "COLOR")) >= 0)
-			GL(glVertexAttrib4f)((GLuint)loc, 1, 1, 1, 1);
-		if ((loc = GL(glGetAttribLocation)(p->prog, "Color")) >= 0)
-			GL(glVertexAttrib4f)((GLuint)loc, 1, 1, 1, 1);
-
-		if ((loc = GL(glGetUniformLocation)(p->prog, "MVPMatrix")) >= 0)
-			GL(glUniformMatrix4fv)(loc, 1, GL_FALSE, last ? mvp_window : mvp_fbo);
-		if ((loc = GL(glGetUniformLocation)(p->prog, "FrameCount")) >= 0)
-			GL(glUniform1i)(loc, frame_count);
-		if ((loc = GL(glGetUniformLocation)(p->prog, "FrameDirection")) >= 0)
-			GL(glUniform1i)(loc, 1);
-		if ((loc = GL(glGetUniformLocation)(p->prog, "OutputSize")) >= 0)
-			GL(glUniform2f)(loc, (GLfloat)ow, (GLfloat)oh);
-		if ((loc = GL(glGetUniformLocation)(p->prog, "FinalViewportSize")) >= 0)
-			GL(glUniform2f)(loc, (GLfloat)vw, (GLfloat)vh);
+		use_program(p->prog, last ? mvp_window : mvp_fbo, ow, oh, vw, vh);
 
 		/* this pass's input, then what came before it */
 		set_filter(in_tex, c->filter_linear);
@@ -567,6 +604,42 @@ void sysvid_gl_present(const Uint8 *rgba)
 
 
 /*
+ * sysvid_gl_showImage
+ *
+ * see sysvid_gl.h
+ */
+void sysvid_gl_showImage(const Uint8 *rgba, int w, int h, int pitch)
+{
+	int dw, dh, vw, vh, vx, vy;
+	GLuint tex, unit = 0;
+
+	if (!letterbox(&dw, &dh, &vx, &vy, &vw, &vh))
+		return;
+
+	GL(glBindVertexArray)(vao);
+	GL(glBindBuffer)(GL_ARRAY_BUFFER, vbo);
+
+	GL(glActiveTexture)(GL_TEXTURE0);
+	tex = new_texture(w, h);
+	GL(glPixelStorei)(GL_UNPACK_ROW_LENGTH, pitch / 4);
+	GL(glTexSubImage2D)(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+	GL(glPixelStorei)(GL_UNPACK_ROW_LENGTH, 0);
+	set_filter(tex, image_pass.filter_linear);
+
+	begin_window(dw, dh, vx, vy, vw, vh);
+	use_program(image_prog, mvp_window, vw, vh, vw, vh);
+	bind_frame(image_prog, "", tex, w, h, &unit);
+	bind_frame(image_prog, "Orig", tex, w, h, &unit);
+	GL(glDrawArrays)(GL_TRIANGLE_STRIP, 0, 4);
+	GL(glColorMask)(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+	SDL_GL_SwapWindow(window);
+	GL(glDeleteTextures)(1, &tex);
+}
+
+
+
+/*
  * sysvid_gl_shutdown
  *
  * releases the GL objects, the context and the window. safe on a partial init.
@@ -583,6 +656,7 @@ void sysvid_gl_shutdown(void)
 			if (passes[i].tex) GL(glDeleteTextures)(1, &passes[i].tex);
 			if (passes[i].fbo) GL(glDeleteFramebuffers)(1, &passes[i].fbo);
 		}
+		if (image_prog) GL(glDeleteProgram)(image_prog);
 		if (orig) GL(glDeleteTextures)(1, &orig);
 		if (vbo) GL(glDeleteBuffers)(1, &vbo);
 		if (vao) GL(glDeleteVertexArrays)(1, &vao);
@@ -591,7 +665,7 @@ void sysvid_gl_shutdown(void)
 	if (window)
 		SDL_DestroyWindow(window);
 	SDL_memset(passes, 0, sizeof(passes));
-	orig = vbo = vao = 0;
+	orig = vbo = vao = image_prog = 0;
 	context = NULL;
 	window = NULL;
 	SDL_GL_ResetAttributes();

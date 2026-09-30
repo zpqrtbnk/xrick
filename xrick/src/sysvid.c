@@ -489,6 +489,61 @@ sysvid_update(rect_t *rects)
 
 
 /*
+ * sysvid_showImage
+ *
+ * see sysvid.h. <img> must be SDL_PIXELFORMAT_RGBA32.
+ */
+void
+sysvid_showImage(SDL_Surface *img)
+{
+	SDL_Texture *t;
+	int dw, dh;
+	SDL_FRect dst;
+
+#ifdef ENABLE_SHADERS
+	if (use_gl)
+	{
+		sysvid_gl_showImage((const U8 *)img->pixels, img->w, img->h, img->pitch);
+		return;
+	}
+#endif
+
+	t = SDL_CreateTextureFromSurface(renderer, img);
+	if (!t)
+		return;
+	SDL_SetTextureScaleMode(t, SDL_SCALEMODE_LINEAR);
+	SDL_SetTextureBlendMode(t, SDL_BLENDMODE_NONE);
+
+	/* at the window's full resolution: logical presentation off while drawing, the
+	   letterbox (the game frame's aspect) computed here instead */
+	SDL_SetRenderLogicalPresentation(renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+	if (SDL_GetCurrentRenderOutputSize(renderer, &dw, &dh) && dw > 0 && dh > 0)
+	{
+		if ((long)dw * fb_height <= (long)dh * fb_width)
+		{
+			dst.w = (float)dw;
+			dst.h = (float)((long)dw * fb_height / fb_width);
+		}
+		else
+		{
+			dst.h = (float)dh;
+			dst.w = (float)((long)dh * fb_width / fb_height);
+		}
+		dst.x = ((float)dw - dst.w) / 2;
+		dst.y = ((float)dh - dst.h) / 2;
+
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+		SDL_RenderClear(renderer);
+		SDL_RenderTexture(renderer, t, NULL, &dst);
+		SDL_RenderPresent(renderer);
+	}
+	SDL_SetRenderLogicalPresentation(renderer, fb_width, fb_height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+	SDL_DestroyTexture(t);
+}
+
+
+
+/*
  * sysvid_zoom
  *
  * increases or decreases zoom by <z>, if possible.

@@ -140,6 +140,7 @@
     <ClInclude Include="include\system.h" />
     <ClInclude Include="include\sysvid.h" />
     <ClInclude Include="include\sysvid_gl.h" />
+    <ClInclude Include="include\splash.h" />
     <ClInclude Include="include\rd1\dat_sndh_engine.h" />
     <ClInclude Include="include\rd1\devtools.h" />
     <ClInclude Include="include\rd1\draw.h" />
@@ -202,6 +203,7 @@
     <ClCompile Include="src\system.c" />
     <ClCompile Include="src\sysvid.c" />
     <ClCompile Include="src\sysvid_gl.c" />
+    <ClCompile Include="src\splash.c" />
     <ClCompile Include="src\xrick.c" />
     <ClCompile Include="src\rd1\dat_demo.c" />
     <ClCompile Include="src\rd1\dat_ents.c" />
@@ -231,7 +233,6 @@
     <ClCompile Include="src\rd1\scr_imain.c" />
     <ClCompile Include="src\rd1\scr_imap.c" />
     <ClCompile Include="src\rd1\scr_pause.c" />
-    <ClCompile Include="src\rd1\scr_xrick.c" />
     <ClCompile Include="src\rd1\scroller.c" />
     <ClCompile Include="src\rd1\sounds.c" />
     <ClCompile Include="src\rd1\sprites.c" />

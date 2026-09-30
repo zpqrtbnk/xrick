@@ -2,3 +2,4 @@
 # and bash fails on the carriage returns
 build.sh text eol=lf
 xrick/src/shaders/embed.sh text eol=lf
+xrick/src/splash/embed.sh text eol=lf

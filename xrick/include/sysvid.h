@@ -32,6 +32,11 @@ extern void sysvid_setDisplayPalette(void);
 extern void sysvid_setPaletteFromImg(img_t* img);
 extern void sysvid_setPaletteFromRGB(U8* r, U8* g, U8* b, U16 n);
 
+/* shows an RGBA32 picture scaled to the game's letterboxed window area, bypassing
+   the frame buffer (and the shader chain): the splash */
+struct SDL_Surface;
+extern void sysvid_showImage(struct SDL_Surface *img);
+
 extern U8 *sysvid_fb;  /* frame buffer */
 extern void sysvid_setGamma(U8 g);
 //extern U8 sysvid_fadeIn(void);

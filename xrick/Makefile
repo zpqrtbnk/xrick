@@ -21,7 +21,7 @@ SDL_LIBS   := $(shell pkg-config --libs sdl3)
 # (variable widths) gets its candidate list. Do not silence them.
 WARN    := -Wall -Wextra -Wconversion -Wsign-conversion -Wtype-limits
 # -fcommon: this is pre-C99-style code with tentative definitions of the same symbol in
-# several translation units (IMG_SPLASH, WAV_*). MSVC and pre-10 GCC allowed it; modern
+# several translation units (WAV_*). MSVC and pre-10 GCC allowed it; modern
 # GCC defaults to -fno-common and rejects it. Build portability only.
 # PLATFORM=ST (default) or PLATFORM=PC -- selects game behaviour and data.
 PLATFORM ?= ST

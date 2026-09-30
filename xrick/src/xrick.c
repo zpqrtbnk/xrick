@@ -18,6 +18,7 @@
 #include "fb.h"
 #include "rd2_game.h"
 #include "rd2_snd.h"
+#include "splash.h"
 
 #include <SDL3/SDL.h>
 #include <signal.h>
@@ -124,6 +125,14 @@ int
 main(int argc, char *argv[])
 {
 	sys_init(argc, argv);
+
+	/* the splash, before either game. on the web it cannot wait here: the game's web
+	   frame waits for splash_done instead (src/rd1/game.c web_frame) */
+#ifdef __EMSCRIPTEN__
+	splash_start();
+#else
+	splash_run();
+#endif
 
 	if (sysarg_args_game == 2)
 		rd2_game_run();
