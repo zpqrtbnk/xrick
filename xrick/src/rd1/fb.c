@@ -159,14 +159,4 @@ void fb_initPalette()
 	sysvid_setPaletteFromRGB(RED, GREEN, BLUE, FB_PALSZ);
 }
 
-
-
-/*
- * sets the palette from the image
- */
-void fb_setPaletteFromImg(img_t* img)
-{
-	sysvid_setPaletteFromImg(img);
-}
-
 /* eof */

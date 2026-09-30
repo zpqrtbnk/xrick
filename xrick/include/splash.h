@@ -7,7 +7,8 @@
 #ifndef _SPLASH_H
 #define _SPLASH_H
 
-/* how long the splash stays on screen, in ms. it cannot be skipped */
+/* how long the splash stays on screen, in ms, fade in and fade out included (320 ms
+   each, src/splash.c). it cannot be skipped */
 #define SPLASH_MS 2000
 
 /* shows the splash and starts its timer */

@@ -29,7 +29,6 @@ extern void sysvid_zoom(S8);
 extern void sysvid_toggleFullscreen(void);
 extern void sysvid_setDisplayPalette(void);
 //extern void sysvid_setPalette(img_color_t*, U16);
-extern void sysvid_setPaletteFromImg(img_t* img);
 extern void sysvid_setPaletteFromRGB(U8* r, U8* g, U8* b, U16 n);
 
 /* shows an RGBA32 picture scaled to the game's letterboxed window area, bypassing

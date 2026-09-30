@@ -82,33 +82,6 @@ static U8 use_gl = 0;
 
 
 /*
- * sysvid_setPaletteFromImg
- *
- * sets the palette according to an image palette.
- */
-void sysvid_setPaletteFromImg(img_t *img)
-{
-	U16 i; // FIXME is it ok to have 256 (not 255) colors?
-
-	if ((paln = img->ncolors) == 0) return;
-
-	for (i = 0; i < paln; ++i)
-	{
-		pals[i].r = img->colors[i].r;
-		pals[i].g = img->colors[i].g;
-		pals[i].b = img->colors[i].b;
-	}
-
-	sysvid_setDisplayPalette();
-
-#ifdef BPP8
-	//SDL_SetColors(screen, (SDL_Color *)&pald, 0, paln);
-#endif
-}
-
-
-
-/*
  * sysvid_setPaletteFromRGB
  *
  * sets the palette according to RGB infos.
