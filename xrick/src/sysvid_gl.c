@@ -155,9 +155,16 @@ static const shader_pass_t chain[] = {
 #ifdef __EMSCRIPTEN__
 #define GL(f) f
 #define GLSL_VERSION "#version 300 es\n"
+/* GLSL ES fragment shaders have no default float precision, and a float declaration
+   before the shader's own `precision` line is an error: stock.glsl declares its
+   `out vec4 FragColor` first, and failed to compile on WebGL. a default here comes
+   before any source; the shader's own precision line still overrides it. GLES 3.0
+   requires highp in fragment shaders */
+#define GLSL_FRAGMENT_PRELUDE "precision highp float;\n"
 #else
 #define GL(f) p_##f
 #define GLSL_VERSION "#version 330 core\n"
+#define GLSL_FRAGMENT_PRELUDE ""
 #define X(ret, name, args) typedef ret (APIENTRY *name##_t) args; static name##_t p_##name;
 GL_FUNCS(X)
 #undef X
@@ -209,7 +216,7 @@ static const GLfloat mvp_window[16] = { 2, 0, 0, 0,  0, -2, 0, 0,  0, 0, -1, 0, 
  */
 static GLuint compile(const shader_pass_t *p, GLenum type)
 {
-	const GLchar *src[3];
+	const GLchar *src[4];
 	const char *body = p->source;
 	const char *v = strstr(body, "#version");
 	GLuint sh;
@@ -223,10 +230,11 @@ static GLuint compile(const shader_pass_t *p, GLenum type)
 	}
 	src[0] = GLSL_VERSION;
 	src[1] = type == GL_VERTEX_SHADER ? "#define VERTEX\n" : "#define FRAGMENT\n";
-	src[2] = body;
+	src[2] = type == GL_VERTEX_SHADER ? "" : GLSL_FRAGMENT_PRELUDE;
+	src[3] = body;
 
 	sh = GL(glCreateShader)(type);
-	GL(glShaderSource)(sh, 3, src, NULL);
+	GL(glShaderSource)(sh, 4, src, NULL);
 	GL(glCompileShader)(sh);
 	GL(glGetShaderiv)(sh, GL_COMPILE_STATUS, &ok);
 	if (!ok)
