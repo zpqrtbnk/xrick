@@ -52,8 +52,10 @@
  *                    SCALE_SOURCE   input size * scale
  *                    SCALE_VIEWPORT letterboxed window area * scale
  *                    SCALE_ABSOLUTE scale pixels
+ *   max_scale      not in .glslp -- if > 0, the output is at most input size *
+ *                  max_scale, whatever scale_type gives (aspect kept)
  * the last pass always renders straight into the window at the letterboxed size;
- * its scale_type/scale are not used.
+ * its scale_type/scale/max_scale are not used.
  * to add a shader: put its .glsl under src/shaders/, run embed.sh, add its passes here.
  */
 enum { SCALE_SOURCE, SCALE_VIEWPORT, SCALE_ABSOLUTE };
@@ -64,6 +66,7 @@ typedef struct {
 	int filter_linear;
 	int scale_type;
 	float scale;
+	float max_scale;
 } shader_pass_t;
 
 /* src/shaders/xbrz/xbrz-freescale-multipass.glslp */
@@ -73,10 +76,24 @@ static const char xbrz_freescale_pass0[] =
 static const char xbrz_freescale_pass1[] =
 #include "shaders/xbrz/xbrz-freescale-pass1.glsl.inc"
 ;
+/* src/shaders/stock.glsl: plain copy */
+static const char stock[] =
+#include "shaders/stock.glsl.inc"
+;
+
+/*
+ * xBRZ draws its curves at the size of its output, so at a large zoom they get very
+ * smooth and the pixel art looks like vector art. its output is capped at
+ * XBRZ_MAX_SCALE x the game frame, and the last pass stretches that to the window with
+ * linear filtering: up to that zoom the picture is plain xBRZ (the copy is 1:1), above
+ * it the curves keep that level of detail and soften instead.
+ */
+#define XBRZ_MAX_SCALE 3.0f
 
 static const shader_pass_t chain[] = {
-	{ "xbrz-freescale-pass0", xbrz_freescale_pass0, 0, SCALE_SOURCE, 1.0f },
-	{ "xbrz-freescale-pass1", xbrz_freescale_pass1, 0, SCALE_VIEWPORT, 1.0f },
+	{ "xbrz-freescale-pass0", xbrz_freescale_pass0, 0, SCALE_SOURCE, 1.0f, 0 },
+	{ "xbrz-freescale-pass1", xbrz_freescale_pass1, 0, SCALE_VIEWPORT, 1.0f, XBRZ_MAX_SCALE },
+	{ "stock", stock, 1, SCALE_VIEWPORT, 1.0f, 0 },
 };
 #define NPASSES ((int)(sizeof(chain) / sizeof(chain[0])))
 
@@ -478,6 +495,12 @@ void sysvid_gl_present(const Uint8 *rgba)
 				ow = (int)((float)in_w * c->scale);
 				oh = (int)((float)in_h * c->scale);
 				break;
+			}
+			if (c->max_scale > 0 && (ow > (int)((float)in_w * c->max_scale) ||
+				oh > (int)((float)in_h * c->max_scale)))
+			{
+				ow = (int)((float)in_w * c->max_scale);
+				oh = (int)((float)in_h * c->max_scale);
 			}
 			if (ow < 1) ow = 1;
 			if (oh < 1) oh = 1;
