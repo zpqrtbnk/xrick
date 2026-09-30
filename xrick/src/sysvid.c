@@ -67,7 +67,7 @@ static U16 fb_width, fb_height;
 
 static U8 zoom = 0; /* actual zoom level */
 static U8 wmzoom = SYSVID_ZOOM; /* window mode zoom level */
-static U8 mxzoom = SYSVID_ZOOM * 2; /* max zoom level */
+static U8 mxzoom = SYSVID_MAXZOOM; /* max zoom level */
 
 #ifdef ENABLE_SHADERS
 /* the frame goes through the GL shader chain (sysvid_gl.c) instead of the renderer.
@@ -244,10 +244,11 @@ IFDEBUG_VIDEO(
 #endif
 	//chkVideo();  /* check video modes */
 
-	/* if a zoom was specified, use it -- but check it is ok */
+	/* if a zoom was specified, use it -- but check it is ok. it is the window mode
+	   zoom: setting <zoom> here was overwritten just below, so -zoom had no effect */
 	if (sysarg_args_zoom)
 	{
-		zoom = sysarg_args_zoom > 0 && sysarg_args_zoom <= mxzoom ? sysarg_args_zoom : mxzoom;
+		wmzoom = sysarg_args_zoom > 0 && sysarg_args_zoom <= mxzoom ? (U8)sysarg_args_zoom : mxzoom;
 	}
 
 	/* prepare for fullscreen, initialize zoom w/default values */

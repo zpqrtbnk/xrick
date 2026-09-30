@@ -18,6 +18,7 @@
 #include "img.h"
 
 #define SYSVID_ZOOM 2
+#define SYSVID_MAXZOOM 8 /* -zoom and the zoom keys stop here */
 #define SYSVID_WIDTH 320
 #define SYSVID_HEIGHT 200
 
