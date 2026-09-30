@@ -50,9 +50,8 @@ var cfg = Object.assign({}, defaults, window.xrickPlayer || {});
 function buildArgs() {
   var q = new URLSearchParams(window.location.search);
   var args = [];
-  var flags = ['demo', 'nosound', 'fullscreen'];
-  var values = ['speed', 'zoom', 'keys', 'vol'];
-  if (!mapSelect) values = values.concat(['map', 'submap', 'rd']);
+  var flags = ['demo', 'nosound' /*, 'fullscreen'*/];
+  var values = ['speed', /*'zoom',*/ 'keys', 'vol', 'map', 'submap', 'game'];
   flags.forEach(function (k) { if (q.has(k)) args.push('-' + k); });
   values.forEach(function (k) { if (q.get(k)) args.push('-' + k, q.get(k)); });
   if (cfg.startInDemo && args.indexOf('-demo') < 0) args.push('-demo');
@@ -61,7 +60,7 @@ function buildArgs() {
 }
 
 // ---- page helpers -------------------------------------------------------------------------
-// every element but the canvas is optional: a page without it just skips that part
+
 function find(selector) { return selector ? document.querySelector(selector) : null; }
 function findAll(selector) { return selector ? Array.prototype.slice.call(document.querySelectorAll(selector)) : []; }
 
@@ -70,7 +69,9 @@ var startBox = find(cfg.start);
 var statusBox = find(cfg.status);
 var lastLines = [];
 
-function setStatus(text) { if (statusBox) statusBox.textContent = text || ''; }
+function setStatus(text) {
+  if (statusBox) statusBox.textContent = text || '';
+}
 
 function setLabel(text) {
   var els = cfg.label ? findAll(cfg.label) : (startBox ? [startBox] : []);
@@ -136,14 +137,15 @@ function bindPad(pad) {
 // valid start point (each has a rightward entry in map_connect). RD2 entries come later,
 // with game 'rd2' (-rd 2).
 var MAPS = [
-  { game: 'rd1', name: 'RD1 - South America',         map: 1, first: 0x00, last: 0x08 },
-  { game: 'rd1', name: 'RD1 - Egypt',                 map: 2, first: 0x09, last: 0x13 },
-  { game: 'rd1', name: 'RD1 - Schwarzendumpf Castle', map: 3, first: 0x14, last: 0x25 },
-  { game: 'rd1', name: 'RD1 - Missile Base',          map: 4, first: 0x26, last: 0x2E }
+  { game: '1', name: 'RD1 - South America',         map: 1, first: 0x00, last: 0x08 },
+  { game: '1', name: 'RD1 - Egypt',                 map: 2, first: 0x09, last: 0x13 },
+  { game: '1', name: 'RD1 - Schwarzendumpf Castle', map: 3, first: 0x14, last: 0x25 },
+  { game: '1', name: 'RD1 - Missile Base',          map: 4, first: 0x26, last: 0x2E },
+  { game: '2', name: 'RD2 - Nothing',               map: 1, first: 0x00, last: 0x01 }
 ];
 var mapSelect = null, subSelect = null;
 
-function hex2(n) { return '0x' + (n < 16 ? '0' : '') + n.toString(16).toUpperCase(); }
+//function hex2(n) { return '0x' + (n < 16 ? '0' : '') + n.toString(16).toUpperCase(); }
 
 function option(value, text) {
   var o = document.createElement('option');
@@ -154,9 +156,8 @@ function option(value, text) {
 
 function fillSubmaps(m) {
   subSelect.innerHTML = '';
-  subSelect.appendChild(option('', 'start of map'));
-  for (var s = m.first + 1; s <= m.last; s++)
-    subSelect.appendChild(option(String(s), 'room ' + (s - m.first + 1) + ' (submap ' + hex2(s) + ')'));
+  for (var s = m.first; s <= m.last; s++)
+    subSelect.appendChild(option(String(s), 'room ' + (s - m.first + 1) + ' (submap ' + s + ')'));
 }
 
 function buildSelector(box) {
@@ -169,10 +170,10 @@ function buildSelector(box) {
   // pre-select from the URL: ?submap=N or ?map=N, 1-based as on the command line
   var q = new URLSearchParams(window.location.search);
   var qs = parseInt(q.get('submap'), 10), qm = parseInt(q.get('map'), 10);
-  var game = q.get('rd') === '2' ? 'rd2' : 'rd1';
+ // var game = q.get('game') === '2' ? '2' : '1';
   var mi = 0, sub = null;
   MAPS.forEach(function (m, i) {
-    if (m.game !== game) return;
+    //if (m.game !== game) return;
     if (qs >= 1 && qs - 1 >= m.first && qs - 1 <= m.last) { mi = i; sub = qs - 1; }
     else if (!(qs >= 1) && qm === m.map) mi = i;
   });
@@ -189,21 +190,19 @@ function buildSelector(box) {
 function selectionArgs() {
   var m = MAPS[mapSelect.value], s = subSelect.value;
   var args = m.game === 'rd2' ? ['-rd', '2'] : [];
-  if (s === '') args.push('-map', String(m.map));
+  if (s === '') args.push('-map', String(m.map)); // FIXME first submap?
   else args.push('-submap', String(parseInt(s, 10) + 1));
   return args;
 }
 
 function lockSelector() {
   if (!mapSelect) return;
-  mapSelect.disabled = true;
-  subSelect.disabled = true;
+  mapSelect.remove();
+  subSelect.remove();
 }
 
-var selectBox = find(cfg.selector);
-if (selectBox) buildSelector(selectBox);
-
 findAll(cfg.buttons).forEach(bindButton);
+
 var padEl = find(cfg.pad);
 if (padEl) bindPad(padEl);
 window.addEventListener('touchstart', function once() {
@@ -311,15 +310,22 @@ var Module = {
   }
 };
 
+var args = buildArgs();
+if (args.indexOf('-game') < 0 && args.indexOf('-map') < 0 && args.indexOf('-submap') < 0 && args.indexOf('-demo') < 0) {
+  var selectBox = find(cfg.selector);
+  if (selectBox) buildSelector(selectBox);
+}
+
 function start() {
-  unlockAudio();                       // inside the tap: iOS playback audio
-  var args = buildArgs();
+  unlockAudio(); // inside the tap: iOS playback audio
+  lockSelector(); // a new choice needs a page reload
+
   if (mapSelect) args = args.concat(selectionArgs());
-  lockSelector();                      // a new choice needs a page reload
+
   if (startBox) startBox.style.display = 'none';
-  canvas.style.display = 'block';      // pages may keep the canvas hidden until now
+  canvas.style.display = 'block'; // pages may keep the canvas hidden until now
   canvas.focus();
-  window.xrickStartArgs = args;        // for checking what the game was started with
+  window.xrickStartArgs = args; // for checking what the game was started with
   Module.callMain(args);
   resumeSdlAudio();
 }
