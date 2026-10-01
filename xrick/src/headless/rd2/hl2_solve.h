@@ -20,6 +20,8 @@ typedef struct {
 	int minlaser;   /* laser shots to hold at the exit */
 	int wp_row, wp_col;  /* >= 0: a waypoint (feet row, column) instead of the exit */
 	const char *stuck;   /* on failure, write the frames to the closest state there */
+	U8 *stage;           /* on failure, if not NULL: the frames to the closest safe state */
+	int *stage_n;        /* (on the ground, alive STAGE_IDLE frames later), or -1 */
 } hl2_solveopt_t;
 
 extern void hl2_solveDefaults(hl2_solveopt_t *);

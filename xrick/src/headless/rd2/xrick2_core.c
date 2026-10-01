@@ -18,6 +18,7 @@
  * -solve / -chain <n>: after -load / -inputs, solve one / <n> exits in a row (hl2_solve.c);
  *          -exit <i> (index in -dump's exits; default: the route's), -waypoint <row>,<col>,
  *          -beam, -maxsteps, -minbombs, -minlaser, -v; -out <file> appends the frames.
+ *          When an exit is not found, the submap's switches are tried (-noswitches: not).
  * -load / -save <file>: start from / write a snapshot (same build only).
  * -distance: Rick's tile distance to the goal. -tiles <s>: submap s's tiles.
  * -steplog one line per frame on stdout: input, map, submap, scroll, rick, counters.
@@ -43,6 +44,7 @@
 #include "hl2_state.h"
 #include "hl2_obs.h"
 #include "hl2_solve.h"
+#include "hl2_switch.h"
 
 static void
 usage(void)
@@ -274,6 +276,86 @@ snap_file(const char *path, int write)
  */
 #define SOLVE_MAX 0x8000
 
+static int switches = 1;  /* -noswitches: 0 */
+
+/* append frames to -out */
+static void
+emit(const char *out, const U8 *seq, int n)
+{
+	FILE *f;
+	if (out && (f = fopen(out, "ab"))) {
+		fwrite(seq, 1, (size_t)n, f);
+		fclose(f);
+	}
+}
+
+/*
+ * one leg: search the exit. Not found: commit the search's closest safe state
+ * (hl2_solve staging) while that gets Rick closer, else fire the nearest switch not
+ * tried yet in this leg (hl2_switch.c) and keep it, and search again. What is
+ * committed is played (the state moves on) and appended to -out.
+ */
+#define STAGES_MAX 12
+#define TRIED_MAX 64
+
+static int
+attempt(hl2_solveopt_t *o, U8 *seq, const char *out)
+{
+	static U8 stage[SOLVE_MAX];
+	U32 tried[TRIED_MAX];
+	int stage_n = -1, n, stages = 0, n_tried = 0, i, d0, d1, si, nsw, fired;
+	hl2_solveopt_t so = *o;
+	hl2_switch_t sw[32];
+	U8 *back = malloc(hl2_stateSize());
+
+	so.stage = stage;
+	so.stage_n = &stage_n;
+	for (;;) {
+		n = hl2_solve(&so, seq, SOLVE_MAX);
+		if (n >= 0)
+			break;
+		d0 = hl2_solveDistance(&so);
+		if (stage_n > 0 && stages < STAGES_MAX) {
+			hl2_stateSave(back);
+			for (i = 0; i < stage_n; i++)
+				hl2_step(stage[i]);
+			d1 = hl2_solveDistance(&so);
+			if (d1 < d0) {
+				printf("solve:   stage %d: %d frames, distance %d -> %d\n", ++stages, stage_n, d0, d1);
+				emit(out, stage, stage_n);
+				continue;
+			}
+			hl2_stateLoad(back);
+		}
+		if (o->wp_row >= 0 || !switches)
+			break;
+		nsw = hl2_switches(sw, 32);
+		for (fired = 0, si = 0; si < nsw && !fired; si++) {
+			int ns, k;
+			if (hl2_switchFired(&sw[si]))
+				continue;
+			for (k = 0; k < n_tried && tried[k] != sw[si].box; k++) ;
+			if (k < n_tried || n_tried == TRIED_MAX)
+				continue;
+			tried[n_tried++] = sw[si].box;
+			ns = hl2_switchFire(o, &sw[si], seq, SOLVE_MAX);
+			printf("solve:   switch %lu box x %d row %d %dx%d mask %d: %s\n",
+			       (unsigned long)sw[si].rec, sw[si].x, sw[si].row, sw[si].w, sw[si].h,
+			       sw[si].mask, ns < 0 ? "not fired" : "fired");
+			if (ns < 0)
+				continue;
+			for (i = 0; i < ns; i++)
+				hl2_step(seq[i]);
+			emit(out, seq, ns);
+			fired = 1;
+		}
+		if (!fired)
+			break;
+	}
+	free(back);
+	return n;
+}
+
 static int
 solve(int chain, hl2_solveopt_t *o, const char *out)
 {
@@ -287,7 +369,7 @@ solve(int chain, hl2_solveopt_t *o, const char *out)
 		int ne = hl2_exits(e, HL2_EXITS_MAX), sm = rd2_rw(HL2_SUBMAP), mp = rd2_rw(HL2_MAP_PLAYING);
 		ex = o->exit >= 0 ? o->exit : hl2_solveRoute();
 		t0 = now();
-		n = hl2_solve(o, seq, SOLVE_MAX);
+		n = attempt(o, seq, out);
 		t1 = now();
 		if (n < 0) {
 			printf("solve: map %d submap %d exit %d (%s row %d -> %d): NOT FOUND (beam %d, %.1f s)\n",
@@ -342,6 +424,7 @@ main(int argc, char *argv[])
 	FILE *f = NULL;
 	double t0;
 
+	setvbuf(stdout, NULL, _IOLBF, 0);        /* progress lines through a pipe */
 	hl2_solveDefaults(&sopt);
 	for (a = 1; a < argc; a++) {
 		if (!strcmp(argv[a], "-map") && a + 1 < argc)
@@ -391,6 +474,8 @@ main(int argc, char *argv[])
 			save = argv[++a];
 		else if (!strcmp(argv[a], "-tiles") && a + 1 < argc)
 			tiles = atoi(argv[++a]);
+		else if (!strcmp(argv[a], "-noswitches"))
+			switches = 0;
 		else if (!strcmp(argv[a], "-stuck") && a + 1 < argc)
 			sopt.stuck = argv[++a];
 		else if (!strcmp(argv[a], "-distance"))

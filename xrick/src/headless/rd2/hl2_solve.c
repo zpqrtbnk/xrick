@@ -50,6 +50,8 @@ hl2_solveDefaults(hl2_solveopt_t *o)
 	o->wp_row = -1;
 	o->wp_col = -1;
 	o->stuck = NULL;
+	o->stage = NULL;
+	o->stage_n = NULL;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -113,7 +115,9 @@ judge(int status)
 	}
 	if (g_wp_row >= 0) {
 		int r = hl2_rickRow(), c = hl2_rickCol();
-		if (grounded() && r >= g_wp_row - 1 && r <= g_wp_row + 1 &&
+		/* on the ground (not a ladder: the waypoint is where Rick acts next), on the
+		   row, within a column */
+		if (rd2_rw(0x12e1cu) != 0 && rd2_rw(0x12e1au) == 0 && r == g_wp_row &&
 		    c >= g_wp_col - 1 && c <= g_wp_col + 1)
 			return counters_ok() ? R_GOAL : R_FAIL;
 	}
@@ -585,6 +589,16 @@ play(int a, int *j)
 	return r;
 }
 
+/*
+ * staging: the search keeps the STAGE_K closest states with Rick on the ground; on
+ * failure the first of them, closest first, that survives STAGE_IDLE frames of no
+ * input is handed back (o->stage), so the caller can commit that much progress and
+ * search again from there -- a beam that reaches a room and dies in it every time
+ * still leaves the way to that room.
+ */
+#define STAGE_K 64
+#define STAGE_IDLE 50
+
 #define CELL_CAP 4
 #define BUCKET_CAP 4
 #define STUCK_FRAMES 600
@@ -597,6 +611,7 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 	size_t sz;
 	int nb = o->maxsteps + MAXLEN + 1, g, i, k, a, j, r, found = -1, n_keep;
 	int best_h = 1 << 30, best_g = 0, h, root, n_dup = 0, n_fail = 0, best_node = 0;
+	int st_node[STAGE_K], st_h[STAGE_K], n_st = 0;
 	bucket_t *bk;
 	int *order, *keep, *expanded = NULL, n_exp = 0, cap_exp = 0;
 	U8 *cellcount, *start, *full;
@@ -701,6 +716,15 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 				nodes[child].f = f;
 				cell = hl2_rickRow() * HL2_COLS + hl2_rickCol();
 				nodes[child].cell = (U16)((cell >= 0 && cell < d_rows * HL2_COLS) ? cell : d_rows * HL2_COLS);
+				if (o->stage && rd2_rw(0x12e1cu) != 0) {   /* landed: a staging candidate */
+					int w = 0, q;
+					if (n_st < STAGE_K) {
+						st_node[n_st] = child; st_h[n_st++] = h;
+					} else {
+						for (q = 1; q < n_st; q++) if (st_h[q] > st_h[w]) w = q;
+						if (h < st_h[w]) { st_node[w] = child; st_h[w] = h; }
+					}
+				}
 				{
 					bucket_t *cb = &bk[nodes[child].g];
 					if (!cb->node) {
@@ -736,6 +760,32 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 			fclose(sf);
 		if (o->verbose)
 			fprintf(stderr, "solve: closest state (%d frames) written to %s\n", sn, o->stuck);
+	}
+	if (found < 0 && o->stage) {
+		int q, best, sn, ok;
+		*o->stage_n = -1;
+		while (n_st > 0 && *o->stage_n < 0) {
+			for (best = 0, q = 1; q < n_st; q++)
+				if (st_h[q] < st_h[best] || (st_h[q] == st_h[best] &&
+				    nodes[st_node[q]].g < nodes[st_node[best]].g)) best = q;
+			sn = path(st_node[best], 0, 0, o->stage, max);
+			hl2_stateRender(1);
+			hl2_stateLoad(full);
+			for (ok = sn > 0, q = 0; ok && q < sn + STAGE_IDLE; q++) {
+				int st = hl2_step(q < sn ? o->stage[q] : 0);
+				if (st != HL2_STEP || hl2_rickDead() || rd2_rw(HL2_LIVES) < g_lives ||
+				    rd2_rw(HL2_SUBMAP) != g_submap)
+					ok = 0;
+			}
+			hl2_stateRender(0);
+			if (ok) {
+				*o->stage_n = sn;
+				if (o->verbose)
+					fprintf(stderr, "solve: stage: %d frames to distance %d\n", sn, st_h[best]);
+			}
+			st_node[best] = st_node[--n_st];
+			st_h[best] = st_h[n_st];
+		}
 	}
 	for (i = 0; i < n_nodes; i++)
 		free(nodes[i].snap), nodes[i].snap = NULL;
