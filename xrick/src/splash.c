@@ -7,7 +7,8 @@
  *
  * The picture is src/splash/splash.png, compiled in (src/splash/embed.sh) and decoded by
  * SDL. It does not go through the game's 8-bit frame buffer: sysvid_showImage scales it
- * to the letterboxed window area, so its detail follows -zoom and fullscreen.
+ * to the letterboxed window area, so its detail follows -zoom and fullscreen. VERSION
+ * (config.h) is written onto it at load time, with SDL's built-in debug font.
  *
  * The fades are RD2's (src/rd2/rd2_render.c rd2_19134 / rd2_1919e): 8 steps, one per
  * game frame, each moving every colour channel by one ST level (1/7 of full scale) --
@@ -32,6 +33,11 @@
 #define FADE_STEP_MS 40 /* RD2: one game frame, 2 VBLs at 50 Hz */
 #define FADE_MS (FADE_STEPS * FADE_STEP_MS)
 #define ST_LEVELS 7     /* an ST colour channel is 0..7 */
+
+/* the version line: SDL's built-in 8x8 debug font, scaled up, centred, near the top */
+#define VERSION_TEXT "#" VERSION
+#define VERSION_SCALE 2
+#define VERSION_Y 20    /* image pixels from the top */
 
 static const unsigned char splash_png[] = {
 #include "splash/splash.png.inc"
@@ -60,6 +66,24 @@ static int fade_level(Uint64 t)
 		return k > ST_LEVELS ? ST_LEVELS : k;
 	}
 	return 0;
+}
+
+/*
+ * write VERSION onto <img>, in the picture's text brown (sampled from splash.png)
+ */
+static void draw_version(SDL_Surface *img)
+{
+	SDL_Renderer *r = SDL_CreateSoftwareRenderer(img);
+	float w = (float)(sizeof(VERSION_TEXT) - 1) * SDL_DEBUG_TEXT_FONT_CHARACTER_SIZE;
+
+	if (!r)
+		return;
+	SDL_SetRenderScale(r, VERSION_SCALE, VERSION_SCALE);
+	SDL_SetRenderDrawColor(r, 0x65, 0x32, 0x01, 0xff);
+	SDL_RenderDebugText(r, ((float)img->w / VERSION_SCALE - w) / 2,
+		(float)VERSION_Y / VERSION_SCALE, VERSION_TEXT);
+	SDL_FlushRenderer(r);
+	SDL_DestroyRenderer(r);
 }
 
 /*
@@ -112,6 +136,8 @@ void splash_start(void)
 		image = SDL_ConvertSurface(s, SDL_PIXELFORMAT_RGBA32);
 		SDL_DestroySurface(s);
 	}
+	if (image)
+		draw_version(image);
 	if (image)
 		shown = SDL_CreateSurface(image->w, image->h, SDL_PIXELFORMAT_RGBA32);
 	if (!image || !shown)
