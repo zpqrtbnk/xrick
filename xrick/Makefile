@@ -116,7 +116,8 @@ $(CORE_DIR)/obj/%.o: %.c
 CORE2_DIR := ../build/core2
 CORE2_SRC := $(filter-out src/rd2/rd2_sys.c src/rd2/rd2_snd.c src/rd2/rd2_demo.c \
 	src/rd2/dat_rd2_sndh_engine.c, $(wildcard src/rd2/*.c)) $(wildcard src/headless/rd2/*.c)
-CORE2_FLAGS := $(INC) -Isrc/headless/rd2 $(WARN) -fcommon -O2 -g -DPLATFORM_$(PLATFORM) -DHEADLESS
+# -MMD -MP: header dependencies, so a struct change in a header rebuilds its users
+CORE2_FLAGS := $(INC) -Isrc/headless/rd2 $(WARN) -fcommon -O2 -g -DPLATFORM_$(PLATFORM) -DHEADLESS -MMD -MP
 CORE2_OBJ := $(CORE2_SRC:%.c=$(CORE2_DIR)/obj/%.o)
 AUDIT2_OBJ := $(CORE2_SRC:%.c=$(CORE2_DIR)/audit/%.o)
 
@@ -136,6 +137,8 @@ $(CORE2_DIR)/obj/%.o: %.c
 $(CORE2_DIR)/audit/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CORE2_FLAGS) -DHL2_WATCH -c -o $@ $<
+
+-include $(CORE2_OBJ:.o=.d) $(AUDIT2_OBJ:.o=.d)
 
 clean:
 	rm -rf $(OUTDIR) $(CORE_DIR) $(CORE2_DIR)

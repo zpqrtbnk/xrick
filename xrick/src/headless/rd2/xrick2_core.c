@@ -21,6 +21,7 @@
  *          When an exit is not found, the submap's switches are tried (-noswitches: not).
  * -load / -save <file>: start from / write a snapshot (same build only).
  * -distance: Rick's tile distance to the goal. -tiles <s>: submap s's tiles.
+ * -switch <i>: list the submap's switches, fire the i-th (-out: append its frames).
  * -steplog one line per frame on stdout: input, map, submap, scroll, rick, counters.
  *
  *   xrick2-core -fuzz <rounds> [-map <n>] [-seed <n>] [-norender]
@@ -419,7 +420,7 @@ main(int argc, char *argv[])
 	int a, map = 1, c, r = HL2_STEP, rounds = 0, mapset = 0, steplog = 0, dump = 0;
 	unsigned long auditf = 0;
 	const char *inputs = NULL, *tdir = NULL, *stop = NULL, *out = NULL, *load = NULL, *save = NULL;
-	int chain = 0, distance = 0, tiles = -1;
+	int chain = 0, distance = 0, tiles = -1, swi = -1;
 	hl2_solveopt_t sopt;
 	FILE *f = NULL;
 	double t0;
@@ -474,6 +475,8 @@ main(int argc, char *argv[])
 			save = argv[++a];
 		else if (!strcmp(argv[a], "-tiles") && a + 1 < argc)
 			tiles = atoi(argv[++a]);
+		else if (!strcmp(argv[a], "-switch") && a + 1 < argc)
+			swi = atoi(argv[++a]);
 		else if (!strcmp(argv[a], "-noswitches"))
 			switches = 0;
 		else if (!strcmp(argv[a], "-stuck") && a + 1 < argc)
@@ -537,6 +540,21 @@ main(int argc, char *argv[])
 	}
 	if (tiles >= 0)
 		hl2_tiles(stdout, tiles);
+	if (swi >= 0) {                             /* -switch <i>: list the switches, fire the i-th */
+		static U8 sseq[SOLVE_MAX];
+		hl2_switch_t sw[32];
+		int nsw = hl2_switches(sw, 32), i, ns;
+		for (i = 0; i < nsw; i++)
+			printf("switch %d: record %lu box x %d row %d %dx%d mask %d actor %d spawned %d fired %d\n",
+			       i, (unsigned long)sw[i].rec, sw[i].x, sw[i].row, sw[i].w, sw[i].h, sw[i].mask,
+			       sw[i].actor, sw[i].spawned, hl2_switchFired(&sw[i]));
+		if (swi < nsw) {
+			ns = hl2_switchFire(&sopt, &sw[swi], sseq, SOLVE_MAX);
+			printf("switch %d: %d frames\n", swi, ns);
+			if (ns > 0)
+				emit(out, sseq, ns);
+		}
+	}
 	if (distance)
 		printf("distance: %d (exit %d)\n", hl2_solveDistance(&sopt),
 		       sopt.exit >= 0 ? sopt.exit : hl2_solveRoute());
