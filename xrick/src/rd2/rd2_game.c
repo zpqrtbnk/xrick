@@ -3,7 +3,8 @@
  *
  * Rick Dangerous 2 -- boot ($10000) and game_main ($10992-$10c22), RAM model.
  * Transcribed from the disassembly (read 2026-09-24) and algo-flow.md §2/§6/§8/§13.
- * ONE function with gotos, like the original's flat labels. MAPDONE is the literal
+ * game_main is ONE function with gotos, like the original's flat labels; one frame
+ * ($10a54-$10bec) is rd2_frame_step, for xrick-core. MAPDONE is the literal
  * original, map 5 included (user decision 2026-09-24, port-rd2.md §7).
  */
 
@@ -24,6 +25,80 @@ rd2_boot(void)
 	rd2_19106();                    /* palette $18ee6 */
 	rd2_ww(RD2_MAP_PLAYING, 1);
 	rd2_123ca();                    /* silent map-1 load */
+}
+
+/* one game_main frame, $10a54 to the `bra` back at $10bec: deaths and submap slides
+   complete inside it. Returns where game_main goes next (RD2_STEP_FRAME: the next
+   frame). Split out of rd2_game_run for xrick-core (PLAN.md T47 phase 2); the code
+   is unchanged. */
+int
+rd2_frame_step(void)
+{
+	rd2_ww(RD2_SHOT_HIT, 0);                    /* $10a54 */
+	rd2_14594();
+	rd2_15bc0();
+	rd2_14d48();
+	rd2_150a2();
+	rd2_15826();
+	rd2_13096();
+	rd2_13e14();
+	rd2_13e98();
+	if (rd2_rw(RD2_SHOT_HIT) != 0)              /* $10a8c */
+		rd2_ww(0x16902, 0);
+	rd2_16658();
+	rd2_18dac();
+	rd2_18782();
+	rd2_170b6();
+	rd2_177a8();
+	rd2_19216();
+	rd2_191e6();
+	rd2_14362();
+
+	if (rd2_rw(RD2_MAPDONE) != 0)               /* $10acc */
+		return RD2_STEP_MAPDONE;
+
+	/* $10b2a: S key */
+	if (rd2_rw(RD2_DEMO) == 0 && rd2_rb(RD2_KEY) == 0x1f) {
+		if (rd2_rw(RD2_SKEY_LATCH) == 0) {
+			rd2_ww(RD2_SKEY_LATCH, 0xffff);
+			rd2_1a5d0();
+			rd2_ww(RD2_ID_REMAP, (U16)(rd2_rw(RD2_ID_REMAP) ^ 0xffff));
+		}
+	} else {
+		rd2_ww(RD2_SKEY_LATCH, 0);              /* $10b5e */
+	}
+
+	if (rd2_rw(RD2_DEMO) != 0) {                /* $10b66 */
+		if (rd2_rw(RD2_DEMO_ENDED) != 0)
+			return RD2_STEP_END_OF_RUN;
+		if (rd2_rb(RD2_JOY) & 0x80) {
+			rd2_ww(RD2_DEMO, 0);
+			return RD2_STEP_PICK;
+		}
+	} else if (rd2_rb(RD2_KEY) == 0x01) {       /* $10b90: ESC */
+		rd2_1a5d0();
+		return RD2_STEP_TITLE;
+	} else if (rd2_rb(RD2_KEY) == 0x19) {       /* $10ba6: P, pause */
+		/* host: rd1's pause (PAUSED box, P again resumes); the ST draws nothing and resumes on
+		   fire: do $191e6 while !(btst #7,[$1a4fb]) */
+		rd2_sys_paused(1);
+		do rd2_191e6(); while (rd2_sys_pausekey());     /* P released */
+		do rd2_191e6(); while (!rd2_sys_pausekey());    /* P pressed again */
+		do rd2_191e6(); while (rd2_sys_pausekey());     /* P released */
+		rd2_sys_paused(0);
+		rd2_191e6();
+	} else if (rd2_sys_endreq()) {              /* host: rd1's E ends the game (not in the original) */
+		rd2_1a5d0();
+		return RD2_STEP_END_OF_RUN;
+	}
+
+	if (rd2_rw(RD2_RICK_DEAD) != 0 && rd2_rws(RD2_RICK_Y) >= 0x100) {   /* $10bc6 */
+		if (rd2_rw(RD2_LIVES) == 0)
+			return RD2_STEP_END_OF_RUN;
+		rd2_149c2();
+		rd2_142fc();
+	}
+	return RD2_STEP_FRAME;
 }
 
 void
@@ -63,71 +138,13 @@ LOAD:
 FRAME:
 	rd2_dbg_frame();                            /* debug only (env RD2_TRACE) */
 	rd2_demo_frame();                           /* host: play or record [$1a4fb] */
-	rd2_ww(RD2_SHOT_HIT, 0);                    /* $10a54 */
-	rd2_14594();
-	rd2_15bc0();
-	rd2_14d48();
-	rd2_150a2();
-	rd2_15826();
-	rd2_13096();
-	rd2_13e14();
-	rd2_13e98();
-	if (rd2_rw(RD2_SHOT_HIT) != 0)              /* $10a8c */
-		rd2_ww(0x16902, 0);
-	rd2_16658();
-	rd2_18dac();
-	rd2_18782();
-	rd2_170b6();
-	rd2_177a8();
-	rd2_19216();
-	rd2_191e6();
-	rd2_14362();
-
-	if (rd2_rw(RD2_MAPDONE) != 0)               /* $10acc */
-		goto MAPDONE;
-
-	/* $10b2a: S key */
-	if (rd2_rw(RD2_DEMO) == 0 && rd2_rb(RD2_KEY) == 0x1f) {
-		if (rd2_rw(RD2_SKEY_LATCH) == 0) {
-			rd2_ww(RD2_SKEY_LATCH, 0xffff);
-			rd2_1a5d0();
-			rd2_ww(RD2_ID_REMAP, (U16)(rd2_rw(RD2_ID_REMAP) ^ 0xffff));
-		}
-	} else {
-		rd2_ww(RD2_SKEY_LATCH, 0);              /* $10b5e */
+	switch (rd2_frame_step()) {
+	case RD2_STEP_MAPDONE:    goto MAPDONE;
+	case RD2_STEP_END_OF_RUN: goto END_OF_RUN;
+	case RD2_STEP_TITLE:      goto TITLE;
+	case RD2_STEP_PICK:       goto PICK;
+	default:                  goto FRAME;
 	}
-
-	if (rd2_rw(RD2_DEMO) != 0) {                /* $10b66 */
-		if (rd2_rw(RD2_DEMO_ENDED) != 0)
-			goto END_OF_RUN;
-		if (rd2_rb(RD2_JOY) & 0x80) {
-			rd2_ww(RD2_DEMO, 0);
-			goto PICK;
-		}
-	} else if (rd2_rb(RD2_KEY) == 0x01) {       /* $10b90: ESC */
-		rd2_1a5d0();
-		goto TITLE;
-	} else if (rd2_rb(RD2_KEY) == 0x19) {       /* $10ba6: P, pause */
-		/* host: rd1's pause (PAUSED box, P again resumes); the ST draws nothing and resumes on
-		   fire: do $191e6 while !(btst #7,[$1a4fb]) */
-		rd2_sys_paused(1);
-		do rd2_191e6(); while (rd2_sys_pausekey());     /* P released */
-		do rd2_191e6(); while (!rd2_sys_pausekey());    /* P pressed again */
-		do rd2_191e6(); while (rd2_sys_pausekey());     /* P released */
-		rd2_sys_paused(0);
-		rd2_191e6();
-	} else if (rd2_sys_endreq()) {              /* host: rd1's E ends the game (not in the original) */
-		rd2_1a5d0();
-		goto END_OF_RUN;
-	}
-
-	if (rd2_rw(RD2_RICK_DEAD) != 0 && rd2_rws(RD2_RICK_Y) >= 0x100) {   /* $10bc6 */
-		if (rd2_rw(RD2_LIVES) == 0)
-			goto END_OF_RUN;
-		rd2_149c2();
-		rd2_142fc();
-	}
-	goto FRAME;                                 /* $10bec */
 
 MAPDONE:                                        /* $10ad4 */
 	if (rd2_rw(RD2_MAP_PLAYING) == 4) {
