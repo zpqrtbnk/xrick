@@ -27,8 +27,16 @@ static inline U32 rd2_rl(U32 a) { return ((U32)rd2_rw(a) << 16) | rd2_rw(a + 2);
 static inline S8  rd2_rbs(U32 a) { return (S8)rd2_rb(a); }
 static inline S16 rd2_rws(U32 a) { return (S16)rd2_rw(a); }
 static inline S32 rd2_rls(U32 a) { return (S32)rd2_rl(a); }
+#ifdef HL2_WATCH
+/* xrick2-audit only (branch `solver`, PLAN.md T47 phase 1): mark every byte written */
+extern U8 hl2_wmap[RD2_RAM_SIZE];
+static inline void rd2_wb(U32 a, U8 v)  { hl2_wmap[a & RD2_RAM_MASK] = 1; rd2_ram[a & RD2_RAM_MASK] = v; }
+static inline void rd2_ww(U32 a, U16 v) { hl2_wmap[a & RD2_RAM_MASK] = 1; hl2_wmap[(a + 1) & RD2_RAM_MASK] = 1;
+                                          rd2_ram[a & RD2_RAM_MASK] = (U8)(v >> 8); rd2_ram[(a + 1) & RD2_RAM_MASK] = (U8)v; }
+#else
 static inline void rd2_wb(U32 a, U8 v)  { rd2_ram[a & RD2_RAM_MASK] = v; }
 static inline void rd2_ww(U32 a, U16 v) { rd2_ram[a & RD2_RAM_MASK] = (U8)(v >> 8); rd2_ram[(a + 1) & RD2_RAM_MASK] = (U8)v; }
+#endif
 static inline void rd2_wl(U32 a, U32 v) { rd2_ww(a, (U16)(v >> 16)); rd2_ww(a + 2, (U16)v); }
 
 /* sign-extension helpers mirroring ext.w / ext.l */

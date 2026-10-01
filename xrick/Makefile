@@ -109,7 +109,35 @@ $(CORE_DIR)/obj/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(INC) $(WARN) -fcommon -O2 -g -DPLATFORM_$(PLATFORM) -DHEADLESS -c -o $@ $<
 
-clean:
-	rm -rf $(OUTDIR) $(CORE_DIR)
+# T47 phase 3: xrick2-core, the RD2 game logic headless -- no SDL, no sound engine.
+# src/rd2 minus its host layer (rd2_sys.c, rd2_snd.c, rd2_demo.c, the sound engine
+# blob), plus src/headless/rd2/. build/core2/xrick2-core; `make audit2` builds
+# build/core2/xrick2-audit with -DHL2_WATCH (every RAM write marked, phase 1).
+CORE2_DIR := ../build/core2
+CORE2_SRC := $(filter-out src/rd2/rd2_sys.c src/rd2/rd2_snd.c src/rd2/rd2_demo.c \
+	src/rd2/dat_rd2_sndh_engine.c, $(wildcard src/rd2/*.c)) $(wildcard src/headless/rd2/*.c)
+CORE2_FLAGS := $(INC) -Isrc/headless/rd2 $(WARN) -fcommon -O2 -g -DPLATFORM_$(PLATFORM) -DHEADLESS
+CORE2_OBJ := $(CORE2_SRC:%.c=$(CORE2_DIR)/obj/%.o)
+AUDIT2_OBJ := $(CORE2_SRC:%.c=$(CORE2_DIR)/audit/%.o)
 
-.PHONY: all core warn clean
+core2: $(CORE2_DIR)/xrick2-core
+audit2: $(CORE2_DIR)/xrick2-audit
+
+$(CORE2_DIR)/xrick2-core: $(CORE2_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $(CORE2_OBJ) -lm
+
+$(CORE2_DIR)/xrick2-audit: $(AUDIT2_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $(AUDIT2_OBJ) -lm
+
+$(CORE2_DIR)/obj/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CORE2_FLAGS) -c -o $@ $<
+
+$(CORE2_DIR)/audit/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CORE2_FLAGS) -DHL2_WATCH -c -o $@ $<
+
+clean:
+	rm -rf $(OUTDIR) $(CORE_DIR) $(CORE2_DIR)
+
+.PHONY: all core core2 audit2 warn clean
