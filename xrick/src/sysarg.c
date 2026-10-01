@@ -48,6 +48,8 @@ static sdlcodes_t sdlcodes[] = {
 int sysarg_args_period = 0;
 int sysarg_args_map = 0;
 int sysarg_args_submap = 0;
+int sysarg_args_mapset = 0;  /* -map was given (RD2 then skips its title and picker) */
+static int submapset = 0;
 int sysarg_args_fullscreen = 0;
 int sysarg_args_zoom = 0;
 int sysarg_args_nosound = 0;
@@ -77,10 +79,12 @@ sysarg_fail(char *msg)
         "                         between 1 (320x200) and x (x times bigger), default is 2\n"
         "  -game <game>         play Rick Dangerous <game>, <game> is 1 or 2, default is 1\n"
         "  -map <map>           start at map number <map>, <map> must be an integer between\n"
-        "                         1 and %d, default is to start at map number 1\n"
+        "                         1 and %d, default is to start at map number 1. With -game 2:\n"
+        "                         a game starts at that level, as if picked on SELECT LEVEL\n"
         "  -submap <submap>     start at submap <submap>, <submap> must be an integer\n"
         "                         between 1 and %d, default is to start at submap number 1 or,\n"
         "                         if a map was specified, at the first submap of that map.\n"
+        "                         Not with -game 2.\n"
         "  -keys <bindings>     override the default key bindings, <bindings> uses format\n"
         "                         <left>-<right>-<up>-<down>-<fire> (cf. KeyCodes)\n",
         // FIXME what's KeyCodes? also nb of maps/submaps depend on game!
@@ -224,6 +228,7 @@ sysarg_init(int argc, char **argv)
       sysarg_args_map = atoi(argv[i]) - 1;
       if (sysarg_args_map < 0 || sysarg_args_map >= MAP_NBR_MAPS-1)
 	sysarg_fail("invalid map number");
+      sysarg_args_mapset = 1;
     }
 
     else if (!strcmp(argv[i], "-submap")) {
@@ -231,6 +236,7 @@ sysarg_init(int argc, char **argv)
       sysarg_args_submap = atoi(argv[i]) - 1;
       if (sysarg_args_submap < 0 || sysarg_args_submap >= MAP_NBR_SUBMAPS)
 	sysarg_fail("invalid submap number");
+      submapset = 1;
     }
 #ifdef ENABLE_SOUND
     else if (!strcmp(argv[i], "-vol")) {
@@ -249,15 +255,6 @@ sysarg_init(int argc, char **argv)
       sysarg_args_game = atoi(argv[i]);
       if (sysarg_args_game != 1 && sysarg_args_game != 2)
 	sysarg_fail("invalid game number");
-#ifdef __EMSCRIPTEN__
-      /*
-       * the RD2 engine waits for the VBL in loops that never return to the
-       * browser (rd2_sys_pump sleeps), so it would freeze the page. web phase W2
-       * (wasm.md §5) has to make it yield first.
-       */
-      if (sysarg_args_game == 2)
-	sysarg_fail("Rick Dangerous 2 is not available in the web build yet");
-#endif
     }
 #ifdef ENABLE_DEMO
     else if (!strcmp(argv[i], "-demo")) {
@@ -280,6 +277,11 @@ sysarg_init(int argc, char **argv)
     }
 
   }
+
+  /* RD2 enters a submap only through an exit trigger or a respawn, so there is no start
+     point to give (wasm.md §10); -map works for both games, which both have 4 maps */
+  if (submapset && sysarg_args_game == 2)
+    sysarg_fail("-submap is not available with -game 2");
 
   /* FIXME this is dirty (sort of) */
   if (sysarg_args_submap > 0 && sysarg_args_submap < 9)

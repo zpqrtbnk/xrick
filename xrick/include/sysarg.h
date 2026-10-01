@@ -19,6 +19,7 @@
 extern int sysarg_args_period;
 extern int sysarg_args_map;
 extern int sysarg_args_submap;
+extern int sysarg_args_mapset;
 extern int sysarg_args_fullscreen;
 extern int sysarg_args_zoom;
 #ifdef ENABLE_SOUND

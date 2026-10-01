@@ -15,7 +15,7 @@
 #define _CONFIG_H
 
 /* version as YYMMDD */
-#define VERSION "260930"
+#define VERSION "261001"
 
 /* graphics (choose one) */
 #define GFXST

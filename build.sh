@@ -3,7 +3,7 @@
 #
 #   desktop  MSBuild xrick/xrick.vcxproj, Release x64 -> build/win/ (xrick.exe, SDL3.dll;
 #            objects in build/win/obj/) (kb/build.md §2; SDL3 from vcpkg, manifest mode)
-#   web      emscripten, RD1 only for now -> build/web/ (index.html, player.js,
+#   web      emscripten, RD1 and RD2 (ASYNCIFY, see the link step) -> build/web/ (index.html, player.js,
 #            xrick.js, xrick.wasm; kb/build.md §4, wasm.md). Mirrors xrick/Makefile:
 #            same sources, include paths and PLATFORM switch, SDL3 from emscripten's
 #            own port (-sUSE_SDL=3).
@@ -165,8 +165,38 @@ for f in $CSRC $CXXSRC; do
 done
 echo "compiled: $n file(s), warnings this run: $(grep -c 'warning:' "$WEB/warn.log")"
 
-echo "linking..."
-em++ $OBJS -o "$WEB/xrick.js" $LDFLAGS
+# ASYNCIFY (wasm.md W2): RD2 never returns to the browser; it yields by emscripten_sleep in
+# rd2_sys_pump (and main waits for the splash the same way). ASYNCIFY makes the functions on
+# the stack at those calls able to unwind and resume. Instrumenting only those keeps the
+# wasm small (plain -sASYNCIFY instruments every function that may reach a sleep through
+# an indirect call: much of SDL, the 68000 emulator). So link twice:
+#   1. ASYNCIFY_ADVISE prints "<f> can change the state due to <g>" for every function;
+#   2. ASYNCIFY_ONLY = the callers, transitively, of xrick's own sleeping functions.
+# Names are those after the optimizer's inlining, which is why they come from pass 1 and
+# are not written by hand. SDL's own sleeps are off (SDL_HINT_EMSCRIPTEN_ASYNCIFY, xrick.c).
+# A new emscripten_sleep call in xrick must be added to SLEEPERS.
+ASYNC="-sASYNCIFY -sASYNCIFY_IGNORE_INDIRECT=1"
+SLEEPERS="rd2_sys_pump main"
+echo "linking (pass 1: asyncify advise)..."
+em++ $OBJS -o "$WEB/obj/advise.js" $LDFLAGS $ASYNC -sASYNCIFY_ADVISE > "$WEB/obj/advise.txt"
+for s in $SLEEPERS; do
+  grep -qx "\[asyncify\] $s can change the state due to emscripten_sleep" "$WEB/obj/advise.txt" || \
+    fail "asyncify: $s does not call emscripten_sleep in the linked wasm (renamed? inlined?) -- update SLEEPERS in build.sh"
+done
+ONLY=$(sed -n 's/^\[asyncify\] \(.*\) can change the state due to \(.*\)$/\1\t\2/p' "$WEB/obj/advise.txt" |
+  awk -F'\t' -v seeds="$SLEEPERS" '
+    { c[NR] = $1; d[NR] = $2 }
+    END {
+      split(seeds, s, " "); for (i in s) need[s[i]] = 1
+      do { added = 0
+           for (i = 1; i <= NR; i++) if ((d[i] in need) && !(c[i] in need)) { need[c[i]] = 1; added = 1 }
+      } while (added)
+      for (f in need) out = out (out ? "," : "") "\x27" f "\x27"
+      print out }')
+echo "asyncify: $(echo "$ONLY" | tr ',' '\n' | wc -l) function(s) instrumented"
+echo "linking (pass 2)..."
+em++ $OBJS -o "$WEB/xrick.js" $LDFLAGS $ASYNC "-sASYNCIFY_ONLY=[$ONLY]"
+rm -f "$WEB/obj/advise.js" "$WEB/obj/advise.wasm"
 
 cp "$PAGE/index.html" "$PAGE/player.js" "$WEB/"
 

@@ -134,14 +134,19 @@ function bindPad(pad) {
 // the game starts, then locked: a new choice means reloading the page. Submap numbers are
 // the game's own (env_submap, 0-based); on the command line -map and -submap are 1-based
 // and a map's first submap is the start of that map (sysarg.c). Every RD1 submap is a
-// valid start point (each has a rightward entry in map_connect). RD2 entries come later,
-// with game 'rd2' (-game 2).
+// valid start point (each has a rightward entry in map_connect). RD2 entries (game '2',
+// -game 2) have no rooms, only "start of map" (-map N, the level as picked on SELECT
+// LEVEL): RD2 enters a submap only through an exit trigger or a respawn, so xrick refuses
+// -submap with -game 2. RD2 names: the picker's strings ($179c0.., kb2/algo-flow.md).
 var MAPS = [
   { game: '1', name: 'RD1 - South America',         map: 1, first: 0x00, last: 0x08 },
   { game: '1', name: 'RD1 - Egypt',                 map: 2, first: 0x09, last: 0x13 },
   { game: '1', name: 'RD1 - Schwarzendumpf Castle', map: 3, first: 0x14, last: 0x25 },
   { game: '1', name: 'RD1 - Missile Base',          map: 4, first: 0x26, last: 0x2E },
-  { game: '2', name: 'RD2 - Nothing',               map: 1, first: 0x00, last: 0x01 }
+  { game: '2', name: 'RD2 - Hyde Park, Earth',           map: 1 },
+  { game: '2', name: 'RD2 - The Ice Caverns of Freezia', map: 2 },
+  { game: '2', name: 'RD2 - The Forests of Vegetablia',  map: 3 },
+  { game: '2', name: 'RD2 - The Atomic Mud Mines',       map: 4 }
 ];
 var mapSelect = null, subSelect = null;
 
@@ -156,6 +161,10 @@ function option(value, text) {
 
 function fillSubmaps(m) {
   subSelect.innerHTML = '';
+  if (m.first === undefined) { // RD2: no rooms (see MAPS)
+    subSelect.appendChild(option('', 'start of map'));
+    return;
+  }
   for (var s = m.first; s <= m.last; s++)
     subSelect.appendChild(option(String(s), 'room ' + (s - m.first + 1) + ' (submap ' + s + ')'));
 }
@@ -170,10 +179,10 @@ function buildSelector(box) {
   // pre-select from the URL: ?submap=N or ?map=N, 1-based as on the command line
   var q = new URLSearchParams(window.location.search);
   var qs = parseInt(q.get('submap'), 10), qm = parseInt(q.get('map'), 10);
- // var game = q.get('game') === '2' ? '2' : '1';
+  var game = q.get('game') === '2' ? '2' : '1'; // RD1 and RD2 maps share the numbers 1-4
   var mi = 0, sub = null;
   MAPS.forEach(function (m, i) {
-    //if (m.game !== game) return;
+    if (m.game !== game) return;
     if (qs >= 1 && qs - 1 >= m.first && qs - 1 <= m.last) { mi = i; sub = qs - 1; }
     else if (!(qs >= 1) && qm === m.map) mi = i;
   });
@@ -189,7 +198,7 @@ function buildSelector(box) {
 // the selection as command-line arguments
 function selectionArgs() {
   var m = MAPS[mapSelect.value], s = subSelect.value;
-  var args = m.game === 'rd2' ? ['-game', '2'] : [];
+  var args = m.game === '2' ? ['-game', '2'] : [];
   if (s === '') args.push('-map', String(m.map)); // FIXME first submap?
   else args.push('-submap', String(parseInt(s, 10) + 1));
   return args;

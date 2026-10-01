@@ -21,6 +21,9 @@
 #include "splash.h"
 
 #include <SDL3/SDL.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #include <signal.h>
 #include <stdlib.h> /* atexit, exit -- SDL2's SDL.h pulled this in transitively, SDL3's doesn't */
 #ifdef __WIN32__
@@ -65,6 +68,13 @@ sys_init(int argc, char** argv)
 	// FIXME not writing to stdxxx.txt files anymore?
 	// SDL3 dropped SDL_INIT_TIMER (timers are always available) and SDL_INIT_EVENTS
 	// (implied by SDL_INIT_VIDEO); SDL_Init now returns bool, true on success.
+#ifdef __EMSCRIPTEN__
+	// the build links with -sASYNCIFY for RD2 (rd2_sys_pump sleeps). With it SDL would also
+	// sleep on its own (SDL_Delay, and every buffer swap), including inside RD1's
+	// emscripten_set_main_loop callback, and build.sh instruments only the functions that
+	// reach xrick's own emscripten_sleep calls. So SDL must never sleep.
+	SDL_SetHint(SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0");
+#endif
 	if (!SDL_Init(SDL_INIT_VIDEO))
 		sys_panic("xrick/video: could not init SDL\n");
 
@@ -130,6 +140,11 @@ main(int argc, char *argv[])
 	   frame waits for splash_done instead (src/rd1/game.c web_frame) */
 #ifdef __EMSCRIPTEN__
 	splash_start();
+	/* RD2 has no per-frame callback: it runs on from here and yields by sleeping
+	   (ASYNCIFY, rd2_sys_pump), so the splash is waited for here the same way */
+	if (sysarg_args_game == 2)
+		while (!splash_done())
+			emscripten_sleep(10);
 #else
 	splash_run();
 #endif

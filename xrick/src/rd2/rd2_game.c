@@ -7,6 +7,7 @@
  * original, map 5 included (user decision 2026-09-24, port-rd2.md §7).
  */
 
+#include "sysarg.h"
 #include "rd2_mem.h"
 #include "rd2_sys.h"
 #include "rd2_game.h"
@@ -37,9 +38,15 @@ rd2_game_run(void)
 TITLE:
 	rd2_demo_stop();                            /* host: demo playback over */
 	rd2_sys_info(0);                            /* host: map/submap numbers off */
+	if (sysarg_args_mapset) {                   /* host: -map N, once: as if N were picked */
+		sysarg_args_mapset = 0;                 /* on SELECT LEVEL. MAPDONE reads the choice */
+		rd2_ww(RD2_PICKER_CHOICE, (U16)(sysarg_args_map + 1));  /* (map 4 ends the run unless 1) */
+		goto PICKED;
+	}
 	rd2_178dc();                                /* $10a18 */
 PICK:
 	rd2_17a46();                                /* $10a1e */
+PICKED:
 	rd2_1771c();                                /* $10a24 */
 	rd2_123a0();                                /* $10a2a */
 LOAD:
