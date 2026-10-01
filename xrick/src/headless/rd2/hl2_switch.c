@@ -131,16 +131,39 @@ press(int m, U8 dir, U8 *p)
 	return n;
 }
 
-/* Rick's x for method <m> facing <dir> to hit box <s> at its middle */
-static int
-aim_x(const hl2_switch_t *s, int m, U8 dir)
+/* the x range [*lo, *hi] of Rick for method <m> facing <dir> to put its point in box <s>
+   (point_in_box is inclusive, algo-collision.md §7) */
+static void
+aim_x(const hl2_switch_t *s, int m, U8 dir, int *lo, int *hi)
 {
-	int mid = s->x + s->w / 2;
-	if (m == 0x08)
-		return dir == 8 ? mid - 0x18 : mid;
-	if (m == 0x04)
-		return mid - 0xc;
-	return dir == 8 ? s->x - 0x30 : s->x + s->w + 0x18;   /* laser: from a little way off */
+	if (m == 0x08) {                                  /* melee point x + $18 / x */
+		*lo = dir == 8 ? s->x - 0x18 : s->x;
+	} else if (m == 0x04) {                           /* blast centre bomb x + $c */
+		*lo = s->x - 0xc;
+	} else {                                          /* laser: from a little way off */
+		*lo = dir == 8 ? s->x - 0x30 : s->x + s->w + 0x18;
+		*hi = *lo;
+		return;
+	}
+	*hi = *lo + s->w;
+}
+
+/* Rick can stand with his anchor at (f, c): body and feet rows free, and the probe's
+   feet row below holds a floor in one of its (up to 3) columns */
+static int
+standable(int f, int c)
+{
+	int r, k;
+	U8 below = 0;
+	if (c < 0 || c + 2 > HL2_COLS)
+		return 0;
+	for (r = f - 2; r <= f; r++)
+		for (k = c; k < c + 2; k++)
+			if (hl2_attr(r, k) & (HL2_T_SOLID | HL2_T_LETHAL))
+				return 0;
+	for (k = c; k < c + 3 && k < HL2_COLS; k++)
+		below |= hl2_attr(f + 1, k);
+	return (below & (HL2_T_FLOOR | HL2_T_SOLID)) != 0;
 }
 
 /*
@@ -167,14 +190,21 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 		if (m == 0x02 && rd2_rw(HL2_LASER) == 0) continue;
 		for (di = 0; di < 2 && res < 0; di++) {
 			U8 dir = di ? 4 : 8;
-			int x = aim_x(s, m, dir);
-			if (x < 0) x = 0;
-			if (x > 0xe8) x = 0xe8;
-			/* feet rows that put the point inside the box, bottom first */
-			for (f = s->row + (s->h + 5) / 8; f >= s->row + 1 && res < 0; f--) {
+			int xlo, xhi, x, c, lastc;
+			aim_x(s, m, dir, &xlo, &xhi);
+			if (xlo < 0) xlo = 0;
+			if (xhi > 0xe8) xhi = 0xe8;
+			/* feet rows that put the point inside the box, bottom first; columns of
+			   the x range where Rick can stand (or the range's start if none) */
+			for (f = s->row + (s->h + 5) / 8; f >= s->row + 1 && res < 0; f--)
+			for (x = xlo, lastc = -1; x <= xhi && res < 0; x += 2) {
+				c = (x + 4) >> 3;
+				if (c == lastc || (!standable(f, c) && !(x == xlo && !standable(f, (xhi + 4) >> 3))))
+					continue;
+				lastc = c;
 				hl2_stateLoad(start);
 				o.wp_row = f;
-				o.wp_col = (x + 4) >> 3;
+				o.wp_col = c;
 				o.exit = -1;
 				o.stuck = NULL;
 				n = hl2_solve(&o, seq, max - PRESS_MAX - 32);
