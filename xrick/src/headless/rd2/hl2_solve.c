@@ -138,6 +138,9 @@ judge(int status)
  * and still prefers what the tiles alone allow; the search finds the platform.
  */
 #define RELAX 8
+/* going down through a floor is rarer (map 1 submap 2: the one-way floor at row 55 is
+   walked around, and at RELAX the field pointed straight through it) */
+#define RELAX_DOWN 40
 
 static int d_rows;
 static U8 *tattr;          /* the submap's attributes, d_rows x 32 */
@@ -212,7 +215,7 @@ edges(int f, int c, int k, int *to, int *cost)
 		if (!support(f, c) || ladder(nf, c)) {
 			to[n] = IDX(nf, c, knorm(nf, c, JUMP_ROWS)); cost[n++] = 1;
 		} else {                                                 /* through a floor: a lift? */
-			to[n] = IDX(nf, c, knorm(nf, c, JUMP_ROWS)); cost[n++] = RELAX;
+			to[n] = IDX(nf, c, knorm(nf, c, JUMP_ROWS)); cost[n++] = RELAX_DOWN;
 		}
 	}
 	nf = f - 1;                                                  /* climb / jump up */
@@ -629,6 +632,13 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 		return -1;
 	}
 	field_goal();
+	if (g_wp_row >= 0 && field_rick() >= 1000) {   /* a waypoint the field cannot reach: no search */
+		hl2_stateRender(1);
+		hl2_stateLoad(full);
+		free(start); free(full);
+		if (o->stage_n) *o->stage_n = -1;
+		return -1;
+	}
 	bk = calloc((size_t)nb, sizeof(bucket_t));
 	order = malloc((size_t)o->beam * BUCKET_CAP * sizeof(int));
 	keep = malloc((size_t)o->beam * BUCKET_CAP * sizeof(int));
