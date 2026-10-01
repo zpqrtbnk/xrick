@@ -14,8 +14,8 @@
 #ifndef _CONFIG_H
 #define _CONFIG_H
 
-/* version */
-#define VERSION "050500"
+/* version as YYMMDD */
+#define VERSION "260930"
 
 /* graphics (choose one) */
 #define GFXST
@@ -79,5 +79,3 @@
 #endif
 
 /* eof */
-
-
