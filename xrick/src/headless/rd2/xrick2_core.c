@@ -14,6 +14,12 @@
  * -trace   as the SDL build's RD2_TRACE: <dir>/f<k>.bin = RAM $12e00-$17800,
  *          $54c00-$56400, $70000-$7ffff at frame head k (k = 1..), before frame k's
  *          input is written. -n: frames to write (default 1000).
+ * -dump    at the end, the state as JSON on stdout (hl2_obs.c) instead of the summary.
+ * -solve / -chain <n>: after -load / -inputs, solve one / <n> exits in a row (hl2_solve.c);
+ *          -exit <i> (index in -dump's exits; default: the route's), -waypoint <row>,<col>,
+ *          -beam, -maxsteps, -minbombs, -minlaser, -v; -out <file> appends the frames.
+ * -load / -save <file>: start from / write a snapshot (same build only).
+ * -distance: Rick's tile distance to the goal. -tiles <s>: submap s's tiles.
  * -steplog one line per frame on stdout: input, map, submap, scroll, rick, counters.
  *
  *   xrick2-core -fuzz <rounds> [-map <n>] [-seed <n>] [-norender]
@@ -35,6 +41,8 @@
 #include "rd2_mem.h"
 #include "hl2.h"
 #include "hl2_state.h"
+#include "hl2_obs.h"
+#include "hl2_solve.h"
 
 static void
 usage(void)
@@ -239,18 +247,102 @@ fuzz(int rounds, int only)
 	return bad ? 1 : 0;
 }
 
+/* read / write a snapshot file, with its drawing buffers (same build only) */
+static int
+snap_file(const char *path, int write)
+{
+	size_t sz = hl2_stateSize();
+	U8 *snap = malloc(sz);
+	FILE *f = fopen(path, write ? "wb" : "rb");
+	int ok;
+
+	if (write) hl2_stateSave(snap);
+	ok = f && (write ? fwrite(snap, 1, sz, f) : fread(snap, 1, sz, f)) == sz;
+	if (f) fclose(f);
+	if (ok && !write) hl2_stateLoad(snap);
+	free(snap);
+	if (!ok)
+		fprintf(stderr, "xrick2-core: cannot %s '%s'\n", write ? "write" : "read", path);
+	return ok;
+}
+
+/*
+ * solve: <chain> legs in a row, each from the state the previous one left. Per leg:
+ * search, polish, replay -- the replay moves the game on to the next submap's (or
+ * map's) first frame. -out appends every frame's joystick byte to <file>, a file
+ * `xrick2-core -inputs` replays after the same prefix.
+ */
+#define SOLVE_MAX 0x8000
+
+static int
+solve(int chain, hl2_solveopt_t *o, const char *out)
+{
+	static U8 seq[SOLVE_MAX];
+	int leg, n, n2, rr, runs, jitter, i, kk, ex;
+	double t0, t1;
+	FILE *f;
+
+	for (leg = 0; leg < chain; leg++) {
+		hl2_exit_t e[HL2_EXITS_MAX];
+		int ne = hl2_exits(e, HL2_EXITS_MAX), sm = rd2_rw(HL2_SUBMAP), mp = rd2_rw(HL2_MAP_PLAYING);
+		ex = o->exit >= 0 ? o->exit : hl2_solveRoute();
+		t0 = now();
+		n = hl2_solve(o, seq, SOLVE_MAX);
+		t1 = now();
+		if (n < 0) {
+			printf("solve: map %d submap %d exit %d (%s row %d -> %d): NOT FOUND (beam %d, %.1f s)\n",
+			       mp, sm, ex, ex >= 0 && ex < ne && e[ex].side == 1 ? "left" : "right",
+			       ex >= 0 && ex < ne ? e[ex].row : -1, ex >= 0 && ex < ne ? e[ex].target : -1,
+			       o->beam, t1 - t0);
+			return 1;
+		}
+		n2 = hl2_solvePolish(o, seq, n);
+		for (runs = 1, jitter = 0, kk = 0, i = 1; i <= n2; i++)
+			if (i == n2 || seq[i] != seq[i - 1]) {
+				if (i - kk < 4) jitter++;
+				if (i < n2) runs++;
+				kk = i;
+			}
+		rr = hl2_solveReplay(o, seq, n2);
+		printf("solve: map %d submap %d exit %d -> %s: %d frames (%d before polish), %d runs "
+		       "(%d under 4 frames), search %.1f s, polish %.1f s%s\n", mp, sm, ex,
+		       ex >= 0 && ex < ne ? (e[ex].done ? "map done" : "") : "?", n2, n, runs, jitter,
+		       t1 - t0, now() - t1, rr == n2 ? "" : " -- REPLAY FAILED");
+		if (ex >= 0 && ex < ne && !e[ex].done)
+			printf("solve:   now submap %u\n", rd2_rw(HL2_SUBMAP));
+		if (rr != n2)
+			return 1;
+		if (out && (f = fopen(out, "ab"))) {
+			fwrite(seq, 1, (size_t)n2, f);
+			fclose(f);
+		}
+		if (o->wp_row >= 0)
+			break;                          /* a waypoint is one leg */
+		if (hl2_status() == HL2_HANG || hl2_status() == HL2_END)
+			break;
+	}
+	printf("solve: now map %u submap %u tick %lu, lives %u, laser %u, bombs %u, score %02x%02x%02x\n",
+	       rd2_rw(HL2_MAP_PLAYING), rd2_rw(HL2_SUBMAP), (unsigned long)hl2_tick(),
+	       rd2_rw(HL2_LIVES), rd2_rw(HL2_LASER), rd2_rw(HL2_BOMBS),
+	       rd2_rb(HL2_SCORE), rd2_rb(HL2_SCORE + 1), rd2_rb(HL2_SCORE + 2));
+	return 0;
+}
+
 static const char *why[] = { "step limit", "map done", "game over", "map 5 hang", "run ended" };
 
 int
 main(int argc, char *argv[])
 {
 	unsigned long steps = 100000, ntrace = 1000, k = 0;
-	int a, map = 1, c, r = HL2_STEP, rounds = 0, mapset = 0, steplog = 0;
+	int a, map = 1, c, r = HL2_STEP, rounds = 0, mapset = 0, steplog = 0, dump = 0;
 	unsigned long auditf = 0;
-	const char *inputs = NULL, *tdir = NULL, *stop = NULL;
+	const char *inputs = NULL, *tdir = NULL, *stop = NULL, *out = NULL, *load = NULL, *save = NULL;
+	int chain = 0, distance = 0, tiles = -1;
+	hl2_solveopt_t sopt;
 	FILE *f = NULL;
 	double t0;
 
+	hl2_solveDefaults(&sopt);
 	for (a = 1; a < argc; a++) {
 		if (!strcmp(argv[a], "-map") && a + 1 < argc)
 			map = atoi(argv[++a]), mapset = 1;
@@ -260,6 +352,8 @@ main(int argc, char *argv[])
 			steps = strtoul(argv[++a], NULL, 0);
 		else if (!strcmp(argv[a], "-trace") && a + 1 < argc)
 			tdir = argv[++a];
+		else if (!strcmp(argv[a], "-dump"))
+			dump = 1;
 		else if (!strcmp(argv[a], "-norender"))
 			hl2_stateRender(0);
 		else if (!strcmp(argv[a], "-steplog"))
@@ -272,6 +366,37 @@ main(int argc, char *argv[])
 			rnd_s = (U32)strtoul(argv[++a], NULL, 0) | 1u;
 		else if (!strcmp(argv[a], "-audit") && a + 1 < argc)
 			auditf = strtoul(argv[++a], NULL, 0);
+		else if (!strcmp(argv[a], "-solve"))
+			chain = 1;
+		else if (!strcmp(argv[a], "-chain") && a + 1 < argc)
+			chain = atoi(argv[++a]);
+		else if (!strcmp(argv[a], "-beam") && a + 1 < argc)
+			sopt.beam = atoi(argv[++a]);
+		else if (!strcmp(argv[a], "-maxsteps") && a + 1 < argc)
+			sopt.maxsteps = atoi(argv[++a]);
+		else if (!strcmp(argv[a], "-exit") && a + 1 < argc)
+			sopt.exit = atoi(argv[++a]);
+		else if (!strcmp(argv[a], "-waypoint") && a + 1 < argc) {
+			if (sscanf(argv[++a], "%d,%d", &sopt.wp_row, &sopt.wp_col) != 2)
+				usage();
+		} else if (!strcmp(argv[a], "-minbombs") && a + 1 < argc)
+			sopt.minbombs = atoi(argv[++a]);
+		else if (!strcmp(argv[a], "-minlaser") && a + 1 < argc)
+			sopt.minlaser = atoi(argv[++a]);
+		else if (!strcmp(argv[a], "-out") && a + 1 < argc)
+			out = argv[++a];
+		else if (!strcmp(argv[a], "-load") && a + 1 < argc)
+			load = argv[++a];
+		else if (!strcmp(argv[a], "-save") && a + 1 < argc)
+			save = argv[++a];
+		else if (!strcmp(argv[a], "-tiles") && a + 1 < argc)
+			tiles = atoi(argv[++a]);
+		else if (!strcmp(argv[a], "-stuck") && a + 1 < argc)
+			sopt.stuck = argv[++a];
+		else if (!strcmp(argv[a], "-distance"))
+			distance = 1;
+		else if (!strcmp(argv[a], "-v"))
+			sopt.verbose = 1;
 		else
 			usage();
 	}
@@ -293,6 +418,8 @@ main(int argc, char *argv[])
 	}
 
 	hl2_start(map);
+	if (load && !snap_file(load, 0))
+		return 2;
 	t0 = now();
 	while (k < steps) {
 		if (tdir && k < ntrace)
@@ -302,6 +429,8 @@ main(int argc, char *argv[])
 			stop = "end of inputs";
 			break;
 		}
+		if (!f && chain > 0)
+			break;                              /* nothing to play before the search */
 		k++;
 		r = hl2_step((U8)c);
 		if (steplog)
@@ -312,6 +441,25 @@ main(int argc, char *argv[])
 			       rd2_rw(HL2_LASER), rd2_rw(HL2_BOMBS), rd2_rws(0x16b12), rd2_rws(0x16902));
 		if (r != HL2_STEP && r != HL2_MAP)
 			break;
+	}
+	if (chain > 0) {
+		int res = solve(chain, &sopt, out);
+		if (save && !snap_file(save, 1))
+			return 2;
+		if (dump)
+			hl2_dump(stdout);
+		return res;
+	}
+	if (tiles >= 0)
+		hl2_tiles(stdout, tiles);
+	if (distance)
+		printf("distance: %d (exit %d)\n", hl2_solveDistance(&sopt),
+		       sopt.exit >= 0 ? sopt.exit : hl2_solveRoute());
+	if (save && !snap_file(save, 1))
+		return 2;
+	if (dump) {
+		hl2_dump(stdout);
+		return 0;
 	}
 	printf("xrick2-core: %s after %lu frames (%.0f frames/s), map %u, submap %u, tick %lu, "
 	       "lives %u, laser %u, bombs %u, score %02x%02x%02x\n",
