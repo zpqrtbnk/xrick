@@ -14,8 +14,8 @@
 #ifndef _CONFIG_H
 #define _CONFIG_H
 
-/* version */
-#define VERSION "050500"
+/* version as YYMMDD */
+#define VERSION "261001"
 
 /* graphics (choose one) */
 #define GFXST
@@ -66,6 +66,11 @@
 /* demo (attract) mode: -demo plays a script, -record writes one. see ../../demo.md */
 #define ENABLE_DEMO
 
+/* GL shader chain between the game frame and the screen (src/sysvid_gl.c, the passes
+   are listed there). #undef it for the plain SDL_Renderer path; that path is also taken
+   at run time when the GL context or a shader cannot be set up */
+#define ENABLE_SHADERS
+
 /* development tools */
 #undef ENABLE_DEVTOOLS
 #undef DEBUG /* see include/debug.h -- was unconditionally on, spamming the console
@@ -74,5 +79,3 @@
 #endif
 
 /* eof */
-
-

@@ -9,6 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <SDL3/SDL.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include "system.h"
 #include "sysevt.h"
@@ -291,7 +294,14 @@ rd2_sys_pump(void)
 
 	now = sys_gettime();
 	if ((S32)(vbl_next - now) > 0) {
+#ifdef __EMSCRIPTEN__
+		/* web (wasm.md W2): every RD2 wait spins on this pump, so sleeping here is where
+		   the browser gets control back (drawing, input, audio callback). emscripten_sleep
+		   unwinds the wasm stack and resumes it later (link flag -sASYNCIFY, build.sh) */
+		emscripten_sleep((unsigned int)(vbl_next - now));
+#else
 		sys_sleep((int)(vbl_next - now));
+#endif
 		now = sys_gettime();
 	}
 	while ((S32)(now - vbl_next) >= 0) {

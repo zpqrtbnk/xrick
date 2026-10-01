@@ -18,6 +18,7 @@
 #include "img.h"
 
 #define SYSVID_ZOOM 2
+#define SYSVID_MAXZOOM 8 /* -zoom and the zoom keys stop here */
 #define SYSVID_WIDTH 320
 #define SYSVID_HEIGHT 200
 
@@ -28,8 +29,12 @@ extern void sysvid_zoom(S8);
 extern void sysvid_toggleFullscreen(void);
 extern void sysvid_setDisplayPalette(void);
 //extern void sysvid_setPalette(img_color_t*, U16);
-extern void sysvid_setPaletteFromImg(img_t* img);
 extern void sysvid_setPaletteFromRGB(U8* r, U8* g, U8* b, U16 n);
+
+/* shows an RGBA32 picture scaled to the game's letterboxed window area, bypassing
+   the frame buffer (and the shader chain): the splash */
+struct SDL_Surface;
+extern void sysvid_showImage(struct SDL_Surface *img);
 
 extern U8 *sysvid_fb;  /* frame buffer */
 extern void sysvid_setGamma(U8 g);

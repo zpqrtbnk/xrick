@@ -29,16 +29,6 @@ typedef struct {
   U8 *pixels;
 } img_t;
 
-/* the splash image */
-extern img_t *IMG_SPLASH;
-
-/*
- * paints image <img> onto the frame buffer.
- * the image must have the appropriate size.
- * also manages palettes.
- */
-extern void img_paintImg(img_t *);
-
 #ifdef GFXST
 /*
  * paints an image of size <width>,<height> with data in <pic> at

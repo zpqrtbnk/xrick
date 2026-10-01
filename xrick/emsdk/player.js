@@ -1,37 +1,82 @@
 // xrick web player -- wasm.md phase W1 (RD1).
-// Loaded by index.html before xrick.js (built by build.sh with -sINVOKE_RUN=0 and
-// -sEXPORTED_RUNTIME_METHODS=callMain,FS): the game starts on a click, which also
-// lets the browser play sound.
+// Loaded by the page before xrick.js (built by build.sh with -sINVOKE_RUN=0 and
+// -sEXPORTED_RUNTIME_METHODS=callMain,FS): the game starts on a click or tap, which
+// also lets the browser play sound.
+//
+// Works with index.html as built, and with any other page (e.g. a CMS template):
+// such a page sets window.xrickPlayer BEFORE loading this file to say where its
+// elements are and where xrick.wasm is served from -- see `defaults` below. The
+// generated xrick.js is never edited.
+//
+//   <script>window.xrickPlayer = { start: '#xrick', label: '#xrick span',
+//     status: '#player_console', buttons: '#controls1 div[data-code]',
+//     selector: '#xrick-select', wasmUrl: '/media/1vqhdi1t/xrick.wasm' };</script>
+//   <script src="player.js"></script>
+//   <script src="xrick.js" async></script>
 
 'use strict';
 
-// ---- player settings --------------------------------------------------------------------
-// startInDemo: start the attract demo instead of a playable game. Off by default
-// (user decision, 2026-09-28); `?demo` in the URL turns it on for one visit.
-var startInDemo = false;
+// ---- settings ---------------------------------------------------------------------------
+var defaults = {
+  // start the attract demo instead of a playable game. Off (user decision,
+  // 2026-09-28); `?demo` in the URL turns it on for one visit
+  startInDemo: false,
+  // element clicked/tapped to start; hidden (display:none) once the game runs
+  start: '#start',
+  // element(s) that show the "click or touch to play" prompt; null = the start element
+  label: null,
+  // element for status messages (loading, why the game stopped); optional
+  status: '#status',
+  // on-page buttons: elements with data-code (KeyboardEvent.code) and data-key
+  buttons: 'button[data-code]',
+  // touch pad (holds the arrow keys); optional
+  pad: '#pad',
+  // "download trace" button shown with ?trace; optional
+  saveTrace: '#savetrace',
+  // container for the map and starting-room drop-downs; optional (without it, ?map=N
+  // and ?submap=N in the URL still choose the start)
+  selector: '#select',
+  // where xrick.wasm is served from; null = next to xrick.js (emscripten's default)
+  wasmUrl: null
+};
+// The canvas must be <canvas id="canvas">: SDL3 looks it up as "#canvas" by default.
+var cfg = Object.assign({}, defaults, window.xrickPlayer || {});
 
 // ---- arguments ----------------------------------------------------------------------------
 // query string -> xrick command line: ?demo -> -demo, ?speed=3 -> -speed 3, ...
 // (only options the game knows; -data is gone since assets are compiled in)
+// With the map selector on the page, the start point (-map / -submap / -game) comes from
+// it instead (selectionArgs); the URL's values only pre-select it.
 function buildArgs() {
   var q = new URLSearchParams(window.location.search);
   var args = [];
-  var flags = ['demo', 'nosound', 'fullscreen'];
-  var values = ['speed', 'zoom', 'keys', 'vol', 'map', 'submap', 'rd'];
+  var flags = ['demo', 'nosound' /*, 'fullscreen'*/];
+  var values = ['speed', /*'zoom',*/ 'keys', 'vol', 'map', 'submap', 'game'];
   flags.forEach(function (k) { if (q.has(k)) args.push('-' + k); });
   values.forEach(function (k) { if (q.get(k)) args.push('-' + k, q.get(k)); });
-  if (startInDemo && args.indexOf('-demo') < 0) args.push('-demo');
+  if (cfg.startInDemo && args.indexOf('-demo') < 0) args.push('-demo');
   if (q.has('trace')) args.push('-trace', '/trace.txt');   // wasm.md W1.7
   return args;
 }
 
 // ---- page helpers -------------------------------------------------------------------------
+
+function find(selector) { return selector ? document.querySelector(selector) : null; }
+function findAll(selector) { return selector ? Array.prototype.slice.call(document.querySelectorAll(selector)) : []; }
+
 var canvas = document.getElementById('canvas');
-var startBox = document.getElementById('start');
-var statusBox = document.getElementById('status');
+var startBox = find(cfg.start);
+var statusBox = find(cfg.status);
 var lastLines = [];
 
-function setStatus(text) { statusBox.textContent = text || ''; }
+function setStatus(text) {
+  if (statusBox) statusBox.textContent = text || '';
+}
+
+function setLabel(text) {
+  var els = cfg.label ? findAll(cfg.label) : (startBox ? [startBox] : []);
+  els.forEach(function (el) { el.textContent = text; });
+}
 
 function keepLine(text) {
   lastLines.push(text);
@@ -48,6 +93,7 @@ function sendKey(down, code, key) {
 
 function bindButton(el) {
   var code = el.dataset.code, key = el.dataset.key;
+  if (!code) return;
   var press = function (e) { e.preventDefault(); sendKey(true, code, key); };
   var release = function (e) { e.preventDefault(); sendKey(false, code, key); };
   el.addEventListener('mousedown', press);
@@ -61,7 +107,7 @@ function bindButton(el) {
 // touch pad: the offset from the pad's centre holds the arrow keys
 function bindPad(pad) {
   var held = {};
-  var dirs = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false };
+  var dirs = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
   function set(code, on) {
     if (!!held[code] === on) return;
     held[code] = on;
@@ -75,21 +121,152 @@ function bindPad(pad) {
     set('ArrowDown', dy > r.height / 4);
     set('ArrowUp', dy < -r.height / 4);
   }
-  function stop(e) { e.preventDefault(); Object.keys(dirs).forEach(function (c) { set(c, false); }); }
+  function stop(e) { e.preventDefault(); dirs.forEach(function (c) { set(c, false); }); }
   pad.addEventListener('touchstart', function (e) { e.preventDefault(); move(e.targetTouches[0]); }, { passive: false });
   pad.addEventListener('touchmove', function (e) { e.preventDefault(); move(e.targetTouches[0]); }, { passive: false });
   pad.addEventListener('touchend', stop, { passive: false });
   pad.addEventListener('touchcancel', stop, { passive: false });
 }
 
-document.querySelectorAll('button[data-code]').forEach(bindButton);
-bindPad(document.getElementById('pad'));
+// ---- map selector ---------------------------------------------------------------------------
+// One list of "<game> - <map>" entries, then the starting room within that map: "start of
+// map" (the map's own start, with its intro) or one of its other submaps. Chosen before
+// the game starts, then locked: a new choice means reloading the page. Submap numbers are
+// the game's own (env_submap, 0-based); on the command line -map and -submap are 1-based
+// and a map's first submap is the start of that map (sysarg.c). Every RD1 submap is a
+// valid start point (each has a rightward entry in map_connect). RD2 entries (game '2',
+// -game 2) have no rooms, only "start of map" (-map N, the level as picked on SELECT
+// LEVEL): RD2 enters a submap only through an exit trigger or a respawn, so xrick refuses
+// -submap with -game 2. RD2 names: the picker's strings ($179c0.., kb2/algo-flow.md).
+var MAPS = [
+  { game: '1', name: 'RD1 - South America',         map: 1, first: 0x00, last: 0x08 },
+  { game: '1', name: 'RD1 - Egypt',                 map: 2, first: 0x09, last: 0x13 },
+  { game: '1', name: 'RD1 - Schwarzendumpf Castle', map: 3, first: 0x14, last: 0x25 },
+  { game: '1', name: 'RD1 - Missile Base',          map: 4, first: 0x26, last: 0x2E },
+  { game: '2', name: 'RD2 - Hyde Park, Earth',           map: 1 },
+  { game: '2', name: 'RD2 - The Ice Caverns of Freezia', map: 2 },
+  { game: '2', name: 'RD2 - The Forests of Vegetablia',  map: 3 },
+  { game: '2', name: 'RD2 - The Atomic Mud Mines',       map: 4 }
+];
+var mapSelect = null, subSelect = null;
+
+//function hex2(n) { return '0x' + (n < 16 ? '0' : '') + n.toString(16).toUpperCase(); }
+
+function option(value, text) {
+  var o = document.createElement('option');
+  o.value = value;
+  o.textContent = text;
+  return o;
+}
+
+function fillSubmaps(m) {
+  subSelect.innerHTML = '';
+  if (m.first === undefined) { // RD2: no rooms (see MAPS)
+    subSelect.appendChild(option('', 'start of map'));
+    return;
+  }
+  for (var s = m.first; s <= m.last; s++)
+    subSelect.appendChild(option(String(s), 'room ' + (s - m.first + 1) + ' (submap ' + s + ')'));
+}
+
+function buildSelector(box) {
+  mapSelect = document.createElement('select');
+  mapSelect.setAttribute('aria-label', 'map');
+  subSelect = document.createElement('select');
+  subSelect.setAttribute('aria-label', 'starting room');
+  MAPS.forEach(function (m, i) { mapSelect.appendChild(option(String(i), m.name)); });
+
+  // pre-select from the URL: ?submap=N or ?map=N, 1-based as on the command line
+  var q = new URLSearchParams(window.location.search);
+  var qs = parseInt(q.get('submap'), 10), qm = parseInt(q.get('map'), 10);
+  var game = q.get('game') === '2' ? '2' : '1'; // RD1 and RD2 maps share the numbers 1-4
+  var mi = 0, sub = null;
+  MAPS.forEach(function (m, i) {
+    if (m.game !== game) return;
+    if (qs >= 1 && qs - 1 >= m.first && qs - 1 <= m.last) { mi = i; sub = qs - 1; }
+    else if (!(qs >= 1) && qm === m.map) mi = i;
+  });
+  mapSelect.value = String(mi);
+  fillSubmaps(MAPS[mi]);
+  if (sub !== null && sub !== MAPS[mi].first) subSelect.value = String(sub);
+
+  mapSelect.addEventListener('change', function () { fillSubmaps(MAPS[mapSelect.value]); });
+  box.appendChild(mapSelect);
+  box.appendChild(subSelect);
+}
+
+// the selection as command-line arguments
+function selectionArgs() {
+  var m = MAPS[mapSelect.value], s = subSelect.value;
+  var args = m.game === '2' ? ['-game', '2'] : [];
+  if (s === '') args.push('-map', String(m.map)); // FIXME first submap?
+  else args.push('-submap', String(parseInt(s, 10) + 1));
+  return args;
+}
+
+function lockSelector() {
+  if (!mapSelect) return;
+  mapSelect.remove();
+  subSelect.remove();
+}
+
+findAll(cfg.buttons).forEach(bindButton);
+
+var padEl = find(cfg.pad);
+if (padEl) bindPad(padEl);
 window.addEventListener('touchstart', function once() {
   document.body.classList.add('touch');
   window.removeEventListener('touchstart', once);
 });
 
-// trace download (wasm.md W1.7): /trace.txt lives in MEMFS
+// ---- sound on iPhone / iPad ----------------------------------------------------------------
+// iOS plays Web Audio as "ambient" sound, which the Ring/Silent switch mutes (the page
+// shows the speaker icon, yet nothing is heard). Two ways to make it "playback" sound,
+// both inside the start tap:
+// - the Audio Session API, where the browser has it (recent Safari/WebKit);
+// - where it does not, a silent looping <audio> element: playing a media element
+//   switches the page to playback audio, which un-mutes Web Audio too -- what the 2019
+//   player's startAudio() did, lost in the W1.5 rewrite.
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);  // iPadOS
+}
+
+function silentWavUrl() {
+  // 0.25 s of 8-bit mono silence at 8000 Hz (0x80 = the zero level of 8-bit PCM)
+  var n = 2000, buf = new ArrayBuffer(44 + n), v = new DataView(buf), i;
+  function str(o, s) { for (var k = 0; k < s.length; k++) v.setUint8(o + k, s.charCodeAt(k)); }
+  str(0, 'RIFF'); v.setUint32(4, 36 + n, true); str(8, 'WAVE');
+  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  str(36, 'data'); v.setUint32(40, n, true);
+  for (i = 0; i < n; i++) v.setUint8(44 + i, 0x80);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+
+function unlockAudio() {
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = 'playback';
+  } catch (e) { /* not supported: the <audio> element below does it */ }
+  if (isIOS() && !unlockAudio.el) {
+    var a = document.createElement('audio');
+    a.setAttribute('playsinline', '');
+    a.loop = true;
+    a.src = silentWavUrl();
+    var p = a.play();
+    if (p && p.catch) p.catch(function () { /* no media playback allowed: nothing more to do */ });
+    unlockAudio.el = a;   // keep it playing (and referenced) for the whole session
+  }
+}
+
+// SDL creates its AudioContext during callMain; resume it while still in the tap
+function resumeSdlAudio() {
+  var ctx = Module.SDL3 && Module.SDL3.audioContext;
+  if (ctx && ctx.state !== 'running' && ctx.resume) ctx.resume();
+}
+
+// ---- trace (wasm.md W1.7) ------------------------------------------------------------------
+// /trace.txt lives in MEMFS
 function traceText() {
   try { Module._fflush(0); } catch (e) { /* runtime already exited: stdio was flushed */ }
   try { return Module.FS.readFile('/trace.txt', { encoding: 'utf8' }); } catch (e) { return null; }
@@ -97,9 +274,10 @@ function traceText() {
 window.xrickTrace = traceText;
 
 // ?trace: a button saves the trace so far, to diff with a native `xrick -demo -trace`
-if (new URLSearchParams(window.location.search).has('trace')) {
-  var saveBtn = document.getElementById('savetrace');
+var saveBtn = find(cfg.saveTrace);
+if (saveBtn && new URLSearchParams(window.location.search).has('trace')) {
   saveBtn.hidden = false;
+  saveBtn.style.display = '';
   saveBtn.addEventListener('click', function () {
     var t = traceText();
     if (!t) { setStatus('no trace yet'); return; }
@@ -112,20 +290,27 @@ if (new URLSearchParams(window.location.search).has('trace')) {
 }
 
 // ---- emscripten Module ---------------------------------------------------------------------
-var xrickArgs = buildArgs();   // given to callMain only (not Module.arguments)
-
+// the command line is built when the game starts (the map selector is read then) and
+// given to callMain only (not Module.arguments)
 var Module = {
   canvas: canvas,
+  // xrick.js asks this first for every file it loads: serve xrick.wasm from cfg.wasmUrl
+  // when the page sets one (e.g. a CMS media URL), else from next to xrick.js
+  locateFile: function (path, scriptDirectory) {
+    if (path === 'xrick.wasm' && cfg.wasmUrl) return cfg.wasmUrl;
+    return scriptDirectory + path;
+  },
   print: function (text) { console.log(text); keepLine(text); },
   printErr: function (text) { console.error(text); keepLine(text); },
   setStatus: function (text) { if (text) setStatus(text); },
   onRuntimeInitialized: function () {
-    startBox.textContent = 'click or touch to play';
+    setLabel('click or touch to play');
     setStatus('');
-    startBox.addEventListener('click', start, { once: true });
+    if (startBox) startBox.addEventListener('click', start, { once: true });
+    else start();   // no start element: nothing to click, but then no sound on most browsers
   },
   onExit: function (status) {
-    // an argument the game refuses (e.g. -rd 2 on the web, W1.4) ends in sysarg_fail,
+    // an argument the game refuses (e.g. -game 2 on the web, W1.4) ends in sysarg_fail,
     // whose first line is "xrick [version #...]: <reason>"; Esc (quit) exits with 0
     var fail = lastLines.filter(function (l) { return /^xrick \[version #[^\]]*\]: /.test(l); }).pop();
     var why = fail ? fail.replace(/^xrick \[version #[^\]]*\]: /, '') : '';
@@ -134,10 +319,24 @@ var Module = {
   }
 };
 
+var args = buildArgs();
+if (args.indexOf('-game') < 0 && args.indexOf('-map') < 0 && args.indexOf('-submap') < 0 && args.indexOf('-demo') < 0) {
+  var selectBox = find(cfg.selector);
+  if (selectBox) buildSelector(selectBox);
+}
+
 function start() {
-  startBox.hidden = true;
+  unlockAudio(); // inside the tap: iOS playback audio
+  lockSelector(); // a new choice needs a page reload
+
+  if (mapSelect) args = args.concat(selectionArgs());
+
+  if (startBox) startBox.style.display = 'none';
+  canvas.style.display = 'block'; // pages may keep the canvas hidden until now
   canvas.focus();
-  Module.callMain(xrickArgs);
+  window.xrickStartArgs = args; // for checking what the game was started with
+  Module.callMain(args);
+  resumeSdlAudio();
 }
 
 canvas.addEventListener('webglcontextlost', function (e) {

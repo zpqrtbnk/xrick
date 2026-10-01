@@ -32,6 +32,7 @@
 #include "debug.h"
 #include "fb.h"
 #include "img.h"
+#include "sysvid_gl.h"
 
 
 #ifdef __MSVC__
@@ -66,38 +67,17 @@ static U16 fb_width, fb_height;
 
 static U8 zoom = 0; /* actual zoom level */
 static U8 wmzoom = SYSVID_ZOOM; /* window mode zoom level */
-static U8 mxzoom = SYSVID_ZOOM * 2; /* max zoom level */
+static U8 mxzoom = SYSVID_MAXZOOM; /* max zoom level */
+
+#ifdef ENABLE_SHADERS
+/* the frame goes through the GL shader chain (sysvid_gl.c) instead of the renderer.
+   pixels then holds the whole frame as RGBA bytes, which is what GL uploads */
+static U8 use_gl = 0;
+#endif
 
 
 
 #include "img_icon.e"
-
-
-
-/*
- * sysvid_setPaletteFromImg
- *
- * sets the palette according to an image palette.
- */
-void sysvid_setPaletteFromImg(img_t *img)
-{
-	U16 i; // FIXME is it ok to have 256 (not 255) colors?
-
-	if ((paln = img->ncolors) == 0) return;
-
-	for (i = 0; i < paln; ++i)
-	{
-		pals[i].r = img->colors[i].r;
-		pals[i].g = img->colors[i].g;
-		pals[i].b = img->colors[i].b;
-	}
-
-	sysvid_setDisplayPalette();
-
-#ifdef BPP8
-	//SDL_SetColors(screen, (SDL_Color *)&pald, 0, paln);
-#endif
-}
 
 
 
@@ -145,6 +125,18 @@ void sysvid_setDisplayPalette(void)
 		pald[i].g = pals[i].g * vid_gamma / 255;
 		pald[i].b = pals[i].b * vid_gamma / 255;
 	}
+
+	/*
+	 * opaque pixels, all 256 entries: sysvid_update copies .a into the ARGB
+	 * texture. it used to stay 0, which the texture's SDL_BLENDMODE_NONE hid on
+	 * the desktop, but on the web SDL3 creates the WebGL canvas with an alpha
+	 * channel (gl_config.alpha_size 8) and premultiplied alpha, so every frame
+	 * was colour with alpha 0 -- shown as fully transparent by Chrome on Apple
+	 * silicon (a black page background behind an invisible canvas), while
+	 * Chrome/Windows and iOS Safari happened to display the colours.
+	 */
+	for (i = 0; i < 256; i++)
+		pald[i].a = 255;
 }
 
 
@@ -225,10 +217,11 @@ IFDEBUG_VIDEO(
 #endif
 	//chkVideo();  /* check video modes */
 
-	/* if a zoom was specified, use it -- but check it is ok */
+	/* if a zoom was specified, use it -- but check it is ok. it is the window mode
+	   zoom: setting <zoom> here was overwritten just below, so -zoom had no effect */
 	if (sysarg_args_zoom)
 	{
-		zoom = sysarg_args_zoom > 0 && sysarg_args_zoom <= mxzoom ? sysarg_args_zoom : mxzoom;
+		wmzoom = sysarg_args_zoom > 0 && sysarg_args_zoom <= mxzoom ? (U8)sysarg_args_zoom : mxzoom;
 	}
 
 	/* prepare for fullscreen, initialize zoom w/default values */
@@ -255,6 +248,23 @@ IFDEBUG_VIDEO(
 	// create pixels
 	// FIXME free pixels!
 	pixels = (U32*)malloc(fb_width * fb_height * sizeof(U32));
+
+#ifdef ENABLE_SHADERS
+	/* the GL shader chain creates its own (GL) window; on failure it has released
+	   everything and the renderer path below runs as without shaders */
+	screen = sysvid_gl_init("xrick", fb_width * zoom, fb_height * zoom, videoFlags,
+		fb_width, fb_height);
+	if (screen)
+	{
+		use_gl = 1;
+		memset(pixels, 0, fb_width * fb_height * sizeof(U32));
+		SDL_SetWindowIcon(screen, s);
+		SDL_DestroySurface(s);
+		sysvid_gl_present((U8 *)pixels);
+		IFDEBUG_VIDEO(sys_printf("xrick/video: ready\n"););
+		return;
+	}
+#endif
 
 	// create window/screen
 	// SDL3 SDL_CreateWindow drops the x/y position args (always undefined-position
@@ -285,11 +295,13 @@ IFDEBUG_VIDEO(
 	// per-texture scale mode (SDL_SCALEMODE_LINEAR is also the SDL3 default).
 	SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
 
-	// This is an opaque raster framebuffer -- pald[].a is never populated (always
-	// 0) since alpha was never meant to carry anything here. SDL2 apparently
-	// defaulted new textures to a blend mode that ignores it; SDL3 renders an
-	// all-zero alpha channel as fully transparent by default, which blended the
-	// whole frame down to the black SDL_RenderClear() color underneath it.
+	// This is an opaque raster framebuffer. pald[].a used to be left at 0; SDL2
+	// apparently defaulted new textures to a blend mode that ignores it; SDL3
+	// renders an all-zero alpha channel as fully transparent by default, which
+	// blended the whole frame down to the black SDL_RenderClear() color
+	// underneath it. Blending stays off, and since 2026-09-29 the palette's alpha
+	// is 255 as well (sysvid_setDisplayPalette): with alpha 0 the web canvas
+	// itself came out transparent on Chrome/macOS.
 	SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
 
 	SDL_UpdateTexture(texture, NULL, pixels, fb_width * sizeof(U32));
@@ -327,6 +339,15 @@ sysvid_shutdown(void)
 	free(pixels);
 	pixels = NULL;
 
+#ifdef ENABLE_SHADERS
+	if (use_gl)
+	{
+		sysvid_gl_shutdown(); /* also destroys the window */
+		use_gl = 0;
+		screen = NULL;
+		return;
+	}
+#endif
 	SDL_DestroyWindow(screen);
 }
 
@@ -346,6 +367,34 @@ sysvid_update(rect_t *rects)
 
 	if (rects == NULL) /* nothing to do? */
 		return;
+
+#ifdef ENABLE_SHADERS
+	if (use_gl)
+	{
+		/* dirty rects into the RGBA copy of the frame, then the whole frame
+		   through the shader chain (shaders look at neighbouring pixels, and
+		   the window is redrawn in full anyway) */
+		for (rect = rects; rect; rect = rect->next)
+		{
+			for (int y = rect->y; y < rect->y + rect->height; y++)
+			{
+				U8 *srcx = ((U8 *)&fb) + rect->x + y * fb_width;
+				U8 *dstx = (U8 *)(pixels + rect->x + y * fb_width);
+
+				for (int x = 0; x < rect->width; x++)
+				{
+					*dstx++ = pald[*srcx].r;
+					*dstx++ = pald[*srcx].g;
+					*dstx++ = pald[*srcx].b;
+					*dstx++ = pald[*srcx].a;
+					srcx++;
+				}
+			}
+		}
+		sysvid_gl_present((U8 *)pixels);
+		return;
+	}
+#endif
 
 	n = 0;
 	rect = rects;
@@ -408,6 +457,61 @@ sysvid_update(rect_t *rects)
 
 	SDL_RenderTexture(renderer, texture, NULL, NULL);
 	SDL_RenderPresent(renderer);
+}
+
+
+
+/*
+ * sysvid_showImage
+ *
+ * see sysvid.h. <img> must be SDL_PIXELFORMAT_RGBA32.
+ */
+void
+sysvid_showImage(SDL_Surface *img)
+{
+	SDL_Texture *t;
+	int dw, dh;
+	SDL_FRect dst;
+
+#ifdef ENABLE_SHADERS
+	if (use_gl)
+	{
+		sysvid_gl_showImage((const U8 *)img->pixels, img->w, img->h, img->pitch);
+		return;
+	}
+#endif
+
+	t = SDL_CreateTextureFromSurface(renderer, img);
+	if (!t)
+		return;
+	SDL_SetTextureScaleMode(t, SDL_SCALEMODE_LINEAR);
+	SDL_SetTextureBlendMode(t, SDL_BLENDMODE_NONE);
+
+	/* at the window's full resolution: logical presentation off while drawing, the
+	   letterbox (the game frame's aspect) computed here instead */
+	SDL_SetRenderLogicalPresentation(renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+	if (SDL_GetCurrentRenderOutputSize(renderer, &dw, &dh) && dw > 0 && dh > 0)
+	{
+		if ((long)dw * fb_height <= (long)dh * fb_width)
+		{
+			dst.w = (float)dw;
+			dst.h = (float)((long)dw * fb_height / fb_width);
+		}
+		else
+		{
+			dst.h = (float)dh;
+			dst.w = (float)((long)dh * fb_width / fb_height);
+		}
+		dst.x = ((float)dw - dst.w) / 2;
+		dst.y = ((float)dh - dst.h) / 2;
+
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+		SDL_RenderClear(renderer);
+		SDL_RenderTexture(renderer, t, NULL, &dst);
+		SDL_RenderPresent(renderer);
+	}
+	SDL_SetRenderLogicalPresentation(renderer, fb_width, fb_height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+	SDL_DestroyTexture(t);
 }
 
 
