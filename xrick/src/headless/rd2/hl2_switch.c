@@ -88,17 +88,23 @@ sw_actors(const hl2_switch_t *s)
 }
 
 /*
- * nothing left to do with this switch: an actor record without a live actor (its
- * boxes are only tested while it lives), or a trigger record already spawned. The
- * box's latch bit is no use here: a latched box is cleared again as soon as nothing
- * hits it (algo-actors.md §4), so it reads 0 a frame after firing.
+ * nothing left to do with this switch: an actor record whose live actors have all
+ * reacted already, or a trigger record already spawned. An actor record with no live
+ * actor is not: getting there spawns it (map 1 submap 4's lift switch). The box's
+ * latch bit is no use: a latched box is cleared again as soon as nothing hits it
+ * (algo-actors.md §4), so it reads 0 a frame after firing.
  */
 int
 hl2_switchFired(const hl2_switch_t *s)
 {
-	if (s->actor)
-		return sw_actors(s) == 0;
-	return (rd2_rb(s->rec) & 0x80) != 0;
+	U32 a;
+	int i, live = 0;
+	if (!s->actor)
+		return (rd2_rb(s->rec) & 0x80) != 0;
+	for (i = 0, a = 0x16b6au; i < 6; i++, a += 0x58)
+		if (rd2_rws(a) > 0 && rd2_rl(a + 0x2a) == s->rec)
+			live++;
+	return live > 0 && sw_actors(s) == 0;
 }
 
 /* what changes when a box fires: the actors spawned from its record (their flags

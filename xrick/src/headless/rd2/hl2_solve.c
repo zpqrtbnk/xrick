@@ -13,8 +13,8 @@
  *            best of each group expanded, at most CELL_CAP per Rick tile
  * - pruned:  Rick hit or dead, a life lost, the run over, any other submap or map
  * - merged:  states with the same hl2_stateKey (render buffers left out)
- * - ranked:  f = 4 * tile distance + 2 * joystick changes (T43 D3: the exit first,
- *            then efficient, then natural)
+ * - ranked:  f = 4 * tile distance + 2 * joystick changes - ammo held (T43 D3: the
+ *            exit first, then efficient, then natural)
  *
  * Snapshots (without the drawing buffers) are kept only for the states expanded; a
  * candidate is re-simulated from its parent's snapshot when it is expanded.
@@ -602,6 +602,9 @@ play(int a, int *j)
 #define STAGE_K 64
 #define STAGE_IDLE 50
 
+#define LASER_VALUE 4    /* one tile */
+#define BOMB_VALUE 16    /* four tiles */
+
 #define CELL_CAP 4
 #define BUCKET_CAP 4
 #define STUCK_FRAMES 600
@@ -722,7 +725,10 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 				if (h < best_h) best_node = n_nodes;   /* the child made just below */
 				child = node_new(nd, (U8)a, (U32)g + progs[a].steps,
 				                 nodes[nd].toggles + prog_toggles(a, nodes[nd].mask), 0);
-				f = 4L * h + 2L * (long)nodes[child].toggles;
+				/* ammo held is worth something: RD2 refills it only at the next map (or
+				   a life), and switches need bombs (map 1 submap 4: two blocks) */
+				f = 4L * h + 2L * (long)nodes[child].toggles - (long)LASER_VALUE * rd2_rw(HL2_LASER) -
+				    (long)BOMB_VALUE * rd2_rw(HL2_BOMBS);
 				nodes[child].f = f;
 				cell = hl2_rickRow() * HL2_COLS + hl2_rickCol();
 				nodes[child].cell = (U16)((cell >= 0 && cell < d_rows * HL2_COLS) ? cell : d_rows * HL2_COLS);
