@@ -551,8 +551,12 @@ main(int argc, char *argv[])
 		if (swi < nsw) {
 			ns = hl2_switchFire(&sopt, &sw[swi], sseq, SOLVE_MAX);
 			printf("switch %d: %d frames\n", swi, ns);
-			if (ns > 0)
+			if (ns > 0) {                       /* play it, so -save / -dump see the result */
+				int i;
+				for (i = 0; i < ns; i++)
+					hl2_step(sseq[i]);
 				emit(out, sseq, ns);
+			}
 		}
 	}
 	if (distance)

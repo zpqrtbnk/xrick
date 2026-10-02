@@ -9,6 +9,8 @@
 #include "rd2_mem.h"
 #include "hl2.h"
 #include "hl2_obs.h"
+#include "hl2_solve.h"
+#include "hl2_switch.h"
 
 /* the current submap, as $14458 left it (algo-flow.md §5): block map [$1646a],
    max scroll [$16468] = w1 * 8, trigger table [$1435c] */
@@ -205,8 +207,20 @@ hl2_dump(FILE *f)
 		fprintf(f, "]}");
 		a += 4 + 4u * (U32)nb;
 	}
-	first = 1;
-	fprintf(f, "%s],\n  \"tiles\": [", first ? "" : "\n  ");
+	/* the switches as hl2_switches lists them (nearest first: the index -switch takes)
+	   and the exit hl2_solveRoute picks (-1: none) */
+	{
+		hl2_switch_t sw[32];
+		int nsw = hl2_switches(sw, 32);
+		fprintf(f, "],\n  \"switches\": [");
+		for (i = 0; i < nsw; i++)
+			fprintf(f, "%s\n    {\"index\": %d, \"record\": %lu, \"x\": %d, \"row\": %d, \"w\": %d, "
+			        "\"h\": %d, \"mask\": %d, \"actor\": %d, \"spawned\": %d, \"fired\": %d}",
+			        i ? "," : "", i, (unsigned long)sw[i].rec, sw[i].x, sw[i].row, sw[i].w,
+			        sw[i].h, sw[i].mask, sw[i].actor, sw[i].spawned, hl2_switchFired(&sw[i]));
+		fprintf(f, "%s],\n  \"route_exit\": %d", nsw ? "\n  " : "", hl2_solveRoute());
+	}
+	fprintf(f, ",\n  \"tiles\": [");
 	for (r = 0; r < hl2_rows(); r++) {
 		fprintf(f, "%s\n    \"", r ? "," : "");
 		for (c = 0; c < HL2_COLS; c++)
