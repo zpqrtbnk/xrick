@@ -110,21 +110,40 @@ hl2_switchFired(const hl2_switch_t *s)
 	return sw_actors(s) == 0;
 }
 
-/* what changes when a box fires: the actors spawned from its record (their flags
-   swap or they go, algo-actors.md §3), or the trigger record's spawned bit */
-static unsigned long long
-sw_sig(const hl2_switch_t *s)
+/* live actors of switch <s>'s record that have reacted (S bit 6 or 4) */
+static int
+sw_reacted(const hl2_switch_t *s)
 {
-	unsigned long long h = rd2_rb(s->rec) >> 7;
 	U32 a;
-	int i;
-
-	if (!s->actor)
-		return h;
+	int i, n = 0;
 	for (i = 0, a = 0x16b6au; i < 6; i++, a += 0x58)
-		if (rd2_rws(a) > 0 && rd2_rl(a + 0x2a) == s->rec)
-			h = h * 1000003ULL + (unsigned long long)rd2_rw(a) * 7919ULL + rd2_rb(a + 0x2e) + 1;
-	return h;
+		if (rd2_rws(a) > 0 && rd2_rl(a + 0x2a) == s->rec && (rd2_rb(a + 0x2e) & 0x50))
+			n++;
+	return n;
+}
+
+/*
+ * play press <p> and tell whether box <s> fired: its latch bit (d3 bit 7) is set on
+ * the frame a test hits it (algo-actors.md §4) -- watched every frame, since it
+ * clears again once nothing hits -- or one more of its actors has reacted, or its
+ * trigger record got spawned. Not "anything about the record changed": the record's
+ * actor spawning as Rick walks up (map 1 submap 4) is not a fire.
+ */
+static int
+play_fire(const U8 *p, int n, int sub, int lives, const hl2_switch_t *s)
+{
+	int i, r, hit = 0, re0 = sw_reacted(s), sp0 = rd2_rb(s->rec) >> 7;
+	for (i = 0; i < n; i++) {
+		r = hl2_step(p[i]);
+		if (r != HL2_STEP || hl2_rickDead() || rd2_rw(HL2_LIVES) < lives ||
+		    rd2_rw(HL2_SUBMAP) != sub)
+			return 0;
+		if (rd2_rb(s->box + 3) & 0x80)
+			hit = 1;
+	}
+	if (sw_reacted(s) > re0 || (!s->actor && (rd2_rb(s->rec) >> 7) > sp0))
+		hit = 1;
+	return hit;
 }
 
 /* play <p> (n frames); 1 if Rick is alive and in the same submap after it */
@@ -218,10 +237,8 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 	size_t sz = hl2_stateSize();
 	U8 *start = malloc(sz), *at = malloc(sz), p[PRESS_MAX + 32];
 	int mi, di, f, n, shift, k, np, res = -1, sub = rd2_rw(HL2_SUBMAP), lives = rd2_rw(HL2_LIVES);
-	unsigned long long sig0;
 
 	hl2_stateSave(start);
-	sig0 = sw_sig(s);
 	for (mi = 0; mi < 3 && res < 0; mi++) {
 		int m = methods[mi];
 		if (!(s->mask & m))
@@ -267,9 +284,7 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 					for (k = 0; k < nw; k++) p[np++] = w;
 					np += press(m, dir, esc, p + np);
 					hl2_stateLoad(at);
-					if (!play(p, np, sub, lives))
-						continue;
-					if (sw_sig(s) == sig0)
+					if (!play_fire(p, np, sub, lives, s))
 						continue;
 					memcpy(seq + n, p, (size_t)np);
 					res = n + np;
