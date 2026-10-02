@@ -8,7 +8,8 @@
  *
  * - action:  one joystick byte held 2, 4 or 8 frames, or a bomb program: stand, drop
  *            (fire + down), run left or right, stand until just before or after the
- *            blast (measured: fuse 40 frames, then about 7 lethal frames)
+ *            blast (measured: fuse 40 frames, then about 7 lethal frames); or throw
+ *            (fire + down + left/right: the bomb slides 54 px), stand or back off
  * - search:  time-synchronous beam: candidates grouped by frame count, the <beam>
  *            best of each group expanded, at most CELL_CAP per Rick tile
  * - pruned:  Rick hit or dead, a life lost, the run over, any other submap or map
@@ -451,7 +452,7 @@ static const U8 act_mask[] = {
 static const U8 act_len[] = { 2, 4, 8 };
 #define N_MASK ((int)sizeof(act_mask))
 #define N_LEN ((int)sizeof(act_len))
-#define N_BOMB 8
+#define N_BOMB 16
 #define N_ACT (N_MASK * N_LEN + N_BOMB)
 #define MAXLEN 52
 
@@ -488,6 +489,23 @@ progs_init(void)
 				progs[a].mask[2] = dirs[d]; progs[a].len[2] = runs[r];
 				progs[a].mask[3] = 0;
 				progs[a].len[3] = (U8)(ends[e] - 4 - runs[r]);
+				progs[a].steps = ends[e];
+			}
+	/*
+	 * throws: fire + down + left/right gives the bomb dx -/+$200, slowed by 8 a frame
+	 * (algo-player.md §4, §11). Measured 2026-10-02 on the four start floors: it stops
+	 * 54 px away and blows at frame 40, so Rick may stay where he is (then: stand) or
+	 * back off the other way (12 frames)
+	 */
+	for (e = 0; e < 2; e++)
+		for (d = 0; d < 2; d++)
+			for (r = 0; r < 2; r++, a++) {
+				progs[a].n = 4;
+				progs[a].mask[0] = 0;    progs[a].len[0] = 2;
+				progs[a].mask[1] = (U8)(0x82 | dirs[d]); progs[a].len[1] = 2;   /* throw */
+				progs[a].mask[2] = r ? dirs[1 - d] : 0; progs[a].len[2] = 12;
+				progs[a].mask[3] = 0;
+				progs[a].len[3] = (U8)(ends[e] - 4 - 12);
 				progs[a].steps = ends[e];
 			}
 }

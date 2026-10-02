@@ -162,6 +162,12 @@ play(const U8 *p, int n, int sub, int lives)
 
 #define PRESS_MAX 96
 
+/* a pseudo method: a bomb thrown (fire + down + left/right). On a plain floor it
+   slides THROW_PX and blows there (measured 2026-10-02, maps 1-4); other floors
+   change that, which the press loop's walking shifts and its fire check absorb */
+#define THROW 0x100
+#define THROW_PX 54
+
 /* where to go after dropping a bomb: away along the floor, either way, or off it by
    a ladder (map 1 submap 4: the blocks at row 70 can only be bombed from where the
    way out is the ladder down) */
@@ -182,9 +188,13 @@ press(int m, U8 dir, int esc, U8 *p)
 		p[n++] = 0x80; p[n++] = 0x80; p[n++] = 0; p[n++] = dir;
 		for (i = 0; i < 3; i++) p[n++] = 0x81;
 		for (i = 0; i < 30; i++) p[n++] = 0;
-	} else {                                 /* bomb: drop, get away, wait for the blast */
+	} else if (m == 0x04) {                  /* bomb: drop, get away, wait for the blast */
 		p[n++] = 0; p[n++] = 0; p[n++] = 0x82; p[n++] = 0x82;
 		for (i = 0; i < 30; i++) p[n++] = escapes[esc];
+		for (i = 0; i < 30; i++) p[n++] = 0;
+	} else {                                 /* THROW: fire + down + dir, the bomb slides */
+		p[n++] = 0; p[n++] = 0; p[n++] = (U8)(0x82 | dir); p[n++] = (U8)(0x82 | dir);
+		for (i = 0; i < 30; i++) p[n++] = esc ? escapes[esc] : 0;
 		for (i = 0; i < 30; i++) p[n++] = 0;
 	}
 	return n;
@@ -199,6 +209,8 @@ aim_x(const hl2_switch_t *s, int m, U8 dir, int *lo, int *hi)
 		*lo = dir == 8 ? s->x - 0x18 : s->x;
 	} else if (m == 0x04) {                           /* blast centre bomb x + $c */
 		*lo = s->x - 0xc;
+	} else if (m == THROW) {                          /* the bomb stops 54 px off (measured, */
+		*lo = s->x - 0xc + (dir == 8 ? -THROW_PX : THROW_PX);   /* plain floor) */
 	} else {                                          /* laser: from a little way off */
 		*lo = dir == 8 ? s->x - 0x30 : s->x + s->w + 0x18;
 		*hi = *lo;
@@ -232,18 +244,18 @@ standable(int f, int c)
 int
 hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max)
 {
-	static const int methods[3] = { 0x08, 0x02, 0x04 };
+	static const int methods[4] = { 0x08, 0x02, 0x04, THROW };
 	hl2_solveopt_t o = *o0;
 	size_t sz = hl2_stateSize();
 	U8 *start = malloc(sz), *at = malloc(sz), p[PRESS_MAX + 32];
 	int mi, di, f, n, shift, k, np, res = -1, sub = rd2_rw(HL2_SUBMAP), lives = rd2_rw(HL2_LIVES);
 
 	hl2_stateSave(start);
-	for (mi = 0; mi < 3 && res < 0; mi++) {
+	for (mi = 0; mi < 4 && res < 0; mi++) {
 		int m = methods[mi];
-		if (!(s->mask & m))
+		if (!(s->mask & (m == THROW ? 0x04 : m)))
 			continue;
-		if (m == 0x04 && rd2_rw(HL2_BOMBS) == 0) continue;
+		if ((m == 0x04 || m == THROW) && rd2_rw(HL2_BOMBS) == 0) continue;
 		if (m == 0x02 && rd2_rw(HL2_LASER) == 0) continue;
 		for (di = 0; di < 2 && res < 0; di++) {
 			U8 dir = di ? 4 : 8;
@@ -276,8 +288,9 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 				hl2_stateSave(at);
 				/* walk 0..12 frames either way (2 px each), then the press (for a bomb,
 				   with each escape) */
-				for (shift = 0; shift <= 24 * (m == 0x04 ? N_ESC : 1) && res < 0; shift++) {
-					int sh = m == 0x04 ? shift % 25 : shift, esc = m == 0x04 ? shift / 25 : 0;
+				for (shift = 0; shift <= 24 * (m == 0x04 || m == THROW ? N_ESC : 1) && res < 0; shift++) {
+					int bomb = m == 0x04 || m == THROW;
+					int sh = bomb ? shift % 25 : shift, esc = bomb ? shift / 25 : 0;
 					U8 w = sh & 1 ? 4 : 8;
 					int nw = (sh + 1) / 2;
 					np = 0;
