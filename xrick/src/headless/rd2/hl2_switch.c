@@ -73,23 +73,47 @@ hl2_switches(hl2_switch_t *sw, int max)
 	return n;
 }
 
+/* the live actors spawned from switch <s>'s record (their +$2a, algo-actors.md §1)
+   that a hit still changes: S (+$2e) bit 6 (profile swapped) or bit 4 (swap pending)
+   set means its box has fired already (update_actor_ai, algo-actors.md §3) */
+static int
+sw_actors(const hl2_switch_t *s)
+{
+	U32 a;
+	int i, n = 0;
+	for (i = 0, a = 0x16b6au; i < 6; i++, a += 0x58)
+		if (rd2_rws(a) > 0 && rd2_rl(a + 0x2a) == s->rec && !(rd2_rb(a + 0x2e) & 0x50))
+			n++;
+	return n;
+}
+
+/*
+ * nothing left to do with this switch: an actor record without a live actor (its
+ * boxes are only tested while it lives), or a trigger record already spawned. The
+ * box's latch bit is no use here: a latched box is cleared again as soon as nothing
+ * hits it (algo-actors.md §4), so it reads 0 a frame after firing.
+ */
 int
 hl2_switchFired(const hl2_switch_t *s)
 {
-	return (rd2_rb(s->box + 3) & 0x80) != 0;
+	if (s->actor)
+		return sw_actors(s) == 0;
+	return (rd2_rb(s->rec) & 0x80) != 0;
 }
 
-/* what changes when a box fires: its latch, and the actor spawned from its record
-   (its flags swap or it goes, algo-actors.md §3) */
+/* what changes when a box fires: the actors spawned from its record (their flags
+   swap or they go, algo-actors.md §3), or the trigger record's spawned bit */
 static unsigned long long
 sw_sig(const hl2_switch_t *s)
 {
-	unsigned long long h = rd2_rb(s->box + 3);
+	unsigned long long h = rd2_rb(s->rec) >> 7;
 	U32 a;
 	int i;
 
+	if (!s->actor)
+		return h;
 	for (i = 0, a = 0x16b6au; i < 6; i++, a += 0x58)
-		if (rd2_rl(a + 0x2a) == s->rec)
+		if (rd2_rws(a) > 0 && rd2_rl(a + 0x2a) == s->rec)
 			h = h * 1000003ULL + (unsigned long long)rd2_rw(a) * 7919ULL + rd2_rb(a + 0x2e) + 1;
 	return h;
 }
@@ -110,9 +134,16 @@ play(const U8 *p, int n, int sub, int lives)
 
 #define PRESS_MAX 96
 
-/* the action program for method <m> facing <dir> (4 left, 8 right) */
+/* where to go after dropping a bomb: away along the floor, either way, or off it by
+   a ladder (map 1 submap 4: the blocks at row 70 can only be bombed from where the
+   way out is the ladder down) */
+static const U8 escapes[] = { 0x04, 0x08, 0x02, 0x01, 0x06, 0x0a, 0x05, 0x09 };
+#define N_ESC ((int)sizeof(escapes))
+
+/* the action program for method <m> facing <dir> (4 left, 8 right); <esc>: the
+   bomb's escape (escapes[]) */
 static int
-press(int m, U8 dir, U8 *p)
+press(int m, U8 dir, int esc, U8 *p)
 {
 	int n = 0, i;
 	if (m == 0x08) {                         /* melee: face, then fire + direction */
@@ -123,9 +154,9 @@ press(int m, U8 dir, U8 *p)
 		p[n++] = 0x80; p[n++] = 0x80; p[n++] = 0; p[n++] = dir;
 		for (i = 0; i < 3; i++) p[n++] = 0x81;
 		for (i = 0; i < 30; i++) p[n++] = 0;
-	} else {                                 /* bomb: drop, run the other way, wait */
+	} else {                                 /* bomb: drop, get away, wait for the blast */
 		p[n++] = 0; p[n++] = 0; p[n++] = 0x82; p[n++] = 0x82;
-		for (i = 0; i < 24; i++) p[n++] = (U8)(dir == 4 ? 8 : 4);
+		for (i = 0; i < 30; i++) p[n++] = escapes[esc];
 		for (i = 0; i < 30; i++) p[n++] = 0;
 	}
 	return n;
@@ -217,13 +248,15 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 				if (!play(seq, n, sub, lives))
 					continue;
 				hl2_stateSave(at);
-				/* walk 0..12 frames either way (2 px each), then the press */
-				for (shift = 0; shift <= 24 && res < 0; shift++) {
-					U8 w = shift & 1 ? 4 : 8;
-					int nw = (shift + 1) / 2;
+				/* walk 0..12 frames either way (2 px each), then the press (for a bomb,
+				   with each escape) */
+				for (shift = 0; shift <= 24 * (m == 0x04 ? N_ESC : 1) && res < 0; shift++) {
+					int sh = m == 0x04 ? shift % 25 : shift, esc = m == 0x04 ? shift / 25 : 0;
+					U8 w = sh & 1 ? 4 : 8;
+					int nw = (sh + 1) / 2;
 					np = 0;
 					for (k = 0; k < nw; k++) p[np++] = w;
-					np += press(m, dir, p + np);
+					np += press(m, dir, esc, p + np);
 					hl2_stateLoad(at);
 					if (!play(p, np, sub, lives))
 						continue;
