@@ -339,6 +339,16 @@ attempt(hl2_solveopt_t *o, U8 *seq, const char *out)
 			if (d1 < d0) {
 				printf("solve:   stage %d: %d frames, distance %d -> %d\n", ++stages, stage_n, d0, d1);
 				emit(out, stage, stage_n);
+				/* a bomb still in flight blocks the next one (one at a time): the
+				   switches' presses would all be ignored (map 3 submap 2). The stage
+				   survived 50 idle frames, so idle until it is gone */
+				for (i = 0; i < 50 && rd2_rw(0x16b12u) != 0; i++) {
+					U8 z = 0;
+					hl2_step(z);
+					emit(out, &z, 1);
+				}
+				if (i)
+					printf("solve:   %d idle frames: the bomb in flight is gone\n", i);
 				continue;
 			}
 			hl2_stateLoad(back);
