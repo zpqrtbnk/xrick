@@ -385,6 +385,34 @@ field_rick(void)
 
 static int route_cost = -1;      /* the last hl2_solveRoute's whole path, in field steps */
 
+/* exits the chain found it cannot take from where Rick was (the field's RELAX lets any
+   rise look possible, map 3 submap 6, 2026-10-03): the route leaves them out for nodes
+   within BLOCK_ROWS rows of that -- the same exit from elsewhere in the submap (another
+   entry) may still do */
+#define BLOCK_MAX 32
+#define BLOCK_ROWS 12
+static int blk_sub[BLOCK_MAX], blk_exit[BLOCK_MAX], blk_row[BLOCK_MAX], n_blk;
+
+void
+hl2_solveBlock(int sub, int exit, int row)
+{
+	if (n_blk < BLOCK_MAX) {
+		blk_sub[n_blk] = sub;
+		blk_exit[n_blk] = exit;
+		blk_row[n_blk++] = row;
+	}
+}
+
+static int
+blocked(int sub, int exit, int row)
+{
+	int i;
+	for (i = 0; i < n_blk; i++)
+		if (blk_sub[i] == sub && blk_exit[i] == exit && abs(blk_row[i] - row) <= BLOCK_ROWS)
+			return 1;
+	return 0;
+}
+
 int
 hl2_solveRouteCost(void)
 {
@@ -413,6 +441,8 @@ hl2_solveRoute(void)
 		n = hl2_exitsOf(ns_[u], e, HL2_EXITS_MAX);
 		for (i = 0; i < n; i++) {
 			int d, tf, tc, k;
+			if (blocked(ns_[u], i, nf_[u]))
+				continue;
 			field_build(ns_[u], e[i].row, EXIT_COL(e[i].side));
 			d = field_at(nf_[u], nc_[u], 0);
 			if (getenv("HL2_ROUTE_DEBUG"))

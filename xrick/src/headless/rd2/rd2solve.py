@@ -138,6 +138,8 @@ class Map:
             args = [CORE, "-map", str(self.m), "-chain", "64", "-onemap", "-beam", str(BEAMS[level]),
                     "-maxsteps", "4000", "-jobs", str(self.jobs), "-v", "-out", run]
             args[3:3] = ["-inputs", self.best] if cur["frames"] else []
+            for b in self.st.get("blocks", []):
+                args += ["-block", b]
             with open(log, "w") as lf:
                 self.proc = subprocess.Popen(args, stdout=lf, stderr=subprocess.STDOUT,
                                              start_new_session=True)
@@ -148,13 +150,24 @@ class Map:
                     self.proc.wait()
                     lf.write("\nrd2solve: stopped at the time budget\n")
             new = check(self.m, run)
+            # exits the chain left out ("solve: exit E of submap S left out from row R"):
+            # kept for the next attempts from the same best.joy
+            blocks = list(self.st.get("blocks", []))
+            with open(log) as lf:
+                for l in lf:
+                    if l.startswith("solve: exit ") and " left out" in l:
+                        w = l.split()
+                        b = "%s,%s,%s" % (w[5], w[2], w[10].rstrip(";"))
+                        if b not in blocks:
+                            blocks.append(b)
+            self.save(blocks=blocks)
             with open(log, "a") as lf:
                 lf.write("rd2solve: run.joy %s\nrd2solve: best.joy %s\n" % (json.dumps(new), json.dumps(cur)))
             if better(new, cur, log):
                 shutil.copyfile(self.best, os.path.join(self.dir, "best.prev.joy"))
                 os.replace(run, self.best)
                 cur = new
-                self.save(level=0, best=cur, last_progress=time.strftime("%Y-%m-%d %H:%M:%S"))
+                self.save(level=0, best=cur, blocks=[], last_progress=time.strftime("%Y-%m-%d %H:%M:%S"))
             elif time.time() < self.deadline - 60:     # not cut short: the beam did not do it
                 self.save(level=level + 1, best=cur)
         self.save(state="paused", best=cur)

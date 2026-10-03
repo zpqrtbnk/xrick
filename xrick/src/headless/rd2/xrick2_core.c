@@ -22,6 +22,9 @@
  *          give up after <n> frames with no new closest distance (default 600).
  *          When an exit is not found, the submap's switches are tried (-noswitches: not).
  *          -onemap: the chain stops when the map is done (maps are solved one by one).
+ *          A routed exit not found is left out and the route asked again (4 times at
+ *          most); -block <submap>,<exit>,<row> leaves one out from the start, for route
+ *          nodes within 12 rows of <row>.
  * -load / -save <file>: start from / write a snapshot (same build only).
  * -distance: Rick's tile distance to the goal, and the route's to the map's end. -tiles <s>: submap s's tiles.
  * -view <up>,<down>: the tiles from <up> rows above Rick's feet to <down> below, with
@@ -416,11 +419,13 @@ attempt(hl2_solveopt_t *o, U8 *seq, const char *out)
 	return n;
 }
 
+#define BLOCKS_MAX 4
+
 static int
 solve(int chain, hl2_solveopt_t *o, const char *out)
 {
 	static U8 seq[SOLVE_MAX];
-	int leg, n, n2, rr, runs, jitter, i, kk, ex;
+	int leg, n, n2, rr, runs, jitter, i, kk, ex, n_blocked = 0;
 	double t0, t1;
 	FILE *f;
 
@@ -436,6 +441,20 @@ solve(int chain, hl2_solveopt_t *o, const char *out)
 			       mp, sm, ex, ex >= 0 && ex < ne && e[ex].side == 1 ? "left" : "right",
 			       ex >= 0 && ex < ne ? e[ex].row : -1, ex >= 0 && ex < ne ? e[ex].target : -1,
 			       o->beam, t1 - t0);
+			/* the route's exit failed with every stage and switch: leave it out and
+			   route again (what was committed stays) */
+			if (o->exit < 0 && ex >= 0 && n_blocked < BLOCKS_MAX) {
+				int ex2;
+				int br = hl2_rickRow();
+				hl2_solveBlock(sm, ex, br);
+				n_blocked++;
+				ex2 = hl2_solveRoute();
+				printf("solve: exit %d of submap %d left out from row %d; route now exit %d\n", ex, sm, br, ex2);
+				if (ex2 >= 0) {
+					leg--;
+					continue;
+				}
+			}
 			return 1;
 		}
 		n2 = hl2_solvePolish(o, seq, n);
@@ -549,6 +568,12 @@ main(int argc, char *argv[])
 			switches = 0;
 		else if (!strcmp(argv[a], "-onemap"))
 			onemap = 1;
+		else if (!strcmp(argv[a], "-block") && a + 1 < argc) {
+			int bs, be, br;
+			if (sscanf(argv[++a], "%d,%d,%d", &bs, &be, &br) != 3)
+				usage();
+			hl2_solveBlock(bs, be, br);
+		}
 		else if (!strcmp(argv[a], "-stuck") && a + 1 < argc)
 			sopt.stuck = argv[++a];
 		else if (!strcmp(argv[a], "-distance"))
