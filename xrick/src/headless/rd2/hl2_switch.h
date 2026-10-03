@@ -21,6 +21,7 @@ typedef struct {
 } hl2_switch_t;
 
 extern int hl2_switches(hl2_switch_t *, int max);   /* the current submap's */
+extern void hl2_switchesSort(hl2_switch_t *, int n, int row, int col);   /* nearest to (row, col) first */
 extern int hl2_switchFired(const hl2_switch_t *);   /* nothing left to fire: its actor gone / record spawned */
 extern int hl2_switchFire(const hl2_solveopt_t *, const hl2_switch_t *, U8 *seq, int max);
 

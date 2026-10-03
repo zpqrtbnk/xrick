@@ -50,6 +50,8 @@ extern int hl2_rickRow(void);              /* feet row */
 extern int hl2_rickCol(void);              /* (x + 4) >> 3 */
 extern int hl2_rickDead(void);
 extern void hl2_dump(FILE *);
+extern void hl2_view(FILE *, int up, int down);   /* tiles around Rick with what moves */
+extern int hl2_shot(const char *path, int zoom);  /* the screen shown, as a PPM */
 extern void hl2_tiles(FILE *, int s);     /* any submap, one numbered row per line */              /* JSON */
 
 #endif

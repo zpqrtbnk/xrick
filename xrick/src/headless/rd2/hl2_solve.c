@@ -32,6 +32,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <sys/mman.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "rd2_mem.h"
 #include "hl2.h"
@@ -43,6 +47,9 @@ void
 hl2_solveDefaults(hl2_solveopt_t *o)
 {
 	o->beam = 128;
+	o->jobs = 1;
+	o->stall = 600;
+	o->res = NULL;
 	o->maxsteps = 3000;
 	o->exit = -1;
 	o->verbose = 0;
@@ -373,6 +380,14 @@ field_rick(void)
  */
 #define RT_MAX 512
 
+static int route_cost = -1;      /* the last hl2_solveRoute's whole path, in field steps */
+
+int
+hl2_solveRouteCost(void)
+{
+	return route_cost;
+}
+
 int
 hl2_solveRoute(void)
 {
@@ -430,6 +445,7 @@ hl2_solveRoute(void)
 			}
 		}
 	}
+	route_cost = best_d;
 	return best_exit;
 }
 
@@ -453,14 +469,20 @@ static const U8 act_len[] = { 2, 4, 8 };
 #define N_MASK ((int)sizeof(act_mask))
 #define N_LEN ((int)sizeof(act_len))
 #define N_BOMB 16
-#define N_ACT (N_MASK * N_LEN + N_BOMB)
+#define N_LASER 3
+#define N_ACT (N_MASK * N_LEN + N_BOMB + N_LASER)
 #define MAXLEN 52
+
+#define K_MOVE 0
+#define K_BOMB 1
+#define K_LASER 2
 
 typedef struct {
 	U8 n;
 	U8 mask[4];
 	U8 len[4];
 	U8 steps;
+	U8 kind;
 } prog_t;
 
 static prog_t progs[N_ACT];
@@ -508,6 +530,28 @@ progs_init(void)
 				progs[a].len[3] = (U8)(ends[e] - 4 - 12);
 				progs[a].steps = ends[e];
 			}
+	for (a = N_MASK * N_LEN; a < N_MASK * N_LEN + N_BOMB; a++)
+		progs[a].kind = K_BOMB;
+	/*
+	 * laser: outside the tunnel [$12e26] re-arms only on a frame with fire held and up
+	 * not (rd2_player.c L133ee), so a second shot needs fire alone first; then face as
+	 * is, left or right (one frame of walking), and fire + up
+	 */
+	for (d = 0; d < N_LASER; d++, a++) {
+		progs[a].kind = K_LASER;
+		progs[a].mask[0] = 0x80; progs[a].len[0] = 2;
+		if (d == 0) {
+			progs[a].n = 3;
+			progs[a].mask[1] = 0x81; progs[a].len[1] = 3;
+			progs[a].mask[2] = 0;    progs[a].len[2] = 3;
+		} else {
+			progs[a].n = 4;
+			progs[a].mask[1] = dirs[d - 1]; progs[a].len[1] = 1;
+			progs[a].mask[2] = 0x81; progs[a].len[2] = 3;
+			progs[a].mask[3] = 0;    progs[a].len[3] = 2;
+		}
+		progs[a].steps = 8;
+	}
 }
 
 static U8
@@ -611,13 +655,15 @@ play(int a, int *j)
 }
 
 /*
- * staging: the search keeps the STAGE_K closest states with Rick on the ground; on
- * failure the first of them, closest first, that survives STAGE_IDLE frames of no
- * input is handed back (o->stage), so the caller can commit that much progress and
- * search again from there -- a beam that reaches a room and dies in it every time
- * still leaves the way to that room.
+ * staging: the search keeps, per Rick tile, its closest state with Rick on the
+ * ground; on failure the first of them, closest first, that survives STAGE_IDLE
+ * frames of no input is handed back (o->stage), so the caller can commit that much
+ * progress and search again from there -- a beam that reaches a room and dies in it
+ * every time still leaves the way to that room. Per tile, not the K closest overall:
+ * those can all lie in the deadly room (map 2 submap 1, 2026-10-03: distance 315
+ * reached past two dart traps, nothing committed).
  */
-#define STAGE_K 64
+#define STAGE_TRY 256
 #define STAGE_IDLE 50
 
 #define LASER_VALUE 4    /* one tile */
@@ -625,20 +671,180 @@ play(int a, int *j)
 
 #define CELL_CAP 4
 #define BUCKET_CAP 4
-#define STUCK_FRAMES 600
 
 typedef struct { int n, cap; int *node; } bucket_t;
+
+/* one child: program <a> played from the state loaded */
+typedef struct {
+	S8 r;            /* R_GOAL, R_FAIL, R_RUN; -1: not played */
+	U8 j;            /* frames played */
+	U8 landed;
+	U8 pad;
+	U16 cell;
+	U16 pad2;
+	int h, row, col;
+	long ammo;       /* LASER_VALUE * laser + BOMB_VALUE * bombs */
+	unsigned long long key;
+} child_t;
+
+static int
+skip_prog(int a)
+{
+	if (progs[a].kind == K_BOMB)             /* a bomb in play already, or none to spare */
+		return rd2_rw(0x16b12u) != 0 || rd2_rw(HL2_BOMBS) <= g_minbombs;
+	if (progs[a].kind == K_LASER)            /* a shot in flight, or none to spare */
+		return rd2_rw(0x16902u) != 0 || rd2_rw(HL2_LASER) <= g_minlaser;
+	return 0;
+}
+
+/* every program from snapshot <snap>, into ch[N_ACT] */
+static void
+expand(const U8 *snap, child_t *ch)
+{
+	int a, j, cell;
+
+	for (a = 0; a < N_ACT; a++) {
+		child_t *c = &ch[a];
+		hl2_stateLoad(snap);
+		c->r = -1;
+		if (skip_prog(a))
+			continue;
+		c->r = (S8)play(a, &j);
+		c->j = (U8)j;
+		if (c->r != R_RUN)
+			continue;
+		c->key = hl2_stateKey();
+		c->h = field_rick();
+		c->row = hl2_rickRow();
+		c->col = hl2_rickCol();
+		c->landed = rd2_rw(0x12e1cu) != 0;
+		c->ammo = (long)LASER_VALUE * rd2_rw(HL2_LASER) + (long)BOMB_VALUE * rd2_rw(HL2_BOMBS);
+		cell = c->row * HL2_COLS + c->col;
+		c->cell = (U16)((cell >= 0 && cell < d_rows * HL2_COLS) ? cell : d_rows * HL2_COLS);
+	}
+}
+
+/*
+ * workers (o->jobs > 1): processes forked when the search starts, so each has the
+ * game, the goal and the field as they are then. Per frame group the parent puts the
+ * kept states' snapshots in shared memory; the workers take them one at a time
+ * (an atomic counter) and write the children's results back. The parent then takes
+ * the results in the same order as the serial search does: the outcome does not
+ * depend on the number of workers.
+ */
+typedef struct {
+	int next, n;
+} wctl_t;
+
+static int w_n;
+static pid_t w_pid[64];
+static int w_cmd[64], w_done = -1;
+static U8 *w_slab;
+static child_t *w_res;
+static wctl_t *w_ctl;
+static size_t w_slab_sz, w_res_sz, w_sz;
+
+static void
+workers_stop(void)
+{
+	int i;
+	for (i = 0; i < w_n; i++) {
+		close(w_cmd[i]);
+		waitpid(w_pid[i], NULL, 0);
+	}
+	if (w_done >= 0) close(w_done);
+	if (w_slab) munmap(w_slab, w_slab_sz);
+	if (w_res) munmap(w_res, w_res_sz);
+	if (w_ctl) munmap(w_ctl, sizeof(wctl_t));
+	w_n = 0; w_done = -1; w_slab = NULL; w_res = NULL; w_ctl = NULL;
+}
+
+static void
+workers_start(int jobs, int beam, size_t sz)
+{
+	int i, p[2], d[2];
+
+	if (jobs > 64) jobs = 64;
+	w_sz = sz;
+	w_slab_sz = (size_t)beam * sz;
+	w_res_sz = (size_t)beam * N_ACT * sizeof(child_t);
+	w_slab = mmap(NULL, w_slab_sz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	w_res = mmap(NULL, w_res_sz, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	w_ctl = mmap(NULL, sizeof(wctl_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	if (w_slab == MAP_FAILED || w_res == MAP_FAILED || w_ctl == MAP_FAILED || pipe(d) < 0) {
+		w_slab = NULL; w_res = NULL; w_ctl = NULL;
+		return;                              /* the search runs alone */
+	}
+	fflush(stdout); fflush(stderr);
+	for (i = 0; i < jobs; i++) {
+		pid_t pid;
+		if (pipe(p) < 0)
+			break;
+		pid = fork();
+		if (pid < 0) {
+			close(p[0]); close(p[1]);
+			break;
+		}
+		if (pid == 0) {                      /* a worker: one byte per group, EOF = stop */
+			char c;
+			int k;
+			close(p[1]); close(d[0]);
+			for (k = 0; k < i; k++) close(w_cmd[k]);
+			while (read(p[0], &c, 1) == 1) {
+				int t;
+				while ((t = __atomic_fetch_add(&w_ctl->next, 1, __ATOMIC_SEQ_CST)) < w_ctl->n)
+					expand(w_slab + (size_t)t * w_sz, w_res + (size_t)t * N_ACT);
+				if (write(d[1], &c, 1) != 1)
+					break;
+			}
+			_exit(0);
+		}
+		close(p[0]);
+		w_cmd[i] = p[1];
+		w_pid[i] = pid;
+		w_n = i + 1;
+	}
+	close(d[1]);
+	w_done = d[0];
+}
+
+/* the workers expand snapshots w_slab[0..n) into w_res */
+static void
+workers_run(int n)
+{
+	char c = 'g';
+	int i, got = 0;
+	w_ctl->next = 0;
+	w_ctl->n = n;
+	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	for (i = 0; i < w_n; i++)
+		if (write(w_cmd[i], &c, 1) != 1)
+			break;
+	while (got < i && read(w_done, &c, 1) == 1)
+		got++;
+}
+
+static double
+clk(void)
+{
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return (double)t.tv_sec + (double)t.tv_nsec * 1e-9;
+}
 
 int
 hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 {
 	size_t sz;
-	int nb = o->maxsteps + MAXLEN + 1, g, i, k, a, j, r, found = -1, n_keep;
-	int best_h = 1 << 30, best_g = 0, h, root, n_dup = 0, n_fail = 0, best_node = 0;
-	int st_node[STAGE_K], st_h[STAGE_K], n_st = 0;
+	int nb = o->maxsteps + MAXLEN + 1, g, i, k, a, j, found = -1, n_keep;
+	int best_h = 1 << 30, best_g = 0, root, n_dup = 0, n_fail = 0, best_node = 0;
+	int best_row = -1, best_col = -1, ncell, par_on, n_jobs = 1;
+	int *st_node, *st_h;
 	bucket_t *bk;
 	int *order, *keep, *expanded = NULL, n_exp = 0, cap_exp = 0;
 	U8 *cellcount, *start, *full;
+	child_t *ch;
+	double t_0 = clk(), t_s = 0, t_a, t_b = 0, tm_prep = 0, tm_exp = 0, tm_merge = 0;
 
 	progs_init();
 	full = malloc(hl2_stateSize());         /* the start with its drawing buffers, put back at the end */
@@ -647,6 +853,7 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 	sz = hl2_stateSize();
 	start = malloc(sz);
 	hl2_stateSave(start);
+	if (o->res) { o->res->best_h = 1000; o->res->row = hl2_rickRow(); o->res->col = hl2_rickCol(); }
 	if (!goal_set(o)) {
 		hl2_stateRender(1);
 		free(start); free(full);
@@ -660,10 +867,15 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 		if (o->stage_n) *o->stage_n = -1;
 		return -1;
 	}
+	ncell = d_rows * HL2_COLS;
 	bk = calloc((size_t)nb, sizeof(bucket_t));
 	order = malloc((size_t)o->beam * BUCKET_CAP * sizeof(int));
 	keep = malloc((size_t)o->beam * BUCKET_CAP * sizeof(int));
-	cellcount = malloc((size_t)d_rows * HL2_COLS);
+	cellcount = malloc((size_t)ncell);
+	st_node = malloc((size_t)ncell * sizeof(int));
+	st_h = malloc((size_t)ncell * sizeof(int));
+	for (i = 0; i < ncell; i++) st_node[i] = -1;
+	ch = malloc((size_t)N_ACT * sizeof(child_t));
 	seen = calloc((size_t)1 << SEEN_BITS, sizeof(unsigned long long));
 	n_nodes = 0;
 	root = node_new(-1, 0xff, 0, 0, 0);
@@ -673,6 +885,11 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 	bk[0].cap = o->beam * BUCKET_CAP;
 	bk[0].node = malloc((size_t)bk[0].cap * sizeof(int));
 	bk[0].node[bk[0].n++] = root;
+	par_on = 0;
+	if (o->jobs > 1) {
+		workers_start(o->jobs, o->beam, sz);
+		par_on = w_n > 0;
+	}
 
 	for (g = 0; g <= o->maxsteps && found < 0; g++) {
 		bucket_t *b = &bk[g];
@@ -691,6 +908,7 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 			continue;
 
 		/* the <beam> best, at most CELL_CAP per Rick tile */
+		t_s = clk();
 		for (i = 0; i < b->n; i++) order[i] = b->node[i];
 		for (i = 1; i < b->n; i++) {
 			int x = order[i];
@@ -698,19 +916,18 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 				order[k] = order[k - 1];
 			order[k] = x;
 		}
-		memset(cellcount, 0, (size_t)d_rows * HL2_COLS);
+		memset(cellcount, 0, (size_t)ncell);
 		for (n_keep = 0, i = 0; i < b->n && n_keep < o->beam; i++) {
 			int c = nodes[order[i]].cell;
-			if (c < d_rows * HL2_COLS) {
+			if (c < ncell) {
 				if (cellcount[c] >= CELL_CAP) continue;
 				cellcount[c]++;
 			}
 			keep[n_keep++] = order[i];
 		}
 
-		for (i = 0; i < n_keep && found < 0; i++) {
+		for (i = 0; i < n_keep; i++) {
 			int nd = keep[i], par = nodes[nd].parent;
-
 			if (!nodes[nd].snap) {           /* re-simulate it from its parent */
 				hl2_stateLoad(nodes[par].snap);
 				play(nodes[nd].act, &j);
@@ -722,42 +939,52 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 				expanded = realloc(expanded, (size_t)cap_exp * sizeof(int));
 			}
 			expanded[n_exp++] = nd;
+			if (par_on)
+				memcpy(w_slab + (size_t)i * sz, nodes[nd].snap, sz);
+		}
+		t_a = clk();
+		if (par_on)
+			workers_run(n_keep);
+		t_b = clk();
+		tm_prep += t_a - t_s;
+		tm_exp += t_b - t_a;
 
-			for (a = 0; a < N_ACT && found < 0; a++) {
-				int child, cell;
+		for (i = 0; i < n_keep && found < 0; i++) {
+			int nd = keep[i];
+			child_t *cs = par_on ? w_res + (size_t)i * N_ACT : ch;
+
+			if (!par_on)
+				expand(nodes[nd].snap, ch);
+			for (a = 0; a < N_ACT; a++) {
+				child_t *c = &cs[a];
+				int child;
 				long f;
 
-				hl2_stateLoad(nodes[nd].snap);
-				if (progs[a].n > 1 && (rd2_rw(0x16b12u) != 0 || rd2_rw(HL2_BOMBS) <= g_minbombs))
-					continue;        /* a bomb in play already, or none to spare */
-				r = play(a, &j);
-				if (r == R_GOAL) {
-					found = path(nd, a, j, seq, max);
+				if (c->r < 0)
+					continue;
+				if (c->r == R_GOAL) {
+					found = path(nd, a, c->j, seq, max);
 					break;
 				}
-				if (r == R_FAIL) { n_fail++; continue; }
+				if (c->r == R_FAIL) { n_fail++; continue; }
 				if (g + progs[a].steps >= nb) continue;
-				if (!seen_add(hl2_stateKey())) { n_dup++; continue; }
-				h = field_rick();
-				if (h < bh) bh = h;
-				if (h < best_h) best_node = n_nodes;   /* the child made just below */
+				if (!seen_add(c->key)) { n_dup++; continue; }
+				if (c->h < bh) bh = c->h;
+				if (c->h < best_h) {
+					best_node = n_nodes;         /* the child made just below */
+					best_h = c->h; best_g = g;
+					best_row = c->row; best_col = c->col;
+				}
 				child = node_new(nd, (U8)a, (U32)g + progs[a].steps,
 				                 nodes[nd].toggles + prog_toggles(a, nodes[nd].mask), 0);
 				/* ammo held is worth something: RD2 refills it only at the next map (or
 				   a life), and switches need bombs (map 1 submap 4: two blocks) */
-				f = 4L * h + 2L * (long)nodes[child].toggles - (long)LASER_VALUE * rd2_rw(HL2_LASER) -
-				    (long)BOMB_VALUE * rd2_rw(HL2_BOMBS);
+				f = 4L * c->h + 2L * (long)nodes[child].toggles - c->ammo;
 				nodes[child].f = f;
-				cell = hl2_rickRow() * HL2_COLS + hl2_rickCol();
-				nodes[child].cell = (U16)((cell >= 0 && cell < d_rows * HL2_COLS) ? cell : d_rows * HL2_COLS);
-				if (o->stage && rd2_rw(0x12e1cu) != 0) {   /* landed: a staging candidate */
-					int w = 0, q;
-					if (n_st < STAGE_K) {
-						st_node[n_st] = child; st_h[n_st++] = h;
-					} else {
-						for (q = 1; q < n_st; q++) if (st_h[q] > st_h[w]) w = q;
-						if (h < st_h[w]) { st_node[w] = child; st_h[w] = h; }
-					}
+				nodes[child].cell = c->cell;
+				if (o->stage && c->landed && c->cell < ncell) {   /* landed: a staging candidate */
+					int q = c->cell;
+					if (st_node[q] < 0 || c->h < st_h[q]) { st_node[q] = child; st_h[q] = c->h; }
 				}
 				{
 					bucket_t *cb = &bk[nodes[child].g];
@@ -777,14 +1004,24 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 				}
 			}
 		}
-		if (bh < best_h) { best_h = bh; best_g = g; }
+		(void)bh;
+		tm_merge += clk() - t_b;
 		if (o->verbose && g % 100 == 0)
 			fprintf(stderr, "solve: frame %d, %d kept, best distance %d (at %d), %d nodes, "
 			        "%d dups, %d fails\n", g, n_keep, best_h, best_g, n_nodes, n_dup, n_fail);
-		if (g - best_g > STUCK_FRAMES)
+		if (g - best_g > o->stall)
 			break;
 	}
+	if (par_on) {
+		n_jobs = w_n;
+		workers_stop();
+	}
 
+	if (o->res && best_row >= 0) {
+		o->res->best_h = best_h;
+		o->res->row = best_row;
+		o->res->col = best_col;
+	}
 	if (found < 0 && o->stuck) {
 		FILE *sf = fopen(o->stuck, "wb");
 		int sn = path(best_node, 0, 0, seq, max);
@@ -796,13 +1033,21 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 			fprintf(stderr, "solve: closest state (%d frames) written to %s\n", sn, o->stuck);
 	}
 	if (found < 0 && o->stage) {
-		int q, best, sn, ok;
+		/* the tiles' best states, closest first (then fewest frames); STAGE_TRY tested */
+		int *cand = malloc((size_t)ncell * sizeof(int)), nc = 0, q, t, sn, ok;
+		for (q = 0; q < ncell; q++)
+			if (st_node[q] >= 0) cand[nc++] = q;
+		for (q = 1; q < nc; q++) {
+			int x = cand[q];
+			for (t = q; t > 0 && (st_h[cand[t - 1]] > st_h[x] || (st_h[cand[t - 1]] == st_h[x] &&
+			     nodes[st_node[cand[t - 1]]].g > nodes[st_node[x]].g)); t--)
+				cand[t] = cand[t - 1];
+			cand[t] = x;
+		}
 		*o->stage_n = -1;
-		while (n_st > 0 && *o->stage_n < 0) {
-			for (best = 0, q = 1; q < n_st; q++)
-				if (st_h[q] < st_h[best] || (st_h[q] == st_h[best] &&
-				    nodes[st_node[q]].g < nodes[st_node[best]].g)) best = q;
-			sn = path(st_node[best], 0, 0, o->stage, max);
+		for (t = 0; t < nc && t < STAGE_TRY && *o->stage_n < 0; t++) {
+			int nd = st_node[cand[t]];
+			sn = path(nd, 0, 0, o->stage, max);
 			hl2_stateRender(1);
 			hl2_stateLoad(full);
 			for (ok = sn > 0, q = 0; ok && q < sn + STAGE_IDLE; q++) {
@@ -815,22 +1060,24 @@ hl2_solve(const hl2_solveopt_t *o, U8 *seq, int max)
 			if (ok) {
 				*o->stage_n = sn;
 				if (o->verbose)
-					fprintf(stderr, "solve: stage: %d frames to distance %d\n", sn, st_h[best]);
+					fprintf(stderr, "solve: stage: %d frames to distance %d (candidate %d of %d)\n",
+					        sn, st_h[cand[t]], t + 1, nc);
 			}
-			st_node[best] = st_node[--n_st];
-			st_h[best] = st_h[n_st];
 		}
+		free(cand);
 	}
 	for (i = 0; i < n_nodes; i++)
 		free(nodes[i].snap), nodes[i].snap = NULL;
 	for (g = 0; g < nb; g++) free(bk[g].node);
 	free(bk); free(order); free(keep); free(cellcount); free(seen); free(expanded);
+	free(st_node); free(st_h); free(ch);
 	hl2_stateRender(1);
 	hl2_stateLoad(full);
 	free(start); free(full);
 	if (o->verbose)
-		fprintf(stderr, "solve: %s, %d nodes, best distance %d\n",
-		        found >= 0 ? "found" : "NOT found", n_nodes, best_h);
+		fprintf(stderr, "solve: %s, %d nodes, best distance %d; %.1f s: select+resim %.1f, "
+		        "expand %.1f, merge %.1f (jobs %d)\n", found >= 0 ? "found" : "NOT found", n_nodes,
+		        best_h, clk() - t_0, tm_prep, tm_exp, tm_merge, n_jobs);
 	return found;
 }
 

@@ -17,16 +17,20 @@ costs the stored snapshots, not the inputs.
 Run (WSL):  python3 mcp2_server.py        env: XRICK2_CORE, XRICK2_MCP_WORK
 """
 
+import base64
 import json
 import os
+import struct
 import subprocess
 import sys
 import tempfile
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.join(HERE, "..", "..", "..", "..", "build")
 CORE = os.environ.get("XRICK2_CORE", os.path.join(BUILD, "core2", "xrick2-core"))
 WORK = os.environ.get("XRICK2_MCP_WORK", os.path.join(BUILD, "mcp2"))
+JOBS = int(os.environ.get("XRICK2_JOBS", "8"))   # worker processes per search (-jobs)
 os.makedirs(WORK, exist_ok=True)
 
 # the joystick byte [$1a4fb] (algo-player.md §1)
@@ -252,7 +256,9 @@ def t_trace(a):
 
 
 def _solve_args(a):
-    args = []
+    args = ["-jobs", str(int(a.get("jobs", JOBS)))]
+    if "stall" in a:
+        args += ["-stall", str(int(a["stall"]))]
     for k, flag in (("beam", "-beam"), ("max_steps", "-maxsteps"), ("exit", "-exit"),
                     ("min_bombs", "-minbombs"), ("min_laser", "-minlaser")):
         if k in a:
@@ -304,6 +310,56 @@ def t_fire_switch(a):
     res = _observe(sid, a.get("full", False))
     res.update({"fired": True, "steps": steps})
     return res
+
+
+def _state_map(sid):
+    return _summary(_snap_path(sid))["map"]
+
+
+def t_view(a):
+    """-view: the tiles around Rick with what moves drawn in"""
+    sid = a["state"]
+    _meta(sid)
+    up, down = int(a.get("up", 16)), int(a.get("down", 8))
+    rc, out, err = _run(["-load", _snap_path(sid), "-steps", "0", "-view", "%d,%d" % (up, down)])
+    if rc != 0:
+        raise RuntimeError(err.strip() or out.strip())
+    return {"text": "\n".join(l for l in out.splitlines() if not l.startswith("xrick2-core:"))}
+
+
+def _png(ppm):
+    """a binary PPM (P6) as PNG bytes"""
+    head, rest = ppm.split(b"\n", 1)
+    dims, rest = rest.split(b"\n", 1)
+    _, px = rest.split(b"\n", 1)
+    w, h = (int(v) for v in dims.split())
+    raw = b"".join(b"\x00" + px[y * w * 3:(y + 1) * w * 3] for y in range(h))
+
+    def chunk(t, b):
+        return struct.pack(">I", len(b)) + t + b + struct.pack(">I", zlib.crc32(t + b) & 0xffffffff)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) +
+            chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
+
+
+def t_shot(a):
+    """-shot: the screen last shown, as an image (and a PNG file)"""
+    sid = a["state"]
+    _meta(sid)
+    zoom = int(a.get("zoom", 2))
+    ppm = os.path.join(WORK, sid + ".ppm")
+    # the palette is the hardware registers, not in the snapshot: start on the state's map
+    rc, out, err = _run(["-map", str(_state_map(sid)), "-load", _snap_path(sid), "-steps", "0",
+                         "-shot", ppm, "-zoom", str(zoom)])
+    if rc != 0 or not os.path.exists(ppm):
+        raise RuntimeError(err.strip() or out.strip())
+    with open(ppm, "rb") as f:
+        png = _png(f.read())
+    os.remove(ppm)
+    path = a.get("file") or os.path.join(WORK, sid + ".png")
+    with open(path, "wb") as f:
+        f.write(png)
+    return {"_content": [{"type": "image", "data": base64.b64encode(png).decode(), "mimeType": "image/png"},
+                         {"type": "text", "text": json.dumps({"state": sid, "file": path})}]}
 
 
 def t_list_states(a):
@@ -449,8 +505,9 @@ def t_export(a):
     """the timeline as a .joy (RD2_JOYSEQ / Hatari) and as src/rd2/dat_rd2_script.c"""
     sid = a["state"]
     data, m = _timeline(sid)
-    if m != 1:
-        raise ValueError("this timeline starts on map %d; the demo starts from a new game on map 1" % m)
+    if m != 1 and a.get("script", True):
+        raise ValueError("this timeline starts on map %d; the script starts from a new game on map 1 "
+                         "(script=false writes the .joy, replayed with xrick2-core -map %d)" % (m, m))
     joy = a.get("joy") or os.path.join(WORK, sid + ".joy")
     with open(joy, "wb") as f:
         f.write(data)
@@ -505,19 +562,32 @@ TOOLS = [
      "ground there, within a column). When a search fails it commits its closest safe state "
      "(stages) and fires switches (switches=false: not); what it committed is kept as the new "
      "state even if the exit is still not reached (partial=true). Hints: beam (128), max_steps "
-     "(3000), min_bombs, min_laser (ammo to still hold), timeout (s). Returns found, partial, "
+     "(3000), min_bombs, min_laser (ammo to still hold), jobs (worker processes, default 8 or env "
+     "XRICK2_JOBS; same result for any number), stall (frames with no new closest distance before "
+     "giving up, 600), timeout (s). Returns found, partial, "
      "the solver's lines, the new state.",
      {"state": {"type": "string"}, "legs": {"type": "integer"}, "exit": {"type": "integer"},
       "waypoint": {"type": "array"}, "beam": {"type": "integer"}, "max_steps": {"type": "integer"},
       "min_bombs": {"type": "integer"}, "min_laser": {"type": "integer"},
-      "switches": {"type": "boolean"}, "timeout": {"type": "integer"}, "note": {"type": "string"},
+      "switches": {"type": "boolean"}, "jobs": {"type": "integer"}, "stall": {"type": "integer"}, "timeout": {"type": "integer"}, "note": {"type": "string"},
       "full": {"type": "boolean"}}, ["state"]),
     ("fire_switch", t_fire_switch,
      "Fire switch 'index' (observe's switches): solve to a spot next to its box, then punch, "
-     "shoot, drop or throw a bomb until the box fires, Rick alive. Hints: beam, max_steps.",
+     "shoot, drop or throw a bomb until the box fires, Rick alive. Hints: beam, max_steps, jobs.",
      {"state": {"type": "string"}, "index": {"type": "integer"}, "beam": {"type": "integer"},
-      "max_steps": {"type": "integer"}, "timeout": {"type": "integer"}, "note": {"type": "string"},
+      "max_steps": {"type": "integer"}, "jobs": {"type": "integer"}, "stall": {"type": "integer"}, "timeout": {"type": "integer"}, "note": {"type": "string"},
       "full": {"type": "boolean"}}, ["state", "index"]),
+    ("view", t_view,
+     "The tiles around Rick ('up' rows above his feet row, 16; 'down' below, 8) with what moves "
+     "drawn in: R Rick, o objects, * shot, B bomb, A-F actors (slots 11-16) over their boxes, "
+     "a-z switch boxes (fire_switch index order), : touch boxes (traps, spawners Rick sets off), "
+     "< > exits; a legend with every actor, switch and touch box. Tiles: ^ lethal, # solid, "
+     "H ladder, T ladder top, = floor, ~ surface, . empty.",
+     {"state": {"type": "string"}, "up": {"type": "integer"}, "down": {"type": "integer"}}, ["state"]),
+    ("shot", t_shot,
+     "The game screen at a state, as an image (320x200 times 'zoom', 2), also saved as a PNG "
+     "('file', default <work>/<state>.png).",
+     {"state": {"type": "string"}, "zoom": {"type": "integer"}, "file": {"type": "string"}}, ["state"]),
     ("list_states", t_list_states, "All states: id, parent, frames from the parent, note.", {}, []),
     ("validate", t_validate,
      "Check a state's chain under the current xrick2-core. mode 'timeline' (default): the "
@@ -534,9 +604,9 @@ TOOLS = [
       "backoff": {"type": "integer"}, "max_legs": {"type": "integer"},
       "beam": {"type": "integer"}, "timeout": {"type": "integer"}}, ["old", "from"]),
     ("export", t_export,
-     "Write a state's timeline (a new game on map 1 to the state) as a .joy (default "
+     "Write a state's timeline (a new game on its root's map to the state) as a .joy (default "
      "<work>/<state>.joy, RD2_JOYSEQ / Hatari input) and, unless script=false, as "
-     "dat_rd2_script.c (joy2script.py; default <work>/<state>_dat_rd2_script.c).",
+     "dat_rd2_script.c (joy2script.py; default <work>/<state>_dat_rd2_script.c; map-1 roots only).",
      {"state": {"type": "string"}, "joy": {"type": "string"}, "file": {"type": "string"},
       "script": {"type": "boolean"}}, ["state"]),
 ]
@@ -573,7 +643,12 @@ def _handle(msg):
             return
         try:
             res = fn(p.get("arguments") or {})
-            _reply(mid, {"content": [{"type": "text", "text": json.dumps(res)}]})
+            if isinstance(res, dict) and "_content" in res:
+                _reply(mid, {"content": res["_content"]})
+            elif isinstance(res, dict) and set(res) == {"text"}:
+                _reply(mid, {"content": [{"type": "text", "text": res["text"]}]})
+            else:
+                _reply(mid, {"content": [{"type": "text", "text": json.dumps(res)}]})
         except Exception as e:  # reported to the model, not a protocol error
             _reply(mid, {"content": [{"type": "text", "text": "error: %s" % e}], "isError": True})
     elif method == "ping":

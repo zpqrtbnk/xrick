@@ -18,9 +18,15 @@
  * -solve / -chain <n>: after -load / -inputs, solve one / <n> exits in a row (hl2_solve.c);
  *          -exit <i> (index in -dump's exits; default: the route's), -waypoint <row>,<col>,
  *          -beam, -maxsteps, -minbombs, -minlaser, -v; -out <file> appends the frames.
+ *          -jobs <n>: <n> worker processes expand the beam (same result as 1); -stall <n>:
+ *          give up after <n> frames with no new closest distance (default 600).
  *          When an exit is not found, the submap's switches are tried (-noswitches: not).
+ *          -onemap: the chain stops when the map is done (maps are solved one by one).
  * -load / -save <file>: start from / write a snapshot (same build only).
- * -distance: Rick's tile distance to the goal. -tiles <s>: submap s's tiles.
+ * -distance: Rick's tile distance to the goal, and the route's to the map's end. -tiles <s>: submap s's tiles.
+ * -view <up>,<down>: the tiles from <up> rows above Rick's feet to <down> below, with
+ *          Rick, actors, objects, switch boxes and exits drawn in, and a legend.
+ * -shot <file.ppm> [-zoom <z>]: the screen last shown (default zoom 2).
  * -switch <i>: list the submap's switches, fire the i-th (-out: append its frames).
  * -steplog one line per frame on stdout: input, map, submap, scroll, rick, counters.
  *
@@ -278,6 +284,7 @@ snap_file(const char *path, int write)
 #define SOLVE_MAX 0x8000
 
 static int switches = 1;  /* -noswitches: 0 */
+static int onemap = 0;    /* -onemap: the chain stops when the map is done */
 
 /* append frames to -out */
 static void
@@ -292,29 +299,37 @@ emit(const char *out, const U8 *seq, int n)
 
 /*
  * one leg: search the exit. Not found: commit the search's closest safe state
- * (hl2_solve staging) while that gets Rick closer, else fire the nearest switch not
- * tried yet in this leg (hl2_switch.c) and keep it, and search again. What is
- * committed is played (the state moves on) and appended to -out.
+ * (hl2_solve staging) while that gets Rick closer, else try the switches not tried
+ * yet in this leg (hl2_switch.c), nearest to where the search got closest first:
+ * fire one, search again, and keep the switch only if that search finds the exit
+ * or gets closer than before it -- otherwise undo it (map 2 submap 1: the lift,
+ * fired again after its trip, took Rick back down). What is committed is played
+ * (the state moves on) and appended to -out.
  */
-#define STAGES_MAX 12
+#define STAGES_MAX 64
 #define TRIED_MAX 64
 
 static int
 attempt(hl2_solveopt_t *o, U8 *seq, const char *out)
 {
-	static U8 stage[SOLVE_MAX];
+	static U8 stage[SOLVE_MAX], swseq[SOLVE_MAX];
 	U32 tried[TRIED_MAX];
-	int stage_n = -1, n, stages = 0, n_tried = 0, i, d0, d1, si, nsw, fired;
+	int stage_n = -1, n = -1, stages = 0, n_tried = 0, i, d0, d1, si, nsw, fired, have = 0, best0;
 	hl2_solveopt_t so = *o;
+	hl2_solveres_t res;
 	hl2_switch_t sw[32];
 	U8 *back = malloc(hl2_stateSize());
 
 	so.stage = stage;
 	so.stage_n = &stage_n;
+	so.res = &res;
 	for (;;) {
-		n = hl2_solve(&so, seq, SOLVE_MAX);
+		if (!have)
+			n = hl2_solve(&so, seq, SOLVE_MAX);
+		have = 0;
 		if (n >= 0)
 			break;
+		best0 = res.best_h;
 		d0 = hl2_solveDistance(&so);
 		if (stage_n > 0 && stages < STAGES_MAX) {
 			hl2_stateSave(back);
@@ -331,6 +346,8 @@ attempt(hl2_solveopt_t *o, U8 *seq, const char *out)
 		if (o->wp_row >= 0 || !switches)
 			break;
 		nsw = hl2_switches(sw, 32);
+		hl2_switchesSort(sw, nsw, res.row, res.col);
+		printf("solve:   closest distance %d at row %d col %d; switches\n", best0, res.row, res.col);
 		for (fired = 0, si = 0; si < nsw && !fired; si++) {
 			int ns, k;
 			if (hl2_switchFired(&sw[si]))
@@ -339,16 +356,27 @@ attempt(hl2_solveopt_t *o, U8 *seq, const char *out)
 			if (k < n_tried || n_tried == TRIED_MAX)
 				continue;
 			tried[n_tried++] = sw[si].box;
-			ns = hl2_switchFire(o, &sw[si], seq, SOLVE_MAX);
+			ns = hl2_switchFire(o, &sw[si], swseq, SOLVE_MAX);
 			printf("solve:   switch %lu box x %d row %d %dx%d mask %d: %s\n",
 			       (unsigned long)sw[si].rec, sw[si].x, sw[si].row, sw[si].w, sw[si].h,
 			       sw[si].mask, ns < 0 ? "not fired" : "fired");
 			if (ns < 0)
 				continue;
+			hl2_stateSave(back);
 			for (i = 0; i < ns; i++)
-				hl2_step(seq[i]);
-			emit(out, seq, ns);
-			fired = 1;
+				hl2_step(swseq[i]);
+			n = hl2_solve(&so, seq, SOLVE_MAX);
+			if (n >= 0 || res.best_h < best0) {
+				printf("solve:   switch kept: %s\n", n >= 0 ? "exit found" : "closer");
+				if (n < 0)
+					printf("solve:   closest distance %d -> %d\n", best0, res.best_h);
+				emit(out, swseq, ns);
+				fired = 1;
+				have = 1;
+			} else {
+				printf("solve:   switch undone: closest distance %d, not under %d\n", res.best_h, best0);
+				hl2_stateLoad(back);
+			}
 		}
 		if (!fired)
 			break;
@@ -403,6 +431,10 @@ solve(int chain, hl2_solveopt_t *o, const char *out)
 			break;                          /* a waypoint is one leg */
 		if (hl2_status() == HL2_HANG || hl2_status() == HL2_END)
 			break;
+		if (onemap && rd2_rw(HL2_MAP_PLAYING) != (U16)mp) {
+			printf("solve: map %d done\n", mp);
+			break;
+		}
 	}
 	printf("solve: now map %u submap %u tick %lu, lives %u, laser %u, bombs %u, score %02x%02x%02x\n",
 	       rd2_rw(HL2_MAP_PLAYING), rd2_rw(HL2_SUBMAP), (unsigned long)hl2_tick(),
@@ -420,7 +452,8 @@ main(int argc, char *argv[])
 	int a, map = 1, c, r = HL2_STEP, rounds = 0, mapset = 0, steplog = 0, dump = 0;
 	unsigned long auditf = 0;
 	const char *inputs = NULL, *tdir = NULL, *stop = NULL, *out = NULL, *load = NULL, *save = NULL;
-	int chain = 0, distance = 0, tiles = -1, swi = -1;
+	int chain = 0, distance = 0, tiles = -1, swi = -1, view_up = -1, view_down = 0, zoom = 2;
+	const char *shot = NULL;
 	hl2_solveopt_t sopt;
 	FILE *f = NULL;
 	double t0;
@@ -456,6 +489,10 @@ main(int argc, char *argv[])
 			chain = atoi(argv[++a]);
 		else if (!strcmp(argv[a], "-beam") && a + 1 < argc)
 			sopt.beam = atoi(argv[++a]);
+		else if (!strcmp(argv[a], "-jobs") && a + 1 < argc)
+			sopt.jobs = atoi(argv[++a]);
+		else if (!strcmp(argv[a], "-stall") && a + 1 < argc)
+			sopt.stall = atoi(argv[++a]);
 		else if (!strcmp(argv[a], "-maxsteps") && a + 1 < argc)
 			sopt.maxsteps = atoi(argv[++a]);
 		else if (!strcmp(argv[a], "-exit") && a + 1 < argc)
@@ -479,10 +516,19 @@ main(int argc, char *argv[])
 			swi = atoi(argv[++a]);
 		else if (!strcmp(argv[a], "-noswitches"))
 			switches = 0;
+		else if (!strcmp(argv[a], "-onemap"))
+			onemap = 1;
 		else if (!strcmp(argv[a], "-stuck") && a + 1 < argc)
 			sopt.stuck = argv[++a];
 		else if (!strcmp(argv[a], "-distance"))
 			distance = 1;
+		else if (!strcmp(argv[a], "-view") && a + 1 < argc) {
+			if (sscanf(argv[++a], "%d,%d", &view_up, &view_down) != 2)
+				usage();
+		} else if (!strcmp(argv[a], "-shot") && a + 1 < argc)
+			shot = argv[++a];
+		else if (!strcmp(argv[a], "-zoom") && a + 1 < argc)
+			zoom = atoi(argv[++a]);
 		else if (!strcmp(argv[a], "-v"))
 			sopt.verbose = 1;
 		else
@@ -559,9 +605,15 @@ main(int argc, char *argv[])
 			}
 		}
 	}
-	if (distance)
-		printf("distance: %d (exit %d)\n", hl2_solveDistance(&sopt),
-		       sopt.exit >= 0 ? sopt.exit : hl2_solveRoute());
+	if (distance) {
+		int ex = hl2_solveRoute(), rc = hl2_solveRouteCost();
+		printf("distance: %d (exit %d), route %d\n", hl2_solveDistance(&sopt),
+		       sopt.exit >= 0 ? sopt.exit : ex, rc);
+	}
+	if (view_up >= 0)
+		hl2_view(stdout, view_up, view_down);
+	if (shot && !hl2_shot(shot, zoom))
+		fprintf(stderr, "xrick2-core: cannot write '%s'\n", shot);
 	if (save && !snap_file(save, 1))
 		return 2;
 	if (dump) {

@@ -11,8 +11,17 @@
 
 #include "system.h"
 
+/* what a search got to: its closest distance and where Rick was then (the frontier) */
+typedef struct {
+	int best_h;
+	int row, col;
+} hl2_solveres_t;
+
 typedef struct {
 	int beam;       /* states kept per frame count */
+	int jobs;       /* worker processes expanding the beam (1: none, the search runs alone) */
+	int stall;      /* give up after this many frames with no new closest distance */
+	hl2_solveres_t *res;  /* if not NULL: filled in by hl2_solve */
 	int maxsteps;   /* give up past this many frames */
 	int exit;       /* index in the submap's exit list (hl2_exits); -1: hl2_solveRoute's choice */
 	int verbose;    /* progress on stderr */
@@ -32,6 +41,7 @@ extern void hl2_solveDefaults(hl2_solveopt_t *);
  * replay ended.
  */
 extern int hl2_solveRoute(void);  /* the exit (index) on the shortest submap path to the map's end, or -1 */
+extern int hl2_solveRouteCost(void);  /* that path's length (field steps) at the last hl2_solveRoute, -1: none */
 extern int hl2_solve(const hl2_solveopt_t *, U8 *seq, int max);   /* frames, or -1 */
 extern int hl2_solvePolish(const hl2_solveopt_t *, U8 *seq, int n);  /* new length */
 extern int hl2_solveReplay(const hl2_solveopt_t *, const U8 *seq, int n);  /* frames to the goal, or -1 */

@@ -57,20 +57,24 @@ hl2_switches(hl2_switch_t *sw, int max)
 		}
 		a += 4 + 4u * (U32)nb;
 	}
-	/* nearest first (rows count double: climbing costs more than walking), and an
-	   actor's boxes only while that actor is out */
-	{
-		int i, j, rr = hl2_rickRow(), rc = hl2_rickCol();
-		for (i = 1; i < n; i++)
-			for (j = i; j > 0; j--) {
-				hl2_switch_t *p = &sw[j - 1], *q = &sw[j], t;
-				int dp = 2 * abs(p->row - rr) + abs(p->x / 8 - rc) + (p->actor && !p->spawned ? 1000 : 0);
-				int dq = 2 * abs(q->row - rr) + abs(q->x / 8 - rc) + (q->actor && !q->spawned ? 1000 : 0);
-				if (dq >= dp) break;
-				t = *p; *p = *q; *q = t;
-			}
-	}
+	hl2_switchesSort(sw, n, hl2_rickRow(), hl2_rickCol());
 	return n;
+}
+
+/* nearest to (row, col) first (rows count double: climbing costs more than walking),
+   and an actor's boxes only while that actor is out */
+void
+hl2_switchesSort(hl2_switch_t *sw, int n, int rr, int rc)
+{
+	int i, j;
+	for (i = 1; i < n; i++)
+		for (j = i; j > 0; j--) {
+			hl2_switch_t *p = &sw[j - 1], *q = &sw[j], t;
+			int dp = 2 * abs(p->row - rr) + abs(p->x / 8 - rc) + (p->actor && !p->spawned ? 1000 : 0);
+			int dq = 2 * abs(q->row - rr) + abs(q->x / 8 - rc) + (q->actor && !q->spawned ? 1000 : 0);
+			if (dq >= dp) break;
+			t = *p; *p = *q; *q = t;
+		}
 }
 
 /* the live actors spawned from switch <s>'s record (their +$2a, algo-actors.md §1)
@@ -162,6 +166,7 @@ play(const U8 *p, int n, int sub, int lives)
 
 #define PRESS_MAX 96
 #define WP_TRIES 8
+#define WP_STALL 200   /* frames with no new closest distance, in a waypoint search */
 
 /* a pseudo method: a bomb thrown (fire + down + left/right). On a plain floor it
    slides THROW_PX and blows there (measured 2026-10-02, maps 1-4); other floors
@@ -250,7 +255,7 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 	size_t sz = hl2_stateSize();
 	U8 *start = malloc(sz), *at = malloc(sz), p[PRESS_MAX + 32];
 	int mi, di, f, n, shift, k, np, res = -1, sub = rd2_rw(HL2_SUBMAP), lives = rd2_rw(HL2_LIVES);
-	int tries = 0;
+	int tries = 0, d;
 
 	hl2_stateSave(start);
 	for (mi = 0; mi < 4 && res < 0; mi++) {
@@ -273,15 +278,25 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 				if (c == lastc || (!standable(f, c) && !(x == xlo && !standable(f, (xhi + 4) >> 3))))
 					continue;
 				lastc = c;
-				/* at most WP_TRIES waypoint searches per switch: map 2 submap 1 spent hours on one
-				   far bomb box, every row x column x method x side */
-				if (++tries > WP_TRIES)
-					goto out;
 				hl2_stateLoad(start);
 				o.wp_row = f;
 				o.wp_col = c;
 				o.exit = -1;
 				o.stuck = NULL;
+				o.stage = NULL;
+				o.stage_n = NULL;
+				o.res = NULL;
+				/* a spot the field cannot reach costs nothing; the others a search capped by
+				   their distance (map 2 submap 1: six ~340 000-node searches for one box) */
+				d = hl2_solveDistance(&o);
+				if (d < 0 || d >= 1000)
+					continue;
+				/* at most WP_TRIES waypoint searches per switch: map 2 submap 1 spent hours on one
+				   far bomb box, every row x column x method x side */
+				if (++tries > WP_TRIES)
+					goto out;
+				o.maxsteps = 300 + 16 * d < o0->maxsteps ? 300 + 16 * d : o0->maxsteps;
+				o.stall = o0->stall < WP_STALL ? o0->stall : WP_STALL;
 				n = hl2_solve(&o, seq, max - PRESS_MAX - 32);
 				if (n < 0)
 					continue;

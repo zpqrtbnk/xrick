@@ -116,8 +116,31 @@ fnv(int key)
 	return h;
 }
 
+/* the search key, 8 bytes at a time (the byte-wise FNV was about a fifth of a
+   search's time); same regions as fnv(1) */
+static unsigned long long
+key64(void)
+{
+	unsigned long long h = 0x9e3779b97f4a7c15ULL, w;
+	U32 a;
+	int i;
+
+	for (i = 0; i < N_REGIONS; i++) {
+		if (regions[i].render)
+			continue;
+		for (a = regions[i].lo; a + 8 <= regions[i].hi; a += 8) {
+			memcpy(&w, rd2_ram + a, 8);
+			h = (h ^ w) * 0xff51afd7ed558ccdULL;
+			h ^= h >> 29;
+		}
+		for (; a < regions[i].hi; a++)
+			h = (h ^ rd2_ram[a]) * 0x100000001b3ULL;
+	}
+	return h ^ (h >> 32);
+}
+
 unsigned long long hl2_stateHash(void) { return fnv(0); }
-unsigned long long hl2_stateKey(void) { return fnv(1); }
+unsigned long long hl2_stateKey(void) { return key64(); }
 
 int
 hl2_stateRegions(void)
