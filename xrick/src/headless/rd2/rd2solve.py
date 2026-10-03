@@ -181,7 +181,8 @@ def main():
     ap.add_argument("--budget", type=float, default=110, help="minutes")
     ap.add_argument("--root", default=os.path.join(BUILD, "rd2solve"))
     ap.add_argument("--status", action="store_true")
-    ap.add_argument("--retry", action="store_true", help="stuck maps start again at the first beam")
+    ap.add_argument("--retry", action="store_true",
+                    help="every map starts again at the first beam (after a solver change)")
     a = ap.parse_args()
     if a.status:
         status(a.root)
@@ -189,7 +190,7 @@ def main():
     deadline = time.time() + a.budget * 60
     maps = [Map(a.root, int(m), a.jobs, deadline) for m in a.maps.split(",")]
     for mp in maps:
-        if a.retry and mp.st.get("state") == "stuck":
+        if a.retry:
             mp.st["level"] = 0
     th = [threading.Thread(target=mp.run) for mp in maps]
     for t in th:
