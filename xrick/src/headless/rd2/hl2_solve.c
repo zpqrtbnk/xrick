@@ -667,7 +667,7 @@ play(int a, int *j)
  * reached past two dart traps, nothing committed).
  */
 #define STAGE_TRY 256
-#define STAGE_IDLE 50
+#define STAGE_IDLE 150  /* map 2 submap 1: a stage that lived 50 idle frames was doomed (a sliding ice block, 41 frames later) */
 
 #define LASER_VALUE 4    /* one tile */
 #define BOMB_VALUE 16    /* four tiles */

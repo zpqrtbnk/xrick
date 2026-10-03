@@ -312,7 +312,7 @@ emit(const char *out, const U8 *seq, int n)
 /*
  * a bomb still in flight blocks the next one (one at a time): the switches' presses
  * would all be ignored (map 3 submap 2: a stage ended just after a drop). Idle until
- * it is gone -- at most 50 frames, what a stage survives idle -- if Rick lives
+ * it is gone -- at most 50 frames, well within the 150 a stage survives idle -- if Rick lives
  * through it; else leave the state as it is.
  */
 static void
