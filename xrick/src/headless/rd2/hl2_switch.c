@@ -167,6 +167,7 @@ play(const U8 *p, int n, int sub, int lives)
 #define PRESS_MAX 96
 #define WP_TRIES 8
 #define WP_STALL 200   /* frames with no new closest distance, in a waypoint search */
+#define BOMB_ABOVE 6   /* rows above a bomb box to drop from */
 
 /* a pseudo method: a bomb thrown (fire + down + left/right). On a plain floor it
    slides THROW_PX and blows there (measured 2026-10-02, maps 1-4); other floors
@@ -249,6 +250,30 @@ standable(int f, int c)
 }
 
 /*
+ * from snapshot <at>: walk 0..12 frames either way (2 px each), then the press of
+ * method <m> facing <dir> (for a bomb, with each escape) until box <s> fires; the
+ * frames into p, or -1
+ */
+static int
+presses(int m, U8 dir, const hl2_switch_t *s, const U8 *at, int sub, int lives, U8 *p)
+{
+	int shift, k, np;
+	for (shift = 0; shift < 25 * (m == 0x04 || m == THROW ? N_ESC * N_ELEN : 1); shift++) {
+		int bomb = m == 0x04 || m == THROW;
+		int sh = bomb ? shift % 25 : shift, esc = bomb ? shift / 25 : 0;
+		U8 w = sh & 1 ? 4 : 8;
+		int nw = (sh + 1) / 2;
+		np = 0;
+		for (k = 0; k < nw; k++) p[np++] = w;
+		np += press(m, dir, esc, p + np);
+		hl2_stateLoad(at);
+		if (play_fire(p, np, sub, lives, s))
+			return np;
+	}
+	return -1;
+}
+
+/*
  * fire switch <s>: frames into seq (the waypoint path plus the press), or -1. The
  * state is put back; the caller replays seq.
  */
@@ -259,7 +284,7 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 	hl2_solveopt_t o = *o0;
 	size_t sz = hl2_stateSize();
 	U8 *start = malloc(sz), *at = malloc(sz), p[PRESS_MAX + 32];
-	int mi, di, f, n, shift, k, np, res = -1, sub = rd2_rw(HL2_SUBMAP), lives = rd2_rw(HL2_LIVES);
+	int mi, di, f, n, np, res = -1, sub = rd2_rw(HL2_SUBMAP), lives = rd2_rw(HL2_LIVES);
 	int tries = 0, d;
 
 	hl2_stateSave(start);
@@ -275,9 +300,33 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 			aim_x(s, m, dir, &xlo, &xhi);
 			if (xlo < 0) xlo = 0;
 			if (xhi > 0xe8) xhi = 0xe8;
-			/* feet rows that put the point inside the box, bottom first; columns of
-			   the x range where Rick can stand (or the range's start if none) */
-			for (f = s->row + (s->h + 5) / 8; f >= s->row + 1 && res < 0; f--)
+			/* first from where Rick stands, if that is within a walk of the spots: it
+			   may be a lift or a platform, which the tile spots below do not know (map
+			   2 submap 1: the lift's edge, over the pit) */
+			{
+				int rx = rd2_rws(HL2_RICK_X), rr = hl2_rickRow();
+				hl2_stateLoad(start);
+				if (rd2_rw(0x12e1cu) != 0 && rx >= xlo - 24 && rx <= xhi + 24 &&
+				    rr <= s->row + (s->h + 5) / 8 &&
+				    rr >= s->row + 1 - ((m == 0x04 || m == THROW) ? BOMB_ABOVE : 0)) {
+					hl2_stateSave(at);
+					np = presses(m, dir, s, at, sub, lives, p);
+					if (np > 0) {
+						memcpy(seq, p, (size_t)np);
+						res = np;
+						if (o.verbose)
+							fprintf(stderr, "switch %lu: fired from where Rick stands\n", (unsigned long)s->rec);
+						break;
+					}
+				}
+			}
+			/* feet rows that put the point inside the box, bottom first -- for a bomb
+			   then up to BOMB_ABOVE rows above it, the bomb falls in (map 2 submap 1:
+			   the hazard in the pit below the lift dies of a bomb dropped from the
+			   lift's edge, 2026-10-03); columns of the x range where Rick can stand
+			   (or the range's start if none) */
+			for (f = s->row + (s->h + 5) / 8;
+			     f >= s->row + 1 - ((m == 0x04 || m == THROW) ? BOMB_ABOVE : 0) && res < 0; f--)
 			for (x = xlo, lastc = -1; x <= xhi && res < 0; x += 2) {
 				c = (x + 4) >> 3;
 				if (c == lastc || (!standable(f, c) && !(x == xlo && !standable(f, (xhi + 4) >> 3))))
@@ -312,19 +361,8 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 				if (!play(seq, n, sub, lives))
 					continue;
 				hl2_stateSave(at);
-				/* walk 0..12 frames either way (2 px each), then the press (for a bomb,
-				   with each escape) */
-				for (shift = 0; shift < 25 * (m == 0x04 || m == THROW ? N_ESC * N_ELEN : 1) && res < 0; shift++) {
-					int bomb = m == 0x04 || m == THROW;
-					int sh = bomb ? shift % 25 : shift, esc = bomb ? shift / 25 : 0;
-					U8 w = sh & 1 ? 4 : 8;
-					int nw = (sh + 1) / 2;
-					np = 0;
-					for (k = 0; k < nw; k++) p[np++] = w;
-					np += press(m, dir, esc, p + np);
-					hl2_stateLoad(at);
-					if (!play_fire(p, np, sub, lives, s))
-						continue;
+				np = presses(m, dir, s, at, sub, lives, p);
+				if (np > 0) {
 					memcpy(seq + n, p, (size_t)np);
 					res = n + np;
 				}
