@@ -211,15 +211,18 @@ knorm(int f, int c, int k)
 static int
 edges(int f, int c, int k, int *to, int *cost)
 {
-	int n = 0, d, nf, nk;
+	int n = 0, d, nf, nk, ground = support(f, c) || ladder(f, c);
 
-	for (d = -1; d <= 1; d += 2)                               /* walk / drift */
-		if (fp_free(f, c + d)) {
-			nk = knorm(f, c + d, (support(f, c) || ladder(f, c)) ? JUMP_ROWS : k);
+	/* walk / drift; through a 2-row gap only crawling, from the ground: in the air Rick
+	   is standing height (map 4 submap 0: the field crawled over the barrels, rows
+	   24-25, which only a jump reaches -- under a ceiling a jump cannot pass) */
+	for (d = -1; d <= 1; d += 2)
+		if (ground ? fp_free(f, c + d) : fp_stand(f, c + d)) {
+			nk = knorm(f, c + d, ground ? JUMP_ROWS : k);
 			to[n] = IDX(f, c + d, nk); cost[n++] = fp_stand(f, c + d) ? 1 : 2;
 		}
 	nf = f + 1;                                                  /* fall / climb down */
-	if (fp_free(nf, c)) {
+	if (ground ? fp_free(nf, c) : fp_stand(nf, c)) {
 		if (!support(f, c) || ladder(nf, c)) {
 			to[n] = IDX(nf, c, knorm(nf, c, JUMP_ROWS)); cost[n++] = 1;
 		} else {                                                 /* through a floor: a lift? */
