@@ -44,10 +44,13 @@ CORE = os.environ.get("XRICK2_CORE", os.path.join(BUILD, "core2", "xrick2-core")
 BEAMS = (192, 384, 768)
 
 
-def check(m, joy):
+def check(m, joy, blocks=()):
     """replay <joy> on a new game on map m: frames, valid (never dead, no life lost),
-       where it ends, the route cost to the map's end (0 when the map is done)"""
+       where it ends, the route cost to the map's end (0 when the map is done) with the
+       exits <blocks> left out, as the chain routes"""
     args = [CORE, "-map", str(m), "-steplog", "-distance"]
+    for b in blocks:
+        args += ["-block", b]
     if os.path.getsize(joy):
         args += ["-inputs", joy]
     else:
@@ -108,7 +111,7 @@ class Map:
         os.replace(tmp, os.path.join(self.dir, "status.json"))
 
     def run(self):
-        cur = check(self.m, self.best)
+        cur = check(self.m, self.best, self.st.get("blocks", []))
         if not cur["valid"]:
             self.save(state="error", reason="best.joy loses a life", best=cur)
             return
@@ -116,7 +119,7 @@ class Map:
         run = os.path.join(self.dir, "run.joy")
         log = self.st.get("log")
         if os.path.exists(run) and log and os.path.exists(log):
-            new = check(self.m, run)
+            new = check(self.m, run, self.st.get("blocks", []))
             if better(new, cur, log):
                 shutil.copyfile(self.best, os.path.join(self.dir, "best.prev.joy"))
                 os.replace(run, self.best)
@@ -149,9 +152,10 @@ class Map:
                     os.killpg(self.proc.pid, signal.SIGKILL)
                     self.proc.wait()
                     lf.write("\nrd2solve: stopped at the time budget\n")
-            new = check(self.m, run)
             # exits the chain left out ("solve: exit E of submap S left out from row R"):
-            # kept for the next attempts from the same best.joy
+            # kept for the next attempts (only --retry clears them: progress made on a
+            # detour must not route back into what was left out), and both ends are
+            # measured with them, so a detour counts as progress
             blocks = list(self.st.get("blocks", []))
             with open(log) as lf:
                 for l in lf:
@@ -161,13 +165,15 @@ class Map:
                         if b not in blocks:
                             blocks.append(b)
             self.save(blocks=blocks)
+            new = check(self.m, run, blocks)
+            cur = check(self.m, self.best, blocks)
             with open(log, "a") as lf:
                 lf.write("rd2solve: run.joy %s\nrd2solve: best.joy %s\n" % (json.dumps(new), json.dumps(cur)))
             if better(new, cur, log):
                 shutil.copyfile(self.best, os.path.join(self.dir, "best.prev.joy"))
                 os.replace(run, self.best)
                 cur = new
-                self.save(level=0, best=cur, blocks=[], last_progress=time.strftime("%Y-%m-%d %H:%M:%S"))
+                self.save(level=0, best=cur, last_progress=time.strftime("%Y-%m-%d %H:%M:%S"))
             elif time.time() < self.deadline - 60:     # not cut short: the beam did not do it
                 self.save(level=level + 1, best=cur)
         self.save(state="paused", best=cur)
@@ -195,7 +201,7 @@ def main():
     ap.add_argument("--root", default=os.path.join(BUILD, "rd2solve"))
     ap.add_argument("--status", action="store_true")
     ap.add_argument("--retry", action="store_true",
-                    help="every map starts again at the first beam (after a solver change)")
+                    help="every map starts again at the first beam, no exit left out (after a solver change)")
     a = ap.parse_args()
     if a.status:
         status(a.root)
@@ -205,6 +211,7 @@ def main():
     for mp in maps:
         if a.retry:
             mp.st["level"] = 0
+            mp.st["blocks"] = []
     th = [threading.Thread(target=mp.run) for mp in maps]
     for t in th:
         t.start()
