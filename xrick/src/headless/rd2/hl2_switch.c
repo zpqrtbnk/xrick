@@ -161,6 +161,7 @@ play(const U8 *p, int n, int sub, int lives)
 }
 
 #define PRESS_MAX 96
+#define WP_TRIES 8
 
 /* a pseudo method: a bomb thrown (fire + down + left/right). On a plain floor it
    slides THROW_PX and blows there (measured 2026-10-02, maps 1-4); other floors
@@ -249,6 +250,7 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 	size_t sz = hl2_stateSize();
 	U8 *start = malloc(sz), *at = malloc(sz), p[PRESS_MAX + 32];
 	int mi, di, f, n, shift, k, np, res = -1, sub = rd2_rw(HL2_SUBMAP), lives = rd2_rw(HL2_LIVES);
+	int tries = 0;
 
 	hl2_stateSave(start);
 	for (mi = 0; mi < 4 && res < 0; mi++) {
@@ -271,6 +273,10 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 				if (c == lastc || (!standable(f, c) && !(x == xlo && !standable(f, (xhi + 4) >> 3))))
 					continue;
 				lastc = c;
+				/* at most WP_TRIES waypoint searches per switch: map 2 submap 1 spent hours on one
+				   far bomb box, every row x column x method x side */
+				if (++tries > WP_TRIES)
+					goto out;
 				hl2_stateLoad(start);
 				o.wp_row = f;
 				o.wp_col = c;
@@ -305,6 +311,7 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 			}
 		}
 	}
+out:
 	hl2_stateLoad(start);
 	free(start); free(at);
 	return res;
