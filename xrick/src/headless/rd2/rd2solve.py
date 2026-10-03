@@ -112,6 +112,16 @@ class Map:
         if not cur["valid"]:
             self.save(state="error", reason="best.joy loses a life", best=cur)
             return
+        # an attempt cut short (this script stopped): what it committed may be progress
+        run = os.path.join(self.dir, "run.joy")
+        log = self.st.get("log")
+        if os.path.exists(run) and log and os.path.exists(log):
+            new = check(self.m, run)
+            if better(new, cur, log):
+                shutil.copyfile(self.best, os.path.join(self.dir, "best.prev.joy"))
+                os.replace(run, self.best)
+                cur = new
+                self.save(level=0, best=cur, last_progress=time.strftime("%Y-%m-%d %H:%M:%S"))
         while time.time() < self.deadline - 60:
             if cur["done"]:
                 self.save(state="done", best=cur)
