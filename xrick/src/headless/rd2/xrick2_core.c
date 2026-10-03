@@ -309,6 +309,35 @@ emit(const char *out, const U8 *seq, int n)
 #define STAGES_MAX 64
 #define TRIED_MAX 64
 
+/*
+ * a bomb still in flight blocks the next one (one at a time): the switches' presses
+ * would all be ignored (map 3 submap 2: a stage ended just after a drop). Idle until
+ * it is gone -- at most 50 frames, what a stage survives idle -- if Rick lives
+ * through it; else leave the state as it is.
+ */
+static void
+settle(const char *out)
+{
+	static U8 z[50];
+	U8 *back;
+	int i, lives = rd2_rw(HL2_LIVES), sub = rd2_rw(HL2_SUBMAP);
+
+	if (rd2_rw(0x16b12u) == 0)
+		return;
+	back = malloc(hl2_stateSize());
+	hl2_stateSave(back);
+	for (i = 0; i < 50 && rd2_rw(0x16b12u) != 0; i++)
+		if (hl2_step(0) != HL2_STEP || hl2_rickDead() || rd2_rw(HL2_LIVES) < lives ||
+		    rd2_rw(HL2_SUBMAP) != sub)
+			break;
+	if (rd2_rw(0x16b12u) == 0 && !hl2_rickDead() && rd2_rw(HL2_LIVES) >= lives) {
+		emit(out, z, i);
+		printf("solve:   %d idle frames: the bomb in flight is gone\n", i);
+	} else
+		hl2_stateLoad(back);
+	free(back);
+}
+
 static int
 attempt(hl2_solveopt_t *o, U8 *seq, const char *out)
 {
@@ -339,22 +368,14 @@ attempt(hl2_solveopt_t *o, U8 *seq, const char *out)
 			if (d1 < d0) {
 				printf("solve:   stage %d: %d frames, distance %d -> %d\n", ++stages, stage_n, d0, d1);
 				emit(out, stage, stage_n);
-				/* a bomb still in flight blocks the next one (one at a time): the
-				   switches' presses would all be ignored (map 3 submap 2). The stage
-				   survived 50 idle frames, so idle until it is gone */
-				for (i = 0; i < 50 && rd2_rw(0x16b12u) != 0; i++) {
-					U8 z = 0;
-					hl2_step(z);
-					emit(out, &z, 1);
-				}
-				if (i)
-					printf("solve:   %d idle frames: the bomb in flight is gone\n", i);
+				settle(out);
 				continue;
 			}
 			hl2_stateLoad(back);
 		}
 		if (o->wp_row >= 0 || !switches)
 			break;
+		settle(out);
 		nsw = hl2_switches(sw, 32);
 		hl2_switchesSort(sw, nsw, res.row, res.col);
 		printf("solve:   closest distance %d at row %d col %d; switches\n", best0, res.row, res.col);
