@@ -179,9 +179,14 @@ play(const U8 *p, int n, int sub, int lives)
    way out is the ladder down) */
 static const U8 escapes[] = { 0x04, 0x08, 0x02, 0x01, 0x06, 0x0a, 0x05, 0x09 };
 #define N_ESC ((int)sizeof(escapes))
+/* and for how long, then stand until 64 frames after the drop: 30 walks out of a
+   room whose exit is 60 px away (map 3 submap 2: the bomb box by the left exit fires
+   with a drop and 12-20 frames left, 2026-10-03) */
+static const U8 esc_len[] = { 30, 20, 12 };
+#define N_ELEN ((int)sizeof(esc_len))
 
 /* the action program for method <m> facing <dir> (4 left, 8 right); <esc>: the
-   bomb's escape (escapes[]) */
+   bomb's escape, escapes[esc % N_ESC] for esc_len[esc / N_ESC] frames */
 static int
 press(int m, U8 dir, int esc, U8 *p)
 {
@@ -196,12 +201,12 @@ press(int m, U8 dir, int esc, U8 *p)
 		for (i = 0; i < 30; i++) p[n++] = 0;
 	} else if (m == 0x04) {                  /* bomb: drop, get away, wait for the blast */
 		p[n++] = 0; p[n++] = 0; p[n++] = 0x82; p[n++] = 0x82;
-		for (i = 0; i < 30; i++) p[n++] = escapes[esc];
-		for (i = 0; i < 30; i++) p[n++] = 0;
+		for (i = 0; i < esc_len[esc / N_ESC]; i++) p[n++] = escapes[esc % N_ESC];
+		for (i = esc_len[esc / N_ESC]; i < 60; i++) p[n++] = 0;
 	} else {                                 /* THROW: fire + down + dir, the bomb slides */
 		p[n++] = 0; p[n++] = 0; p[n++] = (U8)(0x82 | dir); p[n++] = (U8)(0x82 | dir);
-		for (i = 0; i < 30; i++) p[n++] = esc ? escapes[esc] : 0;
-		for (i = 0; i < 30; i++) p[n++] = 0;
+		for (i = 0; i < esc_len[esc / N_ESC]; i++) p[n++] = esc % N_ESC ? escapes[esc % N_ESC] : 0;
+		for (i = esc_len[esc / N_ESC]; i < 60; i++) p[n++] = 0;
 	}
 	return n;
 }
@@ -309,7 +314,7 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 				hl2_stateSave(at);
 				/* walk 0..12 frames either way (2 px each), then the press (for a bomb,
 				   with each escape) */
-				for (shift = 0; shift <= 24 * (m == 0x04 || m == THROW ? N_ESC : 1) && res < 0; shift++) {
+				for (shift = 0; shift < 25 * (m == 0x04 || m == THROW ? N_ESC * N_ELEN : 1) && res < 0; shift++) {
 					int bomb = m == 0x04 || m == THROW;
 					int sh = bomb ? shift % 25 : shift, esc = bomb ? shift / 25 : 0;
 					U8 w = sh & 1 ? 4 : 8;
