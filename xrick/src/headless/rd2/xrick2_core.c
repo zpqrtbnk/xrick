@@ -680,8 +680,10 @@ main(int argc, char *argv[])
 	}
 	if (distance) {
 		int ex = hl2_solveRoute(), rc = hl2_solveRouteCost();
-		printf("distance: %d (exit %d), route %d\n", hl2_solveDistance(&sopt),
-		       sopt.exit >= 0 ? sopt.exit : ex, rc);
+		int rb, rl;
+		hl2_solveReserve(&rb, &rl);
+		printf("distance: %d (exit %d), route %d, reserve bombs %d laser %d\n",
+		       hl2_solveDistance(&sopt), sopt.exit >= 0 ? sopt.exit : ex, rc, rb, rl);
 	}
 	if (view_up >= 0)
 		hl2_view(stdout, view_up, view_down);

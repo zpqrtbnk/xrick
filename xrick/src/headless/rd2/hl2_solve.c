@@ -75,6 +75,45 @@ static int g_wp_row = -1, g_wp_col;
 static int g_submap, g_map, g_lives, g_minbombs, g_minlaser, g_survive;
 static U32 g_t0;
 
+/*
+ * ammo the search's own bomb and laser programs leave alone: one per switch of the map
+ * that only a bomb (box mask 4) or only a shot (mask 2) fires, not met yet (record not
+ * spawned) or with its actor still out. Map 3 reached submap 8, which needs two bombs,
+ * with one: the others had gone on stages and a back-and-forth (2026-10-04). The switch
+ * module is not held back by it; ammo pickups exist, so this is a heuristic.
+ */
+static int g_res_bombs, g_res_laser;
+
+static void
+ammo_reserve(int *bombs, int *laser)
+{
+	int sm, nsub = hl2_submaps(), k, i, live;
+	U32 a, d, act;
+
+	*bombs = *laser = 0;
+	for (sm = 0; sm < nsub; sm++) {
+		a = 0x54c00u + rd2_rw(0x54c06u + 8u * (U32)sm);
+		for (; rd2_rb(a) != 0; a += 4 + 4u * (U32)(rd2_rb(a + 3) & 3)) {
+			for (live = 0, i = 0, act = 0x16b6au; i < 6; i++, act += 0x58)
+				if (rd2_rws(act) > 0 && rd2_rl(act + 0x2a) == a)
+					live = 1;
+			if ((rd2_rb(a) & 0x80) && !live)
+				continue;                      /* met, and nothing left to fire */
+			for (k = 0; k < (rd2_rb(a + 3) & 3); k++) {
+				d = a + 4 + 4u * (U32)k;
+				if ((rd2_rb(d + 3) & 0x0e) == 0x04) (*bombs)++;
+				if ((rd2_rb(d + 3) & 0x0e) == 0x02) (*laser)++;
+			}
+		}
+	}
+}
+
+void
+hl2_solveReserve(int *bombs, int *laser)
+{
+	ammo_reserve(bombs, laser);
+}
+
 static int
 goal_set(const hl2_solveopt_t *o)
 {
@@ -87,6 +126,7 @@ goal_set(const hl2_solveopt_t *o)
 	g_map = rd2_rw(HL2_MAP_PLAYING);
 	g_lives = rd2_rw(HL2_LIVES);
 	g_minbombs = o->minbombs;
+	ammo_reserve(&g_res_bombs, &g_res_laser);
 	g_minlaser = o->minlaser;
 	g_survive = o->survive;
 	g_t0 = hl2_tick();
@@ -804,9 +844,11 @@ static int
 skip_prog(int a)
 {
 	if (progs[a].kind == K_BOMB)             /* a bomb in play already, or none to spare */
-		return rd2_rw(0x16b12u) != 0 || rd2_rw(HL2_BOMBS) <= g_minbombs;
+		return rd2_rw(0x16b12u) != 0 || rd2_rw(HL2_BOMBS) <= g_minbombs ||
+		       rd2_rw(HL2_BOMBS) <= g_res_bombs;
 	if (progs[a].kind == K_LASER)            /* a shot in flight, or none to spare */
-		return rd2_rw(0x16902u) != 0 || rd2_rw(HL2_LASER) <= g_minlaser;
+		return rd2_rw(0x16902u) != 0 || rd2_rw(HL2_LASER) <= g_minlaser ||
+		       rd2_rw(HL2_LASER) <= g_res_laser;
 	return 0;
 }
 
