@@ -48,6 +48,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <signal.h>
+#include <unistd.h>
+#include <execinfo.h>
 
 #include "system.h"
 #include "rd2_mem.h"
@@ -56,6 +59,17 @@
 #include "hl2_obs.h"
 #include "hl2_solve.h"
 #include "hl2_switch.h"
+
+/* SIGUSR1: the call stack on stderr (a worker that never comes back: map 4 submap 6,
+   2026-10-04); symbolize with addr2line -f -e xrick2-core <offset> */
+static void
+on_usr1(int sig)
+{
+	void *bt[64];
+	int n = backtrace(bt, 64);
+	(void)sig;
+	backtrace_symbols_fd(bt, n, 2);
+}
 
 static void
 usage(void)
@@ -512,6 +526,8 @@ main(int argc, char *argv[])
 	double t0;
 
 	setvbuf(stdout, NULL, _IOLBF, 0);        /* progress lines through a pipe */
+	signal(SIGUSR1, on_usr1);
+	hl2_watchdog();
 	hl2_solveDefaults(&sopt);
 	for (a = 1; a < argc; a++) {
 		if (!strcmp(argv[a], "-map") && a + 1 < argc)

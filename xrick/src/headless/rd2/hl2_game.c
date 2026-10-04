@@ -8,6 +8,7 @@
  */
 
 #include <setjmp.h>
+#include <string.h>
 
 #include "rd2_mem.h"
 #include "rd2_sys.h"
@@ -96,6 +97,48 @@ mapdone(void)
 	return HL2_MAP;
 }
 
+/*
+ * watchdog: a frame that never ends. Map 4 submap 6 (2026-10-04): an actor's movement
+ * script loop in update_actor_ai ($14da4, rd2_actors.c rd2_14d70) never left, so the
+ * search's workers spun for an hour. A periodic SIGALRM (WD_MS) sees whether a frame
+ * finished since the last tick; when one has not, it jumps out of hl2_step, which
+ * reports HL2_STUCK. Whether the ST hangs the same way is not known.
+ */
+#include <signal.h>
+#include <sys/time.h>
+
+#define WD_MS 250
+
+static sigjmp_buf stuck_jmp;
+static volatile sig_atomic_t in_frame, frames_done, last_seen = -1;
+
+static void
+on_alarm(int sig)
+{
+	(void)sig;
+	if (in_frame && frames_done == last_seen) {
+		in_frame = 0;
+		siglongjmp(stuck_jmp, 1);
+	}
+	last_seen = frames_done;
+}
+
+void
+hl2_watchdog(void)
+{
+	struct sigaction sa;
+	struct itimerval it;
+
+	memset(&sa, 0, sizeof sa);
+	sa.sa_handler = on_alarm;
+	sa.sa_flags = SA_NODEFER | SA_RESTART;   /* not blocked after the jump (no mask saved) */
+	sigaction(SIGALRM, &sa, NULL);
+	it.it_interval.tv_sec = 0;
+	it.it_interval.tv_usec = WD_MS * 1000;
+	it.it_value = it.it_interval;
+	setitimer(ITIMER_REAL, &it, NULL);
+}
+
 int
 hl2_step(U8 joy)
 {
@@ -103,6 +146,11 @@ hl2_step(U8 joy)
 		return status;
 	rd2_wb(RD2_JOY, joy);                       /* as rd2_demo_frame plays it */
 	tick++;
+	if (sigsetjmp(stuck_jmp, 0)) {
+		status = HL2_STUCK;
+		return status;
+	}
+	in_frame = 1;
 	switch (rd2_frame_step()) {
 	case RD2_STEP_FRAME:
 		status = HL2_STEP;
@@ -114,6 +162,8 @@ hl2_step(U8 joy)
 		status = HL2_OVER;
 		break;
 	}
+	in_frame = 0;
+	frames_done++;
 	return status;
 }
 

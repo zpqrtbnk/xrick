@@ -972,6 +972,7 @@ workers_start(int jobs, int beam, size_t sz)
 		if (pid == 0) {                      /* a worker: one byte per group, EOF = stop */
 			char c;
 			int k;
+			hl2_watchdog();                  /* timers are not inherited */
 			close(p[1]); close(d[0]);
 			for (k = 0; k < i; k++) close(w_cmd[k]);
 			while (read(p[0], &c, 1) == 1) {

@@ -16,11 +16,13 @@
 #define HL2_OVER 2  /* END_OF_RUN: last life lost */
 #define HL2_HANG 3  /* map 5's load hangs (red border): map 4 done in a game begun on map 1 */
 #define HL2_END  4  /* map 4 done in a game begun elsewhere: END_OF_RUN */
+#define HL2_STUCK 5 /* the frame never ended (hl2_watchdog): a state to throw away */
 
 extern void hl2_start(int map);   /* boot, then a new game on map 1..4, as `xrick -game 2 -map N` */
 extern void hl2_boot(void);       /* hl2_start = hl2_boot + hl2_newgame */
 extern void hl2_newgame(int map);
 extern int hl2_step(U8 joy);      /* one game_main frame with joystick byte <joy> */
+extern void hl2_watchdog(void);   /* arm it in this process (and again in each fork) */
 extern int hl2_status(void);      /* the last hl2_step result */
 extern U32 hl2_tick(void);        /* frames since the current map's level start */
 extern void hl2_hang(void);       /* hl2_sys.c: rd2_sys_hang_red */
