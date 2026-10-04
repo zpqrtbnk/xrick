@@ -254,6 +254,35 @@ standable(int f, int c)
  * method <m> facing <dir> (for a bomb, with each escape) until box <s> fires; the
  * frames into p, or -1
  */
+/*
+ * a bomb dropped, then a search for any way to live through it (map 4 submap 0: the
+ * bush on a ledge, a creature below its left end: crawl left, jump over the creature,
+ * run -- three moves no fixed escape has); then the press is judged as any other
+ */
+static int
+bomb_search(const hl2_solveopt_t *o0, const hl2_switch_t *s, const U8 *at, int sub, int lives, U8 *p)
+{
+	static U8 esc[PRESS_MAX * 4];
+	hl2_solveopt_t o = *o0;
+	int n;
+	U8 drop[4] = { 0, 0, 0x82, 0x82 };
+
+	hl2_stateLoad(at);
+	if (!play(drop, 4, sub, lives))
+		return -1;
+	o.survive = 70;          /* fuse 40 + blast 7, and a margin */
+	o.exit = -1; o.wp_row = -1; o.wp_col = -1;
+	o.maxsteps = 160; o.stall = 160;
+	o.stuck = NULL; o.stage = NULL; o.stage_n = NULL; o.res = NULL;
+	n = hl2_solve(&o, esc, (int)sizeof esc - 8);
+	if (n < 0 || n + 4 > PRESS_MAX + 24)
+		return -1;
+	memcpy(p, drop, 4);
+	memcpy(p + 4, esc, (size_t)n);
+	hl2_stateLoad(at);
+	return play_fire(p, n + 4, sub, lives, s) ? n + 4 : -1;
+}
+
 static int
 presses(int m, U8 dir, const hl2_switch_t *s, const U8 *at, int sub, int lives, U8 *p)
 {
@@ -311,6 +340,8 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 				    rr >= s->row + 1 - ((m == 0x04 || m == THROW) ? BOMB_ABOVE : 0)) {
 					hl2_stateSave(at);
 					np = presses(m, dir, s, at, sub, lives, p);
+					if (np < 0 && m == 0x04)
+						np = bomb_search(&o, s, at, sub, lives, p);
 					if (np > 0) {
 						memcpy(seq, p, (size_t)np);
 						res = np;
@@ -362,6 +393,8 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 					continue;
 				hl2_stateSave(at);
 				np = presses(m, dir, s, at, sub, lives, p);
+				if (np < 0 && m == 0x04)
+					np = bomb_search(&o, s, at, sub, lives, p);
 				if (np > 0) {
 					memcpy(seq + n, p, (size_t)np);
 					res = n + np;

@@ -58,6 +58,7 @@ hl2_solveDefaults(hl2_solveopt_t *o)
 	o->wp_row = -1;
 	o->wp_col = -1;
 	o->stuck = NULL;
+	o->survive = 0;
 	o->stage = NULL;
 	o->stage_n = NULL;
 }
@@ -71,7 +72,8 @@ hl2_solveDefaults(hl2_solveopt_t *o)
 
 static hl2_exit_t g_exit;
 static int g_wp_row = -1, g_wp_col;
-static int g_submap, g_map, g_lives, g_minbombs, g_minlaser;
+static int g_submap, g_map, g_lives, g_minbombs, g_minlaser, g_survive;
+static U32 g_t0;
 
 static int
 goal_set(const hl2_solveopt_t *o)
@@ -86,6 +88,8 @@ goal_set(const hl2_solveopt_t *o)
 	g_lives = rd2_rw(HL2_LIVES);
 	g_minbombs = o->minbombs;
 	g_minlaser = o->minlaser;
+	g_survive = o->survive;
+	g_t0 = hl2_tick();
 	if (i < 0 || i >= n)
 		return 0;
 	g_exit = e[i];
@@ -121,6 +125,8 @@ judge(int status)
 			return R_FAIL;
 		return counters_ok() ? R_GOAL : R_FAIL;
 	}
+	if (g_survive > 0 && hl2_tick() - g_t0 >= (U32)g_survive && rd2_rw(0x16b12u) == 0)
+		return R_GOAL;
 	if (g_wp_row >= 0) {
 		int r = hl2_rickRow(), c = hl2_rickCol();
 		/* on the ground (not a ladder: the waypoint is where Rick acts next), on the

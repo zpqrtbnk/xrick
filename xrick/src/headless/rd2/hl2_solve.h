@@ -28,6 +28,8 @@ typedef struct {
 	int minbombs;   /* bombs to hold at the exit */
 	int minlaser;   /* laser shots to hold at the exit */
 	int wp_row, wp_col;  /* >= 0: a waypoint (feet row, column) instead of the exit */
+	int survive;         /* > 0: also a goal: this many frames played and no bomb in play,
+	                        Rick alive (escaping a bomb dropped at a switch) */
 	const char *stuck;   /* on failure, write the frames to the closest state there */
 	U8 *stage;           /* on failure, if not NULL: the frames to the closest safe state */
 	int *stage_n;        /* (on the ground, alive STAGE_IDLE frames later), or -1 */
