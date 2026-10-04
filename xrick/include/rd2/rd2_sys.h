@@ -36,6 +36,17 @@ void rd2_sys_info(U8 on);                         /* map / submap numbers in the
 U8 rd2_sys_endreq(void);                          /* the rd1 "end game" key (E) is down */
 U8 rd2_sys_pausekey(void);                        /* the rd1 pause key (P) is down */
 
+/* rd1's cheats F7/F8/F9 (game_toggleCheat), host additions: trainer = lives, laser and bombs
+   stay at 6; invincible = nothing kills Rick; highlight = sprites drawn over the foreground and
+   tinted, plus the boxes the game tests drawn over the playfield. Not while a demo plays or
+   with -record, so recorded and played .joy streams stay exact. */
+extern U8 rd2_cheat_trainer, rd2_cheat_invincible, rd2_cheat_highlight;
+void rd2_sys_toggleCheat(U8 n);                   /* n = 1 trainer, 2 invincible, 3 highlight */
+#define RD2_BOX_TRIGGER 0                         /* a spawn record's trigger box ($14a3c) */
+#define RD2_BOX_HURT    1                         /* any other box tested against Rick ($14b7a) */
+void rd2_sys_box(U8 kind, S16 x, S16 y, S16 w, S16 h);   /* highlight: a box tested this frame, game coords */
+void rd2_sys_hlpixel(U32 screen, S16 x, S16 y);  /* highlight: a sprite pixel drawn at x, y of a screen */
+
 /* demo mode adapter (rd2_demo.c, include/demo.h) */
 void rd2_demo_init(void);                         /* -demo / -record */
 void rd2_demo_level(void);                        /* level start $10a4e */

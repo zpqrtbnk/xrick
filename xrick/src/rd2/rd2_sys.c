@@ -23,6 +23,7 @@
 #include "rd2_mem.h"
 #include "rd2_sys.h"
 #include "rd2_game.h"
+#include "sysarg.h"
 
 U16 rd2_hw_pal[16];
 
@@ -30,6 +31,7 @@ static U8 base_hi, base_mid;        /* $ff8201 / $ff8203 */
 static U32 vbl_next;                /* host ms of the next VBL */
 static U8 joy_sent;                 /* last joystick-1 byte sent by the "IKBD" */
 static U8 joy_stale;                /* resend at the next pump even if unchanged */
+static U8 host_r[36], host_g[36], host_b[36];   /* the fb palette present() sets, also for dbg_shot */
 static rect_t full = { 0, 0, FB_WIDTH, FB_HEIGHT, NULL };
 
 #define VBL_MS 20   /* 50 Hz */
@@ -83,10 +85,10 @@ dbg_shot(U32 v)
 	fprintf(f, "P6\n320 200\n255\n");
 	for (y = 0; y < 200; y++)
 		for (x = 0; x < 320; x++) {
-			U16 c = rd2_hw_pal[fb[y][x]];
-			fputc(((c >> 8) & 7) * 255 / 7, f);
-			fputc(((c >> 4) & 7) * 255 / 7, f);
-			fputc((c & 7) * 255 / 7, f);
+			U8 c = fb[y][x] < 36 ? fb[y][x] : 0;
+			fputc(host_r[c], f);
+			fputc(host_g[c], f);
+			fputc(host_b[c], f);
 		}
 	fclose(f);
 }
@@ -199,6 +201,140 @@ void rd2_sys_info(U8 on)   { ovl_info = on; }
 U8 rd2_sys_endreq(void)    { return (U8)((control_status & CONTROL_END) != 0); }
 U8 rd2_sys_pausekey(void)  { return (U8)((control_status & CONTROL_PAUSE) != 0); }
 
+/* ---- cheats (rd1 game_toggleCheat; host additions, rd2_sys.h) ---- */
+U8 rd2_cheat_trainer, rd2_cheat_invincible, rd2_cheat_highlight;
+
+void
+rd2_sys_toggleCheat(U8 n)
+{
+#ifndef ENABLE_CHEATS
+	(void)n;
+	return;
+#endif
+	if (!ovl_info || rd2_rw(RD2_DEMO) != 0)                  /* in a level, played by hand */
+		return;
+#ifdef ENABLE_DEMO
+	if (sysarg_args_record)
+		return;
+#endif
+	switch (n) {
+	case 1:                                                  /* rd1: lives, bombs, bullets := 6 */
+		rd2_cheat_trainer = !rd2_cheat_trainer;
+		rd2_ww(0x17710, 6);                                  /* lives, HUD slot $1770e */
+		rd2_ww(0x1770e, 0xffff);
+		rd2_ww(0x176f4, 6);                                  /* laser, HUD slot $176f2 */
+		rd2_ww(0x176f2, 0xffff);
+		rd2_ww(0x17702, 6);                                  /* bombs, HUD slot $17700 */
+		rd2_ww(0x17700, 0xffff);
+		break;
+	case 2:
+		rd2_cheat_invincible = !rd2_cheat_invincible;
+		break;
+	case 3:
+		rd2_cheat_highlight = !rd2_cheat_highlight;
+		break;
+	}
+}
+
+/* highlight. Boxes: collected during a frame's logic, shown from the flip that presents that
+   frame. Tint: per screen ($70000 / $78000), the pixels the sprite blitters drew; a screen's
+   map is cleared when it becomes the draw screen again, since the game then redraws its whole
+   playfield ($18782, graphics.md §5). */
+#define BOX_RICK   2
+#define BOX_ACTOR  3
+#define BOX_MAX    64
+typedef struct { U8 kind; S16 x, y, w, h; } box_t;
+static box_t box_pend[BOX_MAX], box_shown[BOX_MAX];
+static U16 box_npend, box_nshown;
+static U8 hl[2][200][320];
+
+static U8 *
+hlmap(U32 screen)
+{
+	if ((screen & ~0x8000u) != 0x70000u)
+		return NULL;
+	return &hl[(screen >> 15) & 1][0][0];
+}
+
+static void
+box_add(box_t *l, U16 *n, U8 kind, S16 x, S16 y, S16 w, S16 h)
+{
+	if (*n < BOX_MAX) {
+		l[*n].kind = kind;
+		l[*n].x = x; l[*n].y = y; l[*n].w = w; l[*n].h = h;
+		(*n)++;
+	}
+}
+
+void
+rd2_sys_box(U8 kind, S16 x, S16 y, S16 w, S16 h)
+{
+	U16 i;
+	if (!rd2_cheat_highlight)
+		return;
+	for (i = 0; i < box_npend; i++)                          /* $14a3c's own call to $14b7a */
+		if (box_pend[i].x == x && box_pend[i].y == y && box_pend[i].w == w && box_pend[i].h == h)
+			return;
+	box_add(box_pend, &box_npend, kind, x, y, w, h);
+}
+
+void
+rd2_sys_hlpixel(U32 screen, S16 x, S16 y)
+{
+	U8 *m = hlmap(screen);
+	if (m && rd2_cheat_highlight && x >= 0 && x < 320 && y >= 0 && y < 200)
+		m[y * 320 + x] = 1;
+}
+
+static void
+cheat_flip(void)
+{
+	U8 *m = hlmap(rd2_rl(0x18ede));
+	U32 a;
+	U16 i;
+	if (m)
+		memset(m, 0, 200 * 320);
+	box_nshown = 0;
+	if (rd2_cheat_highlight) {
+		for (i = 0; i < box_npend; i++)
+			box_shown[box_nshown++] = box_pend[i];
+		/* Rick's own box, as $14b7a tests it: x [x+4, x+$14), y [y, y+$15), crouched from y+5 */
+		if (rd2_rw(0x12e2a) == 0) {
+			S16 c = rd2_rw(0x12e18) != 0 ? 5 : 0;
+			box_add(box_shown, &box_nshown, BOX_RICK, (S16)(rd2_rws(0x1695c) + 4),
+			        (S16)(rd2_rws(0x16960) + c), 0x10, (S16)(0x15 - c));
+		}
+		/* live actors, with their own size (+26, +28) as $14d04 and $15fba test it */
+		for (a = 0x16b6au, i = 0; i < 6; i++, a += 0x58)
+			if (rd2_rw(a) != 0)
+				box_add(box_shown, &box_nshown, BOX_ACTOR, rd2_rws(a + 2), rd2_rws(a + 6),
+				        rd2_rws(a + 0x26), rd2_rws(a + 0x28));
+	}
+	box_npend = 0;
+}
+
+/* box outline in fb, game coords -> screen as a sprite ($17116: x + $20, y - $38, fine scroll),
+   clipped to the playfield (32..287, 8..199) */
+static void
+box_draw(const box_t *b)
+{
+	S16 x0 = (S16)(b->x + 0x20), y0 = (S16)(b->y - 0x38 - (rd2_rw(0x16462) & 7));
+	S16 x1 = (S16)(x0 + b->w - 1), y1 = (S16)(y0 + b->h - 1), x, y;
+	U8 c = (U8)(32 + b->kind);
+	if (b->w <= 0 || b->h <= 0)
+		return;
+	for (y = y0; y <= y1; y++) {
+		if (y < 8 || y >= 200)
+			continue;
+		for (x = x0; x <= x1; x++) {
+			if (x < 32 || x >= 288)
+				continue;
+			if (y == y0 || y == y1 || x == x0 || x == x1)
+				fb[y][x] = c;
+		}
+	}
+}
+
 /* one glyph of the game's own font ($3ce54 + 32n: 8 rows x 4 plane bytes, opaque, the way
    $19272 draws it) at pixel x, y of fb */
 static void
@@ -229,6 +365,14 @@ static void
 overlays(void)
 {
 	char s[8];
+	U16 i;
+	for (i = 0; i < box_nshown; i++)
+		box_draw(&box_shown[i]);
+	if (ovl_info) {                       /* rd1 env_paintXtra: T / I / H at 0,0 8,0 16,0 */
+		if (rd2_cheat_trainer)    text("T", 0, 0);
+		if (rd2_cheat_invincible) text("I", 8, 0);
+		if (rd2_cheat_highlight)  text("H", 16, 0);
+	}
 	if (ovl_info) {                       /* rd1 env_paintXtra: M<map> / S<submap> at 0,16 */
 		snprintf(s, sizeof s, "M%02u", (unsigned int)(rd2_rw(RD2_MAP_PLAYING) % 100));
 		text(s, 0, 16);
@@ -246,25 +390,40 @@ overlays(void)
 static void
 present(void)
 {
-	U8 r[16], g[16], b[16];
+	/* 0-15 the ST palette; 16-31 the same lightened, for highlighted sprite pixels (as rd1's
+	   GFXST highlight colours, fb.c); 32-35 the highlight boxes: trigger yellow, hurt red,
+	   Rick white, actor green */
+	static const U8 br[4] = { 0xff, 0xff, 0xff, 0x00 }, bg[4] = { 0xff, 0x30, 0xff, 0xff },
+	                bb[4] = { 0x00, 0x30, 0xff, 0x00 };
+	U8 *r = host_r, *g = host_g, *b = host_b;
 	U32 base = ((U32)base_hi << 16) | ((U32)base_mid << 8);
+	U8 *m = hlmap(base);
 	U16 i, x, y;
 
 	for (i = 0; i < 16; i++) {
 		r[i] = (U8)(((rd2_hw_pal[i] >> 8) & 7) * 255 / 7);
 		g[i] = (U8)(((rd2_hw_pal[i] >> 4) & 7) * 255 / 7);
 		b[i] = (U8)((rd2_hw_pal[i] & 7) * 255 / 7);
+		r[16 + i] = (U8)(r[i] + (255 - r[i]) * 5 / 16);
+		g[16 + i] = (U8)(g[i] + (255 - g[i]) * 5 / 16);
+		b[16 + i] = (U8)(b[i] + (255 - b[i]) * 5 / 16);
 	}
-	sysvid_setPaletteFromRGB(r, g, b, 16);
+	for (i = 0; i < 4; i++) {
+		r[32 + i] = br[i];
+		g[32 + i] = bg[i];
+		b[32 + i] = bb[i];
+	}
+	sysvid_setPaletteFromRGB(r, g, b, 36);
 
 	for (y = 0; y < 200; y++)
 		for (x = 0; x < 320; x += 16) {
 			U32 a = base + y * 160u + (x >> 4) * 8u;
 			U16 p0 = rd2_rw(a), p1 = rd2_rw(a + 2), p2 = rd2_rw(a + 4), p3 = rd2_rw(a + 6);
 			for (i = 0; i < 16; i++) {
-				U16 m = (U16)(0x8000 >> i);
-				fb[y][x + i] = (U8)(((p0 & m) ? 1 : 0) | ((p1 & m) ? 2 : 0) |
-				                    ((p2 & m) ? 4 : 0) | ((p3 & m) ? 8 : 0));
+				U16 bit = (U16)(0x8000 >> i);
+				fb[y][x + i] = (U8)(((p0 & bit) ? 1 : 0) | ((p1 & bit) ? 2 : 0) |
+				                    ((p2 & bit) ? 4 : 0) | ((p3 & bit) ? 8 : 0) |
+				                    ((m && m[y * 320 + x + i]) ? 0x10 : 0));
 			}
 		}
 	overlays();
@@ -335,6 +494,7 @@ rd2_19234(void)
 	rd2_wb(0x18edc, rd2_rb(0x18edc) ^ 0x80);
 	rd2_wb(0x18ee0, rd2_rb(0x18ee0) ^ 0x80);
 	rd2_sys_setbase(rd2_rb(0x18edb), rd2_rb(0x18edc));
+	cheat_flip();                                            /* host: highlight boxes and tint */
 }
 
 /* $191e6: wait until [$19232] >= [$18ed8]-1 and has changed since entry, then clear it */

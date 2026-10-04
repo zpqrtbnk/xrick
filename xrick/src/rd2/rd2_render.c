@@ -253,8 +253,10 @@ blit(U32 a6, S16 sx, S16 sy, U32 a0, U32 a1, int masked)
 				continue;
 			if (!((p0 | p1 | p2 | p3) & bit))
 				continue;
-			if (masked && !(rd2_rb(mline + (U32)(x >> 3)) & (0x80 >> (x & 7))))
+			if (masked && !rd2_cheat_highlight &&               /* host: highlight cheat, as rd1 */
+			    !(rd2_rb(mline + (U32)(x >> 3)) & (0x80 >> (x & 7))))
 				continue;
+			rd2_sys_hlpixel(a1, x, W(sy + r));
 			ga = line + (U32)(x >> 4) * 8u;
 			m = (U16)(0x8000 >> (x & 15));
 			for (pl = 0; pl < 4; pl++) {
