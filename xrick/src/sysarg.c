@@ -86,8 +86,11 @@ sysarg_fail(char *msg)
         "                         if a map was specified, at the first submap of that map.\n"
         "                         Not with -game 2.\n"
         "  -keys <bindings>     override the default key bindings, <bindings> uses format\n"
-        "                         <left>-<right>-<up>-<down>-<fire> (cf. KeyCodes)\n",
-        // FIXME what's KeyCodes? also nb of maps/submaps depend on game!
+        "                         <left>-<right>-<up>-<down>-<fire>, default S-D-O-K-SPACE.\n"
+        "                         Keys are named after their place on a US keyboard, not the\n"
+        "                         letter printed on yours: A..Z, 0..9, F1..F24, SPACE, RETURN,\n"
+        "                         TAB, LEFT, RIGHT, UP, DOWN, KP_0..KP_9, etc. (src/sdlcodes.e)\n",
+        // FIXME nb of maps/submaps depend on game!
         VERSION, msg, GAME_PERIOD, MAP_NBR_MAPS-1, MAP_NBR_SUBMAPS);
 #ifdef ENABLE_SOUND
     sys_printf(
@@ -110,6 +113,21 @@ sysarg_fail(char *msg)
     	"  -trace <file>        RD1: write one line per logic step to <file> -- random\n"
     	"                         generator, counters, entities -- to diff two runs tick by tick.\n");
 #endif
+    sys_printf(
+        "\n"
+        "keys (US keyboard places):\n"
+        "  S D O K, arrows      left, right, up, down (S D O K: see -keys)\n"
+        "  SPACE                fire (see -keys)\n"
+        "  P                    pause, P again resumes\n"
+        "  E                    end the game\n"
+        "  ESC                  quit\n"
+        "  F1                   toggle fullscreen\n"
+        "  F2 / F3              zoom out / in\n"
+        "  F4                   toggle sound mute\n"
+        "  F5 / F6              sound volume down / up\n"
+        "  F7 / F8 / F9         cheats: trainer / invincible / highlight\n"
+        "  F10                  RD2: the original game's S key, a debug toggle that\n"
+        "                         plays other sounds in place of most effects\n");
 	exit(1);
 }
 

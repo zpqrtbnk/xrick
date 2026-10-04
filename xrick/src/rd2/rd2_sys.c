@@ -17,6 +17,7 @@
 #include "sysevt.h"
 #include "sysvid.h"
 #include "control.h"
+#include "syskbd.h"
 #include "rects.h"
 #include "fb.h"
 
@@ -101,16 +102,21 @@ dbg_shot(U32 v)
 extern void (*sysevt_rawkey)(U16 scancode, U8 down, U8 repeat);
 extern U8 sysevt_quit;
 
+/* The host bindings (syskbd.c, -keys) decide, as in rd1: a key bound to a direction or fire
+   is only that (sysevt.c tests those first), P is the pause binding, and the ST's S ($1f, debug
+   sound-id remap [$1a5ce]) is syskbd_sndset (F10), since S is a direction key (user decision 2026-10-04).
+   The fire key (Space) is therefore not also sent as the keyboard's $39: see port-rd2.md §7. */
 static U8
 st_code(U16 sdl)
 {
-	switch (sdl) {
-	case SDL_SCANCODE_P:      return 0x19;
-	case SDL_SCANCODE_S:      return 0x1f;
-	default: return 0;
-	}
-	/* SDL_SCANCODE_SPACE is the joystick fire key (syskbd_fire) and is therefore not
-	   also sent as the keyboard's $39: see port-rd2.md §7 (host binding). */
+	if (sdl == syskbd_up || sdl == syskbd_down || sdl == syskbd_left ||
+	    sdl == syskbd_right || sdl == syskbd_fire)
+		return 0;
+	if (sdl == syskbd_pause)
+		return 0x19;
+	if (sdl == syskbd_sndset)
+		return 0x1f;
+	return 0;
 }
 
 static void
