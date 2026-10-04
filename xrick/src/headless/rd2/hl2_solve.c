@@ -131,7 +131,7 @@ judge(int status)
 		int r = hl2_rickRow(), c = hl2_rickCol();
 		/* on the ground (not a ladder: the waypoint is where Rick acts next), on the
 		   row, within a column */
-		if (rd2_rw(0x12e1cu) != 0 && rd2_rw(0x12e1au) == 0 && r == g_wp_row &&
+		if ((rd2_rw(0x12e1cu) != 0 || rd2_rw(0x12e14u) != 0) && rd2_rw(0x12e1au) == 0 && r == g_wp_row &&
 		    c >= g_wp_col - 1 && c <= g_wp_col + 1)
 			return counters_ok() ? R_GOAL : R_FAIL;
 	}
@@ -221,11 +221,21 @@ bounce(int f, int c)
 	       support(f, c);
 }
 
+/*
+ * tunnel mode ([$12e14], map 4 submap 5): Rick flies -- up held lifts him anywhere
+ * there is room (13 rows in 30 frames), released he sinks, down lowers him (measured
+ * 2026-10-04). The field of the submap Rick is flying in treats every free cell like
+ * a ladder (field_build sets it)
+ */
+static int g_fly;
+
 /* a state's k as the field stores it: K_GROUND where Rick can stand or climb, 0 on a
    bounce tile */
 static int
 knorm(int f, int c, int k)
 {
+	if (g_fly)
+		return K_GROUND;
 	if (bounce(f, c))
 		return 0;
 	return (support(f, c) || ladder(f, c)) ? K_GROUND : k;
@@ -237,7 +247,7 @@ knorm(int f, int c, int k)
 static int
 edges(int f, int c, int k, int *to, int *cost)
 {
-	int n = 0, d, nf, nk, ground = support(f, c) || ladder(f, c);
+	int n = 0, d, nf, nk, ground = g_fly || support(f, c) || ladder(f, c);
 
 	/* walk / drift; through a 2-row gap only crawling, from the ground: in the air Rick
 	   is standing height (map 4 submap 0: the field crawled over the barrels, rows
@@ -256,7 +266,11 @@ edges(int f, int c, int k, int *to, int *cost)
 		}
 	}
 	nf = f - 1;                                                  /* climb / jump up */
-	if (fp_stand(nf, c)) {
+	if (g_fly) {                                                 /* or fly */
+		if (fp_free(nf, c)) {
+			to[n] = IDX(nf, c, K_GROUND); cost[n++] = 1;
+		}
+	} else if (fp_stand(nf, c)) {
 		if (ladder(f, c) && ladder(nf, c)) {
 			to[n] = IDX(nf, c, knorm(nf, c, K_GROUND)); cost[n++] = 1;
 		} else if (k < KMAX) {
@@ -279,6 +293,7 @@ field_build(int sm, int gf, int gc)
 	int *heap, hn = 0;
 
 	d_rows = hl2_rowsOf(sm);
+	g_fly = sm == rd2_rw(HL2_SUBMAP) && rd2_rw(0x12e14u) != 0;
 	free(tattr); free(dist);
 	tattr = malloc((size_t)d_rows * HL2_COLS);
 	for (f = 0; f < d_rows; f++)

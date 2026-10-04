@@ -164,6 +164,8 @@ play(const U8 *p, int n, int sub, int lives)
 	return 1;
 }
 
+static int sw_tunnel;    /* Rick flies (tunnel mode, [$12e14]): any free spot will do */
+
 #define PRESS_MAX 96
 #define WP_TRIES 8
 #define WP_STALL 200   /* frames with no new closest distance, in a waypoint search */
@@ -196,6 +198,10 @@ press(int m, U8 dir, int esc, U8 *p)
 		p[n++] = 0; p[n++] = dir;
 		for (i = 0; i < 4; i++) p[n++] = (U8)(0x80 | dir);
 		for (i = 0; i < 6; i++) p[n++] = 0;
+	} else if (m == 0x02 && sw_tunnel) {     /* in the tunnel fire alone shoots (rd2_13d0a) */
+		p[n++] = 0; p[n++] = dir;
+		for (i = 0; i < 3; i++) p[n++] = 0x80;
+		for (i = 0; i < 30; i++) p[n++] = 0;
 	} else if (m == 0x02) {                  /* laser: re-arm (fire alone), face, fire + up */
 		p[n++] = 0x80; p[n++] = 0x80; p[n++] = 0; p[n++] = dir;
 		for (i = 0; i < 3; i++) p[n++] = 0x81;
@@ -232,7 +238,7 @@ aim_x(const hl2_switch_t *s, int m, U8 dir, int *lo, int *hi)
 }
 
 /* Rick can stand with his anchor at (f, c): body and feet rows free, and the probe's
-   feet row below holds a floor in one of its (up to 3) columns */
+   feet row below holds a floor in one of its (up to 3) columns -- or, flying, just free */
 static int
 standable(int f, int c)
 {
@@ -244,6 +250,8 @@ standable(int f, int c)
 		for (k = c; k < c + 2; k++)
 			if (hl2_attr(r, k) & (HL2_T_SOLID | HL2_T_LETHAL))
 				return 0;
+	if (sw_tunnel)
+		return 1;
 	for (k = c; k < c + 3 && k < HL2_COLS; k++)
 		below |= hl2_attr(f + 1, k);
 	return (below & (HL2_T_FLOOR | HL2_T_SOLID)) != 0;
@@ -317,6 +325,7 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 	int tries = 0, d;
 
 	hl2_stateSave(start);
+	sw_tunnel = rd2_rw(0x12e14u) != 0;
 	for (mi = 0; mi < 4 && res < 0; mi++) {
 		int m = methods[mi];
 		if (!(s->mask & (m == THROW ? 0x04 : m)))
@@ -335,7 +344,7 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 			{
 				int rx = rd2_rws(HL2_RICK_X), rr = hl2_rickRow();
 				hl2_stateLoad(start);
-				if (rd2_rw(0x12e1cu) != 0 && rx >= xlo - 24 && rx <= xhi + 24 &&
+				if ((rd2_rw(0x12e1cu) != 0 || sw_tunnel) && rx >= xlo - 24 && rx <= xhi + 24 &&
 				    rr <= s->row + (s->h + 5) / 8 &&
 				    rr >= s->row + 1 - ((m == 0x04 || m == THROW) ? BOMB_ABOVE : 0)) {
 					hl2_stateSave(at);
@@ -356,8 +365,8 @@ hl2_switchFire(const hl2_solveopt_t *o0, const hl2_switch_t *s, U8 *seq, int max
 			   the hazard in the pit below the lift dies of a bomb dropped from the
 			   lift's edge, 2026-10-03); columns of the x range where Rick can stand
 			   (or the range's start if none) */
-			for (f = s->row + (s->h + 5) / 8;
-			     f >= s->row + 1 - ((m == 0x04 || m == THROW) ? BOMB_ABOVE : 0) && res < 0; f--)
+			for (f = s->row + (s->h + 5) / 8 + (sw_tunnel ? 2 : 0);
+			     f >= s->row + 1 - ((m == 0x04 || m == THROW) ? BOMB_ABOVE : sw_tunnel ? 2 : 0) && res < 0; f--)
 			for (x = xlo, lastc = -1; x <= xhi && res < 0; x += 2) {
 				c = (x + 4) >> 3;
 				if (c == lastc || (!standable(f, c) && !(x == xlo && !standable(f, (xhi + 4) >> 3))))
