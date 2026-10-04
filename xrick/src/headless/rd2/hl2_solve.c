@@ -78,7 +78,8 @@ static U32 g_t0;
 /*
  * ammo the search's own bomb and laser programs leave alone: one per switch of the map
  * that only a bomb (box mask 4) or only a shot (mask 2) fires, not met yet (record not
- * spawned) or with its actor still out. Map 3 reached submap 8, which needs two bombs,
+ * spawned) or with its actor still out -- for bombs: none at all while any such switch
+ * remains. Map 3 reached submap 8, which needs two bombs,
  * with one: the others had gone on stages and a back-and-forth (2026-10-04). The switch
  * module is not held back by it; ammo pickups exist, so this is a heuristic.
  */
@@ -845,7 +846,8 @@ skip_prog(int a)
 {
 	if (progs[a].kind == K_BOMB)             /* a bomb in play already, or none to spare */
 		return rd2_rw(0x16b12u) != 0 || rd2_rw(HL2_BOMBS) <= g_minbombs ||
-		       rd2_rw(HL2_BOMBS) <= g_res_bombs;
+		       g_res_bombs > 0;      /* while bomb switches remain, bombs are for them: the
+		                                count is a lower bound (map 3's spare went on a stage again) */
 	if (progs[a].kind == K_LASER)            /* a shot in flight, or none to spare */
 		return rd2_rw(0x16902u) != 0 || rd2_rw(HL2_LASER) <= g_minlaser ||
 		       rd2_rw(HL2_LASER) <= g_res_laser;
