@@ -111,7 +111,7 @@ class Map:
         os.replace(tmp, os.path.join(self.dir, "status.json"))
 
     def run(self):
-        cur = check(self.m, self.best, self.st.get("blocks", []))
+        cur = check(self.m, self.best)
         if not cur["valid"]:
             self.save(state="error", reason="best.joy loses a life", best=cur)
             return
@@ -119,7 +119,7 @@ class Map:
         run = os.path.join(self.dir, "run.joy")
         log = self.st.get("log")
         if os.path.exists(run) and log and os.path.exists(log):
-            new = check(self.m, run, self.st.get("blocks", []))
+            new = check(self.m, run)
             if better(new, cur, log):
                 shutil.copyfile(self.best, os.path.join(self.dir, "best.prev.joy"))
                 os.replace(run, self.best)
@@ -153,9 +153,11 @@ class Map:
                     self.proc.wait()
                     lf.write("\nrd2solve: stopped at the time budget\n")
             # exits the chain left out ("solve: exit E of submap S left out from row R"):
-            # kept for the next attempts (only --retry clears them: progress made on a
-            # detour must not route back into what was left out), and both ends are
-            # measured with them, so a detour counts as progress
+            # kept for the next attempts (only --retry clears them). Progress is measured
+            # WITHOUT them: with them, an end where every exit is left out has no route
+            # and anything looked better (map 2: a 1->8->1 loop was kept), and real
+            # progress into such a place looked like none (map 4, row 103). A detour that
+            # takes the route cost up is not taken automatically: a hint.
             blocks = list(self.st.get("blocks", []))
             with open(log) as lf:
                 for l in lf:
@@ -165,8 +167,7 @@ class Map:
                         if b not in blocks:
                             blocks.append(b)
             self.save(blocks=blocks)
-            new = check(self.m, run, blocks)
-            cur = check(self.m, self.best, blocks)
+            new = check(self.m, run)
             with open(log, "a") as lf:
                 lf.write("rd2solve: run.joy %s\nrd2solve: best.joy %s\n" % (json.dumps(new), json.dumps(cur)))
             if better(new, cur, log):
