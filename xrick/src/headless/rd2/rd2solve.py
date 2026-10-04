@@ -161,7 +161,10 @@ class Map:
             blocks = list(self.st.get("blocks", []))
             with open(log) as lf:
                 for l in lf:
-                    if l.startswith("solve: exit ") and " left out" in l:
+                    # one that leaves no route at all is not kept: the wider beams of
+                    # the next attempts retry that exit instead (map 4 submap 5: one
+                    # failure at beam 192 made the map "stuck")
+                    if l.startswith("solve: exit ") and " left out" in l and not l.rstrip().endswith("exit -1"):
                         w = l.split()
                         b = "%s,%s,%s" % (w[5], w[2], w[10].rstrip(";"))
                         if b not in blocks:
