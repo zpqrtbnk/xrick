@@ -444,6 +444,34 @@ hl2_solveBlock(int sub, int exit, int row)
 	}
 }
 
+/*
+ * arrivals of this chain, (submap, entry row): the route's first hop does not go back
+ * into one entered VISIT_MAX times already, while it has another way (map 3: the route
+ * bounced between submaps 7 and 8, a stage having moved Rick next to an exit left out)
+ */
+#define VISIT_MAX 2
+#define ARRIVALS_MAX 128
+static int arr_sub[ARRIVALS_MAX], arr_row[ARRIVALS_MAX], n_arr;
+
+void
+hl2_solveArrived(int sub, int row)
+{
+	if (n_arr < ARRIVALS_MAX) {
+		arr_sub[n_arr] = sub;
+		arr_row[n_arr++] = row;
+	}
+}
+
+static int
+visits(int sub, int row)
+{
+	int i, n = 0;
+	for (i = 0; i < n_arr; i++)
+		if (arr_sub[i] == sub && arr_row[i] == row)
+			n++;
+	return n;
+}
+
 static int
 blocked(int sub, int exit, int row)
 {
@@ -460,8 +488,17 @@ hl2_solveRouteCost(void)
 	return route_cost;
 }
 
+static int route_pass(int);
+
 int
 hl2_solveRoute(void)
+{
+	int ex = route_pass(1);              /* no first hop into a place visited VISIT_MAX times */
+	return ex >= 0 ? ex : route_pass(0);
+}
+
+static int
+route_pass(int guard)
 {
 	static int ns_[RT_MAX], nf_[RT_MAX], nc_[RT_MAX], nd_[RT_MAX], first[RT_MAX], done_[RT_MAX];
 	hl2_exit_t e[HL2_EXITS_MAX];
@@ -483,6 +520,8 @@ hl2_solveRoute(void)
 		for (i = 0; i < n; i++) {
 			int d, tf, tc, k;
 			if (blocked(ns_[u], i, nf_[u]))
+				continue;
+			if (guard && u == 0 && !e[i].done && visits(e[i].target, e[i].entry) >= VISIT_MAX)
 				continue;
 			field_build(ns_[u], e[i].row, EXIT_COL(e[i].side));
 			d = field_at(nf_[u], nc_[u], knorm(nf_[u], nc_[u], K_GROUND));

@@ -43,7 +43,8 @@ extern void hl2_solveDefaults(hl2_solveopt_t *);
  * replay ended.
  */
 extern int hl2_solveRoute(void);  /* the exit (index) on the shortest submap path to the map's end, or -1 */
-extern void hl2_solveBlock(int sub, int exit, int row);  /* the route leaves this exit out, from near row */
+extern void hl2_solveBlock(int sub, int exit, int row);
+extern void hl2_solveArrived(int sub, int row);  /* the chain entered submap sub, feet on row */  /* the route leaves this exit out, from near row */
 extern int hl2_solveRouteCost(void);  /* that path's length (field steps) at the last hl2_solveRoute, -1: none */
 extern int hl2_solve(const hl2_solveopt_t *, U8 *seq, int max);   /* frames, or -1 */
 extern int hl2_solvePolish(const hl2_solveopt_t *, U8 *seq, int n);  /* new length */

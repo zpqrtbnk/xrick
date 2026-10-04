@@ -470,6 +470,8 @@ solve(int chain, hl2_solveopt_t *o, const char *out)
 		       "(%d under 4 frames), search %.1f s, polish %.1f s%s\n", mp, sm, ex,
 		       ex >= 0 && ex < ne ? (e[ex].done ? "map done" : "") : "?", n2, n, runs, jitter,
 		       t1 - t0, now() - t1, rr == n2 ? "" : " -- REPLAY FAILED");
+		if (rd2_rw(HL2_SUBMAP) != (U16)sm)
+			hl2_solveArrived(rd2_rw(HL2_SUBMAP), hl2_rickRow());
 		if (ex >= 0 && ex < ne && !e[ex].done)
 			printf("solve:   now submap %u\n", rd2_rw(HL2_SUBMAP));
 		if (rr != n2)
