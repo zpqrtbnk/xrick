@@ -143,7 +143,16 @@ judge(int status)
 
 #define FP_W 2
 #define JUMP_ROWS 4
-#define NK (JUMP_ROWS + 1)
+/*
+ * map 3's surface tiles (attribute bit 0) bounce Rick: holding up on the pad at map 3
+ * submap 6 row 88 cols 4-7 took him from feet row 87 to 79 (measured 2026-10-04, user
+ * hint: "a super jump pad"). k counts rows risen against KMAX: a jump from a plain floor
+ * starts at K_GROUND, from a bounce tile at 0
+ */
+#define BOUNCE_ROWS 8
+#define KMAX BOUNCE_ROWS
+#define K_GROUND (KMAX - JUMP_ROWS)
+#define NK (KMAX + 1)
 #define DIST_INF 0xffff
 /*
  * Moving platforms and lifts are objects (algo-objects.md), not tiles: a submap can
@@ -204,11 +213,22 @@ ladder(int f, int c)
 	return 0;
 }
 
-/* a state's k as the field stores it: 0 where Rick can stand or climb */
+/* standing on a bounce tile (map 3's surface bit) */
+static int
+bounce(int f, int c)
+{
+	return rd2_rw(HL2_MAP_PLAYING) == 3 && ((at(f + 1, c) | at(f + 1, c + 1)) & HL2_T_SURFACE) &&
+	       support(f, c);
+}
+
+/* a state's k as the field stores it: K_GROUND where Rick can stand or climb, 0 on a
+   bounce tile */
 static int
 knorm(int f, int c, int k)
 {
-	return (support(f, c) || ladder(f, c)) ? 0 : k;
+	if (bounce(f, c))
+		return 0;
+	return (support(f, c) || ladder(f, c)) ? K_GROUND : k;
 }
 
 #define IDX(f, c, k) (((f) * HL2_COLS + (c)) * NK + (k))
@@ -224,25 +244,25 @@ edges(int f, int c, int k, int *to, int *cost)
 	   24-25, which only a jump reaches -- under a ceiling a jump cannot pass) */
 	for (d = -1; d <= 1; d += 2)
 		if (ground ? fp_free(f, c + d) : fp_stand(f, c + d)) {
-			nk = knorm(f, c + d, ground ? JUMP_ROWS : k);
+			nk = knorm(f, c + d, ground ? KMAX : k);
 			to[n] = IDX(f, c + d, nk); cost[n++] = fp_stand(f, c + d) ? 1 : 2;
 		}
 	nf = f + 1;                                                  /* fall / climb down */
 	if (ground ? fp_free(nf, c) : fp_stand(nf, c)) {
 		if (!support(f, c) || ladder(nf, c)) {
-			to[n] = IDX(nf, c, knorm(nf, c, JUMP_ROWS)); cost[n++] = 1;
+			to[n] = IDX(nf, c, knorm(nf, c, KMAX)); cost[n++] = 1;
 		} else {                                                 /* through a floor: a lift? */
-			to[n] = IDX(nf, c, knorm(nf, c, JUMP_ROWS)); cost[n++] = RELAX_DOWN;
+			to[n] = IDX(nf, c, knorm(nf, c, KMAX)); cost[n++] = RELAX_DOWN;
 		}
 	}
 	nf = f - 1;                                                  /* climb / jump up */
 	if (fp_stand(nf, c)) {
 		if (ladder(f, c) && ladder(nf, c)) {
-			to[n] = IDX(nf, c, knorm(nf, c, 0)); cost[n++] = 1;
-		} else if (k < JUMP_ROWS) {
+			to[n] = IDX(nf, c, knorm(nf, c, K_GROUND)); cost[n++] = 1;
+		} else if (k < KMAX) {
 			to[n] = IDX(nf, c, knorm(nf, c, k + 1)); cost[n++] = 2;
 		} else {                                                 /* higher than a jump: a lift? */
-			to[n] = IDX(nf, c, knorm(nf, c, JUMP_ROWS)); cost[n++] = RELAX;
+			to[n] = IDX(nf, c, knorm(nf, c, KMAX)); cost[n++] = RELAX;
 		}
 	}
 	return n;
@@ -365,7 +385,7 @@ field_rick(void)
 	if (c > HL2_COLS - FP_W) c = HL2_COLS - FP_W;
 	if (f < 0 || f >= d_rows || c < 0)
 		return 1000;
-	k = grounded() ? 0 : JUMP_ROWS / 2;
+	k = grounded() ? (bounce(f, c) ? 0 : K_GROUND) : KMAX - JUMP_ROWS / 2;   /* in the air: half a jump */
 	d = dist[IDX(f, c, k)];
 	if (d == DIST_INF) {                    /* Rick's own cell off the field: its best k */
 		for (k = 0; k < NK; k++)
@@ -450,7 +470,7 @@ hl2_solveRoute(void)
 			if (blocked(ns_[u], i, nf_[u]))
 				continue;
 			field_build(ns_[u], e[i].row, EXIT_COL(e[i].side));
-			d = field_at(nf_[u], nc_[u], 0);
+			d = field_at(nf_[u], nc_[u], knorm(nf_[u], nc_[u], K_GROUND));
 			if (getenv("HL2_ROUTE_DEBUG"))
 				fprintf(stderr, "route: submap %d at (%d,%d) cost %d: exit %d (%d row %d -> %d entry %d%s): %d\n",
 				        ns_[u], nf_[u], nc_[u], nd_[u], i, e[i].side, e[i].row, e[i].target,

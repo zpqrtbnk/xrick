@@ -26,7 +26,8 @@
  *          most); -block <submap>,<exit>,<row> leaves one out from the start, for route
  *          nodes within 12 rows of <row>.
  * -load / -save <file>: start from / write a snapshot (same build only).
- * -distance: Rick's tile distance to the goal, and the route's to the map's end. -tiles <s>: submap s's tiles.
+ * -distance: Rick's tile distance to the goal, and the route's to the map's end.
+ * -surface <s>: submap s's tiles with S where the surface bit is set (map 3: bounce). -tiles <s>: submap s's tiles.
  * -view <up>,<down>: the tiles from <up> rows above Rick's feet to <down> below, with
  *          Rick, actors, objects, switch boxes and exits drawn in, and a legend.
  * -shot <file.ppm> [-zoom <z>]: the screen last shown (default zoom 2).
@@ -502,7 +503,7 @@ main(int argc, char *argv[])
 	int a, map = 1, c, r = HL2_STEP, rounds = 0, mapset = 0, steplog = 0, dump = 0;
 	unsigned long auditf = 0;
 	const char *inputs = NULL, *tdir = NULL, *stop = NULL, *out = NULL, *load = NULL, *save = NULL;
-	int chain = 0, distance = 0, tiles = -1, swi = -1, view_up = -1, view_down = 0, zoom = 2;
+	int chain = 0, distance = 0, tiles = -1, surface = -1, swi = -1, view_up = -1, view_down = 0, zoom = 2;
 	const char *shot = NULL;
 	hl2_solveopt_t sopt;
 	FILE *f = NULL;
@@ -562,6 +563,8 @@ main(int argc, char *argv[])
 			save = argv[++a];
 		else if (!strcmp(argv[a], "-tiles") && a + 1 < argc)
 			tiles = atoi(argv[++a]);
+		else if (!strcmp(argv[a], "-surface") && a + 1 < argc)
+			surface = atoi(argv[++a]);
 		else if (!strcmp(argv[a], "-switch") && a + 1 < argc)
 			swi = atoi(argv[++a]);
 		else if (!strcmp(argv[a], "-noswitches"))
@@ -642,6 +645,18 @@ main(int argc, char *argv[])
 	}
 	if (tiles >= 0)
 		hl2_tiles(stdout, tiles);
+	if (surface >= 0) {                         /* -surface <s>: S where the surface bit is set */
+		int r, c;
+		for (r = 0; r < hl2_rowsOf(surface); r++) {
+			printf("%3d ", r);
+			for (c = 0; c < HL2_COLS; c++) {
+				U8 at = hl2_attrOf(surface, r, c);
+				putchar(at & HL2_T_SURFACE ? 'S' : at & HL2_T_SOLID ? '#' : at & HL2_T_FLOOR ? '=' :
+				        at & HL2_T_LADDER ? 'H' : '.');
+			}
+			putchar(10);
+		}
+	}
 	if (swi >= 0) {                             /* -switch <i>: list the switches, fire the i-th */
 		static U8 sseq[SOLVE_MAX];
 		hl2_switch_t sw[32];
