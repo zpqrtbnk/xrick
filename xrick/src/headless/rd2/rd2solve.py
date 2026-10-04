@@ -59,7 +59,7 @@ def check(m, joy, blocks=()):
     rows = [l.split() for l in out if len(l.split()) > 20 and l.split()[1] == "joy"]
     dist = next((l for l in out if l.startswith("distance:")), "distance: -1 (exit -1), route -1").split()
     r = {"frames": len(rows), "valid": True, "map": m, "submap": 0, "lives": None,
-         "distance": int(dist[1]), "route": int(dist[-1])}
+         "distance": int(dist[1]), "route": int(dist[dist.index("route") + 1].rstrip(","))}
     if rows:
         lives0 = int(rows[0][16])
         r["valid"] = all(int(f[14]) == 0 and int(f[16]) >= lives0 for f in rows)
