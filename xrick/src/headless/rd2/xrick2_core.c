@@ -443,7 +443,7 @@ solve(int chain, hl2_solveopt_t *o, const char *out)
 			       o->beam, t1 - t0);
 			/* the route's exit failed with every stage and switch: leave it out and
 			   route again (what was committed stays) */
-			if (o->exit < 0 && ex >= 0 && n_blocked < BLOCKS_MAX) {
+			if (o->exit < 0 && o->wp_row < 0 && ex >= 0 && n_blocked < BLOCKS_MAX) {
 				int ex2;
 				int br = hl2_rickRow();
 				hl2_solveBlock(sm, ex, br);
