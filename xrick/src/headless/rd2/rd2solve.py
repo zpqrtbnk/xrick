@@ -42,6 +42,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.path.normpath(os.path.join(HERE, "..", "..", "..", "..", "build"))
 CORE = os.environ.get("XRICK2_CORE", os.path.join(BUILD, "core2", "xrick2-core"))
 BEAMS = (192, 384, 768)
+# maps whose search may spend any ammo: bomb pickups ahead make the reserve too strict
+# (map 4: 13 bomb switches counted against 6 bombs, the robots by the ladder need bombs)
+NORESERVE = {4}
 
 
 def check(m, joy, blocks=()):
@@ -143,6 +146,8 @@ class Map:
             args[3:3] = ["-inputs", self.best] if cur["frames"] else []
             for b in self.st.get("blocks", []):
                 args += ["-block", b]
+            if self.m in NORESERVE:
+                args += ["-noreserve"]
             with open(log, "w") as lf:
                 self.proc = subprocess.Popen(args, stdout=lf, stderr=subprocess.STDOUT,
                                              start_new_session=True)

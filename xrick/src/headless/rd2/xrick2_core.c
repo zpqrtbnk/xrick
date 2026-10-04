@@ -22,6 +22,8 @@
  *          give up after <n> frames with no new closest distance (default 600).
  *          When an exit is not found, the submap's switches are tried (-noswitches: not).
  *          -onemap: the chain stops when the map is done (maps are solved one by one).
+ *          -noreserve: the search may spend any ammo (else it keeps one per bomb-only /
+ *          shot-only switch left, and no bomb at all while a bomb switch remains).
  *          A routed exit not found is left out and the route asked again (4 times at
  *          most); -block <submap>,<exit>,<row> leaves one out from the start, for route
  *          nodes within 12 rows of <row>.
@@ -589,6 +591,8 @@ main(int argc, char *argv[])
 			switches = 0;
 		else if (!strcmp(argv[a], "-onemap"))
 			onemap = 1;
+		else if (!strcmp(argv[a], "-noreserve"))
+			sopt.noreserve = 1;
 		else if (!strcmp(argv[a], "-block") && a + 1 < argc) {
 			int bs, be, br;
 			if (sscanf(argv[++a], "%d,%d,%d", &bs, &be, &br) != 3)

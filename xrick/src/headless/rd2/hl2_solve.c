@@ -59,6 +59,7 @@ hl2_solveDefaults(hl2_solveopt_t *o)
 	o->wp_col = -1;
 	o->stuck = NULL;
 	o->survive = 0;
+	o->noreserve = 0;
 	o->stage = NULL;
 	o->stage_n = NULL;
 }
@@ -128,6 +129,8 @@ goal_set(const hl2_solveopt_t *o)
 	g_lives = rd2_rw(HL2_LIVES);
 	g_minbombs = o->minbombs;
 	ammo_reserve(&g_res_bombs, &g_res_laser);
+	if (o->noreserve)
+		g_res_bombs = g_res_laser = 0;
 	g_minlaser = o->minlaser;
 	g_survive = o->survive;
 	g_t0 = hl2_tick();
