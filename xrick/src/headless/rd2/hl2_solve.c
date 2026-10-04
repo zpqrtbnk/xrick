@@ -340,6 +340,33 @@ field_build(int sm, int gf, int gc)
 	for (f = 0; f < d_rows; f++)
 		for (c = 0; c < HL2_COLS; c++)
 			tattr[f * HL2_COLS + c] = hl2_attrOf(sm, f, c);
+	/* blockers in Rick's submap -- live actors of hit class $0c whose spawn record has a
+	   switch box (shot / bomb / melee), so only that switch removes them (algo-actors.md
+	   §3) -- are solid: the field would route through them. One without a box may die to a
+	   direct hit and stays passable (map 3 submap 9: both ways down have such actors; with
+	   them solid there was no route at all) */
+	if (sm == rd2_rw(HL2_SUBMAP)) {
+		U32 a, rec, d;
+		int i, k, boxed, y0, y1, x0, x1, scr = rd2_rw(HL2_SCROLL) & ~7;
+		for (i = 0, a = 0x16b6au; i < 6; i++, a += 0x58) {
+			if (rd2_rws(a) <= 0 || (rd2_rb(a + 1) & 0x1c) != 0x0c)
+				continue;
+			rec = rd2_rl(a + 0x2a);
+			for (boxed = 0, k = 0; rec && k < (rd2_rb(rec + 3) & 3); k++) {
+				d = rec + 4 + 4u * (U32)k;
+				if (rd2_rb(d + 3) & 0x0e)
+					boxed = 1;
+			}
+			if (!boxed)
+				continue;
+			x0 = rd2_rws(a + 2) >> 3; x1 = (rd2_rws(a + 2) + rd2_rws(a + 0x26) - 1) >> 3;
+			y0 = (scr + rd2_rws(a + 6)) >> 3; y1 = (scr + rd2_rws(a + 6) + rd2_rws(a + 0x28) - 1) >> 3;
+			for (f = y0; f <= y1; f++)
+				for (c = x0; c <= x1; c++)
+					if (f >= 0 && f < d_rows && c >= 0 && c < HL2_COLS)
+						tattr[f * HL2_COLS + c] |= HL2_T_SOLID;
+		}
+	}
 	ns = d_rows * HL2_COLS * NK;
 	dist = malloc((size_t)ns * sizeof(U16));
 	for (s = 0; s < ns; s++) dist[s] = DIST_INF;
