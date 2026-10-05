@@ -373,7 +373,8 @@ rd2_dbg_load(void)
  * write [$1a4fb] -- as fast as the game runs (rd2_sys_pump), then hands the joystick to the
  * player. With `-game 2 -map N` and a .joy the solver wrote from a new game on map N
  * (build/rd2solve/mapN/best.joy), the game is where the solver left Rick: the SDL build and
- * xrick2-core play the same frames byte for byte (kb2/demo-solver.md section 1).
+ * xrick2-core play the same frames byte for byte (kb2/demo-solver.md section 1). The game
+ * is then paused (P plays).
  */
 static void
 start_frame(void)
@@ -408,8 +409,10 @@ start_frame(void)
 	replay_fast = 0;
 	vbl_next = sys_gettime() + VBL_MS;
 	rd2_sys_joyresync();                                     /* the host state from the next pump on */
-	sys_printf("xrick: RD2_START: %u frames replayed (VBL %u, %u ms), your turn\n", k,
-	           vbl_total, sys_gettime() - t0);
+	rd2_wb(0x1a4fcu, 0x19);                                  /* paused, as if P had been pressed
+	                                                            (rd2_game.c $10ba6): P plays */
+	sys_printf("xrick: RD2_START: %u frames replayed (VBL %u, %u ms), paused: press P to play\n",
+	           k, vbl_total, sys_gettime() - t0);
 }
 
 /* debug: RD2_TRACE=<dir> [RD2_TRACE_N=frames] writes RAM $12e00-$17800, $54c00-$56400 and
