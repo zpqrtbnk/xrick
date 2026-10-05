@@ -30,6 +30,7 @@ static U8 base_hi, base_mid;        /* $ff8201 / $ff8203 */
 static U32 vbl_next;                /* host ms of the next VBL */
 static U8 joy_sent;                 /* last joystick-1 byte sent by the "IKBD" */
 static U8 joy_stale;                /* resend at the next pump even if unchanged */
+static U8 replay_fast;              /* RD2_START replay running: no waits, no drawing */
 static rect_t full = { 0, 0, FB_WIDTH, FB_HEIGHT, NULL };
 
 #define VBL_MS 20   /* 50 Hz */
@@ -290,6 +291,11 @@ rd2_sys_pump(void)
 	sysevt_poll();
 	if (sysevt_quit || (control_status & CONTROL_EXIT))
 		exit(0);                                             /* window closed or ESC (rd1); sys_shutdown runs at exit */
+	if (replay_fast) {                                       /* RD2_START: one VBL per pump, no */
+		vbl();                                               /* wait, no drawing, the host joystick */
+		vbl_next = sys_gettime() + VBL_MS;                   /* left alone (rd2_dbg_frame feeds it) */
+		return;
+	}
 	joystick();
 
 	now = sys_gettime();
@@ -361,6 +367,51 @@ rd2_dbg_load(void)
 	rd2_ww(0x1239cu, (U16)strtoul(m, NULL, 10));
 }
 
+/*
+ * debug (branch `solver`, PLAN.md T47): RD2_START=<file.joy> replays the file -- one
+ * joystick byte per frame, byte k-1 at frame head k, as RD2_JOYSEQ and the demo playback
+ * write [$1a4fb] -- as fast as the game runs (rd2_sys_pump), then hands the joystick to the
+ * player. With `-game 2 -map N` and a .joy the solver wrote from a new game on map N
+ * (build/rd2solve/mapN/best.joy), the game is where the solver left Rick: the SDL build and
+ * xrick2-core play the same frames byte for byte (kb2/demo-solver.md section 1).
+ */
+static void
+start_frame(void)
+{
+	static FILE *js;
+	static int state;                                        /* 0 not started, 1 replaying, 2 off */
+	static U32 k, t0;
+	int c;
+
+	if (state == 2)
+		return;
+	if (state == 0) {
+		const char *p = getenv("RD2_START");
+		if (!p || !(js = fopen(p, "rb"))) {
+			if (p)
+				sys_printf("xrick: RD2_START: cannot read '%s'\n", p);
+			state = 2;
+			return;
+		}
+		sys_printf("xrick: RD2_START: replaying %s\n", p);
+		t0 = sys_gettime();
+		state = 1;
+		replay_fast = 1;
+	}
+	if ((c = fgetc(js)) != EOF) {
+		rd2_wb(0x1a4fbu, (U8)c);
+		k++;
+		return;
+	}
+	fclose(js);
+	state = 2;
+	replay_fast = 0;
+	vbl_next = sys_gettime() + VBL_MS;
+	rd2_sys_joyresync();                                     /* the host state from the next pump on */
+	sys_printf("xrick: RD2_START: %u frames replayed (VBL %u, %u ms), your turn\n", k,
+	           vbl_total, sys_gettime() - t0);
+}
+
 /* debug: RD2_TRACE=<dir> [RD2_TRACE_N=frames] writes RAM $12e00-$17800, $54c00-$56400 and
    $70000-$7ffff at each game_main
    frame head ($10a54) as <dir>/f<k>.bin, k = 1.., for comparison with the original under Hatari */
@@ -372,6 +423,7 @@ rd2_dbg_frame(void)
 	char path[512];
 	FILE *f;
 	U32 n;
+	start_frame();
 	if (!dir) return;
 	n = getenv("RD2_TRACE_N") ? (U32)strtoul(getenv("RD2_TRACE_N"), NULL, 10) : 1000;
 	if (++k > n) return;
