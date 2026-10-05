@@ -14,6 +14,7 @@
 
 #include "rd2_mem.h"
 #include "rd2_collide.h"
+#include "rd2_sys.h"
 
 #define ATTR  0x65200u   /* tile attribute table */
 #define WIN   0x65300u   /* tile window, 32 bytes per row */
@@ -273,6 +274,7 @@ int
 rd2_14b7a(S16 d0, S16 d1, S16 d2, S16 d3)
 {
 	S16 d7;
+	rd2_sys_box(RD2_BOX_HURT, d0, d1, d2, d3);               /* host: highlight cheat */
 	if (rd2_rw(0x12e2a) != 0) return 0;
 	d7 = W(rd2_rws(0x1695c) + 0x14);
 	if (d0 >= d7) return 0;

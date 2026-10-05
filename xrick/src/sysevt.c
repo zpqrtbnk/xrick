@@ -27,6 +27,8 @@
 #include "control.h"
 #include "sysarg.h"
 #include "draw.h"
+#include "rd2_snd.h"
+#include "rd2_sys.h"
 
 #define SYSJOY_RANGE 3280
 
@@ -98,25 +100,25 @@ processEvent()
 			sysvid_zoom(+1);
 		}
 #ifdef ENABLE_SOUND
+		/* F4-F9: each game has its own sound engine and cheats */
 		else if (key == SDL_SCANCODE_F4) {
-			syssnd_toggleMute();
+			if (sysarg_args_game == 2) rd2_snd_toggleMute(); else syssnd_toggleMute();
 		}
 		else if (key == SDL_SCANCODE_F5) {
-			syssnd_vol(-1);
+			if (sysarg_args_game == 2) rd2_snd_vol(-1); else syssnd_vol(-1);
 		}
 		else if (key == SDL_SCANCODE_F6) {
-			syssnd_vol(+1);
+			if (sysarg_args_game == 2) rd2_snd_vol(+1); else syssnd_vol(+1);
 		}
 #endif
-		/* F7-F9: rd1 cheats; rd2 has none yet (PLAN.md), so they must not reach rd1 state */
-		else if (key == SDL_SCANCODE_F7 && sysarg_args_game != 2) {
-			game_toggleCheat(1);
+		else if (key == SDL_SCANCODE_F7) {
+			if (sysarg_args_game == 2) rd2_sys_toggleCheat(1); else game_toggleCheat(1);
 		}
-		else if (key == SDL_SCANCODE_F8 && sysarg_args_game != 2) {
-			game_toggleCheat(2);
+		else if (key == SDL_SCANCODE_F8) {
+			if (sysarg_args_game == 2) rd2_sys_toggleCheat(2); else game_toggleCheat(2);
 		}
-		else if (key == SDL_SCANCODE_F9 && sysarg_args_game != 2) {
-			game_toggleCheat(3);
+		else if (key == SDL_SCANCODE_F9) {
+			if (sysarg_args_game == 2) rd2_sys_toggleCheat(3); else game_toggleCheat(3);
 		}
 		break;
 	case SDL_EVENT_KEY_UP:

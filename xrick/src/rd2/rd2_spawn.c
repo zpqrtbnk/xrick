@@ -9,6 +9,7 @@
 #include "rd2_mem.h"
 #include "rd2_game.h"
 #include "rd2_collide.h"
+#include "rd2_sys.h"
 
 #define SCROLL   0x16462u   /* word, scroll y */
 #define SPAWNTAB 0x144c4u   /* long, current submap's spawn table */
@@ -329,6 +330,7 @@ rd2_14a3c(U32 a0, U32 a6)
 		d2 = W((U8)((rd2_rb(a1 + 2) & 0x0f) + 1) << 3);
 		d0 = rd2_rb(a1);
 		m = rd2_rb(a1 + 3);
+		rd2_sys_box(RD2_BOX_TRIGGER, d0, d1, d2, d3);        /* host: highlight cheat */
 		if ((m & 0x01) && rd2_14b7a(d0, d1, d2, d3)) goto HIT;
 		if ((m & 0x02) && rd2_14bee(d0, d1, d2, d3)) {
 			rd2_ww(RD2_SHOT_HIT, 0xffff);

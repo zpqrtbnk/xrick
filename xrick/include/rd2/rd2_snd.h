@@ -12,7 +12,9 @@
 
 void rd2_snd_init(void);
 void rd2_snd_shutdown(void);
-U16  rd2_snd_rw(U32 a);    /* game-side read of an engine cell, e.g. [$1aa08] */
+void rd2_snd_toggleMute(void);   /* F4 */
+void rd2_snd_vol(S8 d);          /* F5 / F6 */
+U16  rd2_snd_rw(U32 a);   /* game-side read of an engine cell, e.g. [$1aa08] */
 
 #endif /* _RD2_SND_H */
 

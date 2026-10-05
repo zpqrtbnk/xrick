@@ -19,17 +19,18 @@
  * Using the SDL_SCANCODE_xxx keysyms, which map to a QWERTY keyboard.
  * We get them via SDL_KEYDOWN.
  * We do *not* use SDL_TEXTINPUT nor SDLK_ to get true key mappings, so
- * for instance left on an AZERTY keyboard will be 'w' instead of 'z'.
+ * for instance a binding to 'q' is the key labelled 'a' on an AZERTY keyboard.
  */
 
 U8 syskbd_up = SDL_SCANCODE_O;
 U8 syskbd_down = SDL_SCANCODE_K;
-U8 syskbd_left = SDL_SCANCODE_Z;
-U8 syskbd_right = SDL_SCANCODE_X;
+U8 syskbd_left = SDL_SCANCODE_S;
+U8 syskbd_right = SDL_SCANCODE_D;
 U8 syskbd_pause = SDL_SCANCODE_P;
 U8 syskbd_end = SDL_SCANCODE_E;
 U8 syskbd_xtra = SDL_SCANCODE_ESCAPE;
 U8 syskbd_fire = SDL_SCANCODE_SPACE;
+U8 syskbd_sndset = SDL_SCANCODE_F10;  /* rd2 only: the ST's S key ($1f), debug sound-id remap [$1a5ce] */
 
 /* eof */
 

@@ -53,6 +53,10 @@ void rd2_sys_pump(void) { }
 void rd2_dbg_load(void) { }
 void rd2_dbg_frame(void) { }
 void rd2_sys_joyresync(void) { }
+/* the host cheats (PLAN.md T42, rd2_sys.c): never on in the solver, which plays the real game */
+U8 rd2_cheat_trainer, rd2_cheat_invincible, rd2_cheat_highlight;
+void rd2_sys_box(U8 kind, S16 x, S16 y, S16 w, S16 h) { (void)kind; (void)x; (void)y; (void)w; (void)h; }
+void rd2_sys_hlpixel(U32 screen, S16 x, S16 y) { (void)screen; (void)x; (void)y; }
 void rd2_sys_paused(U8 on) { (void)on; }
 void rd2_sys_info(U8 on) { (void)on; }
 U8 rd2_sys_endreq(void) { return 0; }

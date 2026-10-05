@@ -25,6 +25,8 @@
 #include "rd2_game.h"
 #include "rd2_snd.h"
 #include "dat_rd2_program.h"
+#include "sysarg.h"
+#include "syssnd.h"
 #include "audio_engine/AtariMachineC.h"
 
 #define SND_BASE  0x19e96u
@@ -37,6 +39,8 @@ static AtariMachineHandle *machine;
 static SDL_AudioStream *stream;
 static SDL_Mutex *lock;
 static U32 per_tick, countdown;
+static U8 uvol = SYSSND_MAXVOL;     /* user volume and mute, as rd1's sndUVol/sndMute (syssnd.c) */
+static U8 mute = FALSE;
 
 static void
 callback(void *ud, SDL_AudioStream *s, int want, int total)
@@ -54,7 +58,12 @@ callback(void *ud, SDL_AudioStream *s, int want, int total)
 				atari_machine_jsr(machine, 0x1a866u, 0);      /* TICK, the VBL ISR's sound part */
 				countdown = per_tick;
 			}
-			buf[i] = atari_machine_next_sample(machine);
+			if (mute)
+				buf[i] = 0;
+			else {
+				S32 v = atari_machine_next_sample(machine);
+				buf[i] = (S16)((v * (S32)uvol) / SYSSND_MAXVOL);
+			}
 		}
 		SDL_UnlockMutex(lock);
 		SDL_PutAudioStreamData(s, buf, (int)(n * sizeof(S16)));
@@ -67,6 +76,8 @@ rd2_snd_init(void)
 {
 	SDL_AudioSpec spec;
 
+	if (sysarg_args_vol >= 0)  /* -vol given: 0 (silence) .. SYSSND_MAXVOL */
+		uvol = (U8)sysarg_args_vol;
 	if (!SDL_InitSubSystem(SDL_INIT_AUDIO))
 		return;
 	spec.freq = FREQ;
@@ -105,6 +116,29 @@ rd2_snd_shutdown(void)
 	atari_machine_destroy(machine);
 	stream = NULL;
 	machine = NULL;
+}
+
+/* F4 / F5 / F6, as rd1's syssnd_toggleMute / syssnd_vol */
+void
+rd2_snd_toggleMute(void)
+{
+	if (!machine)
+		return;
+	SDL_LockMutex(lock);
+	mute = !mute;
+	SDL_UnlockMutex(lock);
+}
+
+void
+rd2_snd_vol(S8 d)
+{
+	if (!machine)
+		return;
+	if ((d < 0 && uvol > 0) || (d > 0 && uvol < SYSSND_MAXVOL)) {
+		SDL_LockMutex(lock);
+		uvol = (U8)(uvol + d);
+		SDL_UnlockMutex(lock);
+	}
 }
 
 /* $1a6aa play_sound(d0 = id, d1 = param) */

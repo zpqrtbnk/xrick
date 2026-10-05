@@ -11,6 +11,7 @@
 #include "rd2_cpu.h"
 #include "rd2_game.h"
 #include "rd2_collide.h"
+#include "rd2_sys.h"
 
 #define RX     0x1695cu   /* Rick x */
 #define RY     0x16960u   /* Rick y (long with the fraction at $16962) */
@@ -60,7 +61,8 @@ rd2_13d58(void)
 {
 	snd(0x10);
 	rd2_ww(0x16902, 1);
-	rd2_ww(0x176f4, (U16)(rd2_rw(0x176f4) - 1));
+	if (!rd2_cheat_trainer)                                  /* host: trainer cheat */
+		rd2_ww(0x176f4, (U16)(rd2_rw(0x176f4) - 1));
 	rd2_ww(0x176f2, 0xffff);
 	rd2_ww(0x16908, (U16)(rd2_rw(RY) + 7));
 	if (rd2_rw(RFACE) == 0) {
@@ -129,7 +131,11 @@ rd2_13096(void)
 		rd2_ww(0x12ef4, 0);
 	}
 	if (rd2_rw(0x12e2a) != 0) goto L13ace;
-	if (rd2_rw(0x12e2c) != 0) goto L13a62;
+	if (rd2_rw(0x12e2c) != 0) {
+		if (!rd2_cheat_invincible)
+			goto L13a62;
+		rd2_ww(0x12e2c, 0);                                  /* host: invincible cheat */
+	}
 	if (rd2_rw(TUNNEL) != 0) goto L13b84;
 	if (rd2_rw(LADDER) != 0) goto L138c6;
 	rd2_ww(0x12e1c, 0);
@@ -153,7 +159,7 @@ rd2_13096(void)
 
 L13194:
 	d7 = rd2_rb(RD2_PRES);
-	if (d7 & 0x20) goto L13a62;
+	if ((d7 & 0x20) && !rd2_cheat_invincible) goto L13a62;     /* host: invincible cheat */
 	if (!(d7 & 0x40)) goto L1321e;
 	d1 = 0;                                                  /* standing on an actor */
 	SETW(d1, rd2_rw(RD2_PPLY) - 0x15);
@@ -166,7 +172,7 @@ L13194:
 	rd2_ww(RD2_PACT, 0);
 	probe();
 	d7 = rd2_rb(RD2_PRES);
-	if (d7 & 0x20) goto L13a62;
+	if ((d7 & 0x20) && !rd2_cheat_invincible) goto L13a62;     /* host: invincible cheat */
 	d7 &= 0x06;
 	if (d7 != 0) {
 		d7 = rd2_rb(RD2_PRES);
@@ -356,7 +362,7 @@ L134ac:
 	probe();
 L13606:
 	d7 = rd2_rb(RD2_PRES);
-	if (d7 & 0x20) goto L13a62;
+	if ((d7 & 0x20) && !rd2_cheat_invincible) goto L13a62;     /* host: invincible cheat */
 	if (d7 & 0x02) {                                         /* wall */
 		if (RWS(d6) < 0)
 			SETW(d2, RW(d2) + 0x0c);
@@ -505,7 +511,8 @@ L13976:                                                      /* fire + down: bom
 	if (rd2_rw(0x17702) == 0) goto L1394e;
 	if (rd2_rw(0x16b12) != 0) goto L1394e;
 	rd2_ww(0x16b12, 1);
-	rd2_ww(0x17702, (U16)(rd2_rw(0x17702) - 1));
+	if (!rd2_cheat_trainer)                                  /* host: trainer cheat */
+		rd2_ww(0x17702, (U16)(rd2_rw(0x17702) - 1));
 	rd2_ww(0x17700, 0xffff);
 	rd2_ww(0x16b14, rd2_rw(RX));
 	rd2_ww(0x16b16, 0);
@@ -531,7 +538,8 @@ L13a62:                                                      /* death */
 	snd(0x0a);
 	rd2_ww(0x12e2c, 0);
 	rd2_ww(0x12e2a, 0xffff);
-	rd2_ww(0x17710, (U16)(rd2_rw(0x17710) - 1));
+	if (!rd2_cheat_trainer)                                  /* host: trainer cheat */
+		rd2_ww(0x17710, (U16)(rd2_rw(0x17710) - 1));
 	rd2_ww(0x1770e, 0xffff);
 	rd2_ww(0x1696c, 0);
 	rd2_ww(RWALK, 0);
@@ -608,7 +616,7 @@ L13b84:                                                      /* tunnel */
 	rd2_ww(RD2_PACT, 0xffff);
 	rd2_15fba();
 	d7 = rd2_rb(RD2_PRES);
-	if (d7 & 0x20) goto L13a62;
+	if ((d7 & 0x20) && !rd2_cheat_invincible) goto L13a62;     /* host: invincible cheat */
 	if (d7 & 0x04) goto L13c6a;
 	if (!(d7 & 0x02)) goto L13c86;
 	if (rd2_rws(RVY) >= 0) goto L13c6a;
