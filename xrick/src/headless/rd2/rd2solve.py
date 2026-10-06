@@ -58,8 +58,12 @@ def check(m, joy, blocks=()):
         args += ["-inputs", joy]
     else:
         args += ["-steps", "0"]
-    out = subprocess.run(args, capture_output=True, text=True).stdout.splitlines()
+    run = subprocess.run(args, capture_output=True, text=True)
+    out = run.stdout.splitlines()
     rows = [l.split() for l in out if len(l.split()) > 20 and l.split()[1] == "joy"]
+    # map 4 done keeps map 4: the run ends (HL2_END, game begun on map 4) or map 5's load
+    # hangs (HL2_HANG) -- xrick2_core.c why[] (2026-10-06)
+    ended = any(w in run.stdout + run.stderr for w in ("run ended", "map 5 hang"))
     dist = next((l for l in out if l.startswith("distance:")), "distance: -1 (exit -1), route -1").split()
     r = {"frames": len(rows), "valid": True, "map": m, "submap": 0, "lives": None,
          "distance": int(dist[1]), "route": int(dist[dist.index("route") + 1].rstrip(","))}
@@ -69,7 +73,7 @@ def check(m, joy, blocks=()):
         last = rows[-1]
         r.update({"map": int(last[4]), "submap": int(last[6]), "x": int(last[10]),
                   "lives": int(last[16]), "laser": int(last[18]), "bombs": int(last[20])})
-    r["done"] = r["map"] != m
+    r["done"] = r["map"] != m or ended
     if r["done"]:
         r["route"] = 0
     return r
