@@ -579,6 +579,13 @@ start_frame(void)
 	                                                            (rd2_game.c $10ba6): P plays */
 	sys_printf("xrick: RD2_START: %u frames replayed (VBL %u, %u ms), paused: press P to play\n",
 	           k, vbl_total, sys_gettime() - t0);
+	if (getenv("RD2_START_CHEATS")) {                        /* trainer, invincible, highlight, as */
+		rd2_sys_toggleCheat(1);                              /* F7, F8, F9 would (user request */
+		rd2_sys_toggleCheat(2);                              /* 2026-10-06) */
+		rd2_sys_toggleCheat(3);
+		sys_printf("xrick: RD2_START: cheats %c%c%c\n", rd2_cheat_trainer ? 'T' : '-',
+		           rd2_cheat_invincible ? 'I' : '-', rd2_cheat_highlight ? 'H' : '-');
+	}
 }
 
 /* debug: RD2_TRACE=<dir> [RD2_TRACE_N=frames] writes RAM $12e00-$17800, $54c00-$56400 and
