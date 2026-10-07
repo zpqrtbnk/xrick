@@ -44,7 +44,7 @@ CORE = os.environ.get("XRICK2_CORE", os.path.join(BUILD, "core2", "xrick2-core")
 BEAMS = (192, 384, 768)
 # maps whose search may spend any ammo: bomb pickups ahead make the reserve too strict
 # (map 4: 13 bomb switches counted against 6 bombs, the robots by the ladder need bombs)
-NORESERVE = {4}
+NORESERVE = {2, 4}   # map 2 (2026-10-07): 27 bomb switches, pickups in submaps 3, 4, 6, 9-11
 
 
 def check(m, joy, blocks=()):
