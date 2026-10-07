@@ -559,17 +559,27 @@ hl2_solveRouteCost(void)
 	return route_cost;
 }
 
-static int route_pass(int);
+static int route_pass(int, int);
+
+/*
+ * relaxed pass, last resort: a hop the field cannot reach counts DIST_RELAX instead of
+ * being left out. The field knows no lifts, and map 2 is built on them (2026-10-07:
+ * submaps 1-3 had no route, so -waypoint and fire_switch, which need a goal exit, refused
+ * to run); this still picks the exit a path of the fewest unreachable hops leads to
+ */
+#define DIST_RELAX 2000
 
 int
 hl2_solveRoute(void)
 {
-	int ex = route_pass(1);              /* no first hop into a place visited VISIT_MAX times */
-	return ex >= 0 ? ex : route_pass(0);
+	int ex = route_pass(1, 0);           /* no first hop into a place visited VISIT_MAX times */
+	if (ex < 0)
+		ex = route_pass(0, 0);
+	return ex >= 0 ? ex : route_pass(0, 1);
 }
 
 static int
-route_pass(int guard)
+route_pass(int guard, int relax)
 {
 	static int ns_[RT_MAX], nf_[RT_MAX], nc_[RT_MAX], nd_[RT_MAX], first[RT_MAX], done_[RT_MAX];
 	hl2_exit_t e[HL2_EXITS_MAX];
@@ -600,8 +610,11 @@ route_pass(int guard)
 				fprintf(stderr, "route: submap %d at (%d,%d) cost %d: exit %d (%d row %d -> %d entry %d%s): %d\n",
 				        ns_[u], nf_[u], nc_[u], nd_[u], i, e[i].side, e[i].row, e[i].target,
 				        e[i].entry, e[i].done ? " done" : "", d);
-			if (d >= 1000)
-				continue;
+			if (d >= 1000) {
+				if (!relax)
+					continue;
+				d = DIST_RELAX;
+			}
 			k = nd_[u] + d + 1;
 			if (e[i].done) {
 				if (best_d < 0 || k < best_d) {
