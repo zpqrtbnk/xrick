@@ -119,6 +119,11 @@ TITLE:
 		goto PICKED;
 	}
 	rd2_178dc();                                /* $10a18 */
+	if (rd2_demo_autostart()) {                 /* host: -demo with a solved game (PLAN.md T47): */
+		rd2_ww(RD2_DEMO, 0);                    /* after the title, a real game on map 1 */
+		rd2_ww(RD2_PICKER_CHOICE, 1);           /* instead of the original attract demo */
+		goto PICKED;
+	}
 PICK:
 	rd2_17a46();                                /* $10a1e */
 PICKED:

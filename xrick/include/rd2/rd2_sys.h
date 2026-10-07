@@ -52,6 +52,7 @@ void rd2_demo_init(void);                         /* -demo / -record */
 void rd2_demo_level(void);                        /* level start $10a4e */
 void rd2_demo_frame(void);                        /* frame head $10a54 */
 void rd2_demo_stop(void);                         /* end of run / back to the title */
+U8 rd2_demo_autostart(void);                      /* -demo: start the scripted game now (once) */
 
 void rd2_1a546(U8 b);   /* ACIA handler, one received IKBD byte */
 void rd2_1a866(void);   /* TICK: runs in the audio thread, rd2_snd.c */

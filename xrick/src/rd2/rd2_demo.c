@@ -126,6 +126,19 @@ rd2_demo_frame(void)
 		rd2_wb(RD2_JOY, to_joy(demo_play()));
 }
 
+/* after the title sequence ($178dc), once: with -demo and a script for map 1, the
+   solved game (PLAN.md T47) starts by itself as a real game on map 1, whether the
+   title timed out or fire was pressed */
+U8
+rd2_demo_autostart(void)
+{
+	static U8 done;
+	if (done || !demo_active || demo_recording() || rd2_demo_scripts[0].nbr == 0)
+		return 0;
+	done = 1;
+	return 1;
+}
+
 /* the run is over (END_OF_RUN, or ESC back to the title): the keyboard takes over for
    game over, name entry and the title */
 void
@@ -143,6 +156,7 @@ void rd2_demo_init(void) {}
 void rd2_demo_level(void) {}
 void rd2_demo_frame(void) {}
 void rd2_demo_stop(void) {}
+U8 rd2_demo_autostart(void) { return 0; }
 
 #endif /* ENABLE_DEMO */
 
