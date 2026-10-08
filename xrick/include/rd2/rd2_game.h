@@ -1,6 +1,15 @@
 /*
- * xrick/include/rd2/rd2_game.h
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- game_main ($10992) and the routines it calls, RAM model
  * (port-rd2.md §7). Game state lives in emulated RAM (rd2_mem.h) at the original
  * addresses; this header names the cells game_main touches and declares every

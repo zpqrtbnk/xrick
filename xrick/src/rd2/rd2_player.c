@@ -1,6 +1,15 @@
 /*
- * xrick/src/rd2/rd2_player.c
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- Rick, the laser shot, the bomb and the input reader, transliterated
  * at register level from the disassembly ($13096-$13e02, $13e14-$14220; read 2026-09-24;
  * kb2/algo-player.md). d0 = input byte (low byte), d1 = y as 16.16 (swapped as in the

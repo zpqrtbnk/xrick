@@ -1,6 +1,15 @@
 /*
- * xrick/src/rd2/rd2_game.c
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- boot ($10000) and game_main ($10992-$10c22), RAM model.
  * Transcribed from the disassembly (read 2026-09-24) and algo-flow.md §2/§6/§8/§13.
  * game_main is ONE function with gotos, like the original's flat labels; one frame

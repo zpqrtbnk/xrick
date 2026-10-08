@@ -1,6 +1,15 @@
 /*
- * xrick/src/rd2/rd2_demo.c
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- adapter to the shared demo core (include/demo.h). Host code, not
  * a transliteration. One segment per map (1..4 -> 0..3), entered at level start
  * ($10a4e); one tick per game_main frame ($10a54). Only real games are played or

@@ -1,6 +1,15 @@
 /*
- * xrick/src/rd2/rd2_spawn.c
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- spawn machinery, transliterated from the disassembly ($14542-$14b79,
  * read 2026-09-24; kb2/algo-spawn.md §1-§5, §7). Spawn and box records are read from and
  * written into the level image in RAM at $53400 (runtime bits, algo-spawn.md §9).

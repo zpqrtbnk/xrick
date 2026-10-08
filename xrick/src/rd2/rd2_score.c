@@ -1,6 +1,15 @@
 /*
- * xrick/src/rd2/rd2_score.c
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- score, lives, ammo, bombs, HUD counters and the bonus timer,
  * transliterated from the disassembly ($1771c-$178da, $157b4-$15868, read 2026-09-24;
  * kb2/algo-flow.md §7, algo-spawn.md §8).

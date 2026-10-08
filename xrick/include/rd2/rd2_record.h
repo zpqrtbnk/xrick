@@ -1,6 +1,15 @@
 /*
- * xrick/include/rd2/rd2_record.h
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- the 88-byte ($58) record shared by every moving thing, as byte
  * OFFSETS into emulated RAM (RAM-model port, port-rd2.md §7). Accessed with
  * rd2_rw(rec + RD2_R_X) etc., so word/byte overlaps (e.g. +0 word / +1 byte F) behave as

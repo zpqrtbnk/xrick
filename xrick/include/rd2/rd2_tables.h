@@ -1,6 +1,15 @@
 /*
- * xrick/include/rd2/rd2_tables.h
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- trigger table, spawn table and trigger-box record layouts
  * (level-tables.md SS2-3, algo-actors.md S4). These records are read directly out
  * of the embedded level-image blobs (the mutable level image at $53400, RD2_LVLIMG_OFF_SUBMAP_HEADERS

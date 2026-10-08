@@ -1,6 +1,15 @@
 /*
- * xrick/src/rd2/rd2_actors.c
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- 6-slot actor table, script steppers and chain helpers, transliterated
  * from the disassembly ($14d48-$150a1, $1704c-$17115 minus the draw, $171a4-$17391,
  * $15740-$157aa; read 2026-09-24; kb2/algo-actors.md §1-§3, algo-spawn.md §6-§7).

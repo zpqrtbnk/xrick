@@ -1,11 +1,9 @@
 /*
- * xrick/include/demo.h
- *
  * Demo mode, shared by both games: -demo plays a recorded control script, -record
  * writes one. A script is split in segments -- RD1: one per submap visit, RD2: one per map
  * -- and a game adapter tells the core when a segment starts and when a tick passes.
  *
- * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By

@@ -1,6 +1,4 @@
 /*
- * xrick/src/demo.c
- *
  * Demo mode, shared by both games -- see demo.h
  *
  * Replays a scripted sequence of control events into the game engine, timed per
@@ -8,7 +6,7 @@
  * src/rd1/game.c (demo_cycle drives control_status) and src/rd2/rd2_demo.c
  * (demo_play / demo_record drive the joystick byte).
  *
- * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By

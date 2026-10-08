@@ -1,6 +1,15 @@
 /*
- * xrick/include/rd2/rd2_sys.h
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- host bridge of the RAM-model port (port-rd2.md §7): the ST hardware
  * the game touches, done on the host.
  *   - VBL: the ISR $1902e ([$19232] += 1, then the music tick $1a866) runs once per 20 ms

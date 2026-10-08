@@ -1,6 +1,15 @@
 /*
- * xrick/src/rd2/rd2_render.c
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- rendering, transliterated from the disassembly (read 2026-09-24):
  * palette/fades $19106-$191e4, text $19272-$19386, clear $19388-$194cc, banner $194ce,
  * sprite walkers $17086-$171a2, background window $16474-$16656, scrolling $16658-$167a0,

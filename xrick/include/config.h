@@ -1,7 +1,5 @@
 /*
- * xrick/include/config.h
- *
- * Copyright (C) 1998-2019 bigorno (bigorno@bigorno.net). All rights reserved.
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
  * The use and distribution terms for this software are contained in the file
  * named README, which can be found in the root of this distribution. By
@@ -15,7 +13,7 @@
 #define _CONFIG_H
 
 /* version as YYMMDD */
-#define VERSION "261001"
+#define VERSION "261008"
 
 /* graphics (choose one) */
 #define GFXST

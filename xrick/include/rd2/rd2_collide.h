@@ -1,6 +1,15 @@
 /*
- * xrick/include/rd2/rd2_collide.h
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- collision probes and hit tests (rd2_collide.c, kb2/algo-collision.md).
  * Probe cells are RAM (inputs x/y/vy/actors-flag, outputs result/platform y/dx/dy).
  */

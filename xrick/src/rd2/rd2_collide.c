@@ -1,6 +1,15 @@
 /*
- * xrick/src/rd2/rd2_collide.c
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- collision probes and hit tests, transliterated from the disassembly
  * ($15f1e-$16461, $14b7a-$14d47, read 2026-09-24; kb2/algo-collision.md). RAM model: the
  * probe cells $15f0e-$15f1c, $161ca/$161cc and $12e16 are RAM, so they persist between

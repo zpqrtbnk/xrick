@@ -1,6 +1,15 @@
 /*
- * xrick/include/rd2/rd2_sound.h
+ * Copyright (C) 1998-NOW bigorno (bigorno@bigorno.net). All rights reserved.
  *
+ * The use and distribution terms for this software are contained in the file
+ * named README, which can be found in the root of this distribution. By
+ * using this software in any fashion, you are agreeing to be bound by the
+ * terms of this license.
+ *
+ * You must not remove this notice, or any other, from this software.
+ */
+
+/*
  * Rick Dangerous 2 -- sound dispatch ids (sound-ref.md S2 dispatch table, S7 "id ->
  * game event"). Only the ids sound-ref.md S7 actually names get a symbolic constant
  * here; the rest of the 0-91 range is used as a bare number by P3/P5 with a comment
