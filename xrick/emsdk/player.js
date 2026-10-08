@@ -148,7 +148,8 @@ var MAPS = [
   { game: '2', name: 'RD2 - The Forests of Vegetablia',  map: 3 },
   { game: '2', name: 'RD2 - The Atomic Mud Mines',       map: 4 }
 ];
-var mapSelect = null, subSelect = null;
+var mapSelect = null, subSelect = null, playBox = null, modeSelect = null;
+var runtimeReady = false; // set once xrick.wasm is loaded: the game can start
 
 //function hex2(n) { return '0x' + (n < 16 ? '0' : '') + n.toString(16).toUpperCase(); }
 
@@ -193,6 +194,31 @@ function buildSelector(box) {
   mapSelect.addEventListener('change', function () { fillSubmaps(MAPS[mapSelect.value]); });
   box.appendChild(mapSelect);
   box.appendChild(subSelect);
+  box.appendChild(buildPlayButton());
+}
+
+// split button: the button starts the game; its drop-down switches it between "play"
+// (a playable game) and "demo" (the attract demo, -demo, from the selected start)
+function buildPlayButton() {
+  playBox = document.createElement('span');
+  playBox.className = 'split';
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  modeSelect = document.createElement('select');
+  modeSelect.setAttribute('aria-label', 'start mode');
+  modeSelect.appendChild(option('play', 'play'));
+  modeSelect.appendChild(option('demo', 'demo'));
+  if (cfg.startInDemo) modeSelect.value = 'demo';
+  function sync() {
+    btn.textContent = modeSelect.value;
+    setLabel(modeSelect.value === 'demo' ? 'click or touch to watch the demo' : 'click or touch to play');
+  }
+  modeSelect.addEventListener('change', sync);
+  btn.addEventListener('click', function () { if (runtimeReady) start(); });
+  sync();
+  playBox.appendChild(btn);
+  playBox.appendChild(modeSelect);
+  return playBox;
 }
 
 // the selection as command-line arguments
@@ -208,6 +234,7 @@ function lockSelector() {
   if (!mapSelect) return;
   mapSelect.remove();
   subSelect.remove();
+  playBox.remove();
 }
 
 findAll(cfg.buttons).forEach(bindButton);
@@ -304,9 +331,10 @@ var Module = {
   printErr: function (text) { console.error(text); keepLine(text); },
   setStatus: function (text) { if (text) setStatus(text); },
   onRuntimeInitialized: function () {
-    setLabel('click or touch to play');
+    runtimeReady = true;
+    setLabel(modeSelect && modeSelect.value === 'demo' ? 'click or touch to watch the demo' : 'click or touch to play');
     setStatus('');
-    if (startBox) startBox.addEventListener('click', start, { once: true });
+    if (startBox) startBox.addEventListener('click', start);
     else start();   // no start element: nothing to click, but then no sound on most browsers
   },
   onExit: function (status) {
@@ -326,10 +354,13 @@ if (args.indexOf('-game') < 0 && args.indexOf('-map') < 0 && args.indexOf('-subm
 }
 
 function start() {
+  if (start.done) return; // the start element and the play button both start it, once
+  start.done = true;
   unlockAudio(); // inside the tap: iOS playback audio
   lockSelector(); // a new choice needs a page reload
 
   if (mapSelect) args = args.concat(selectionArgs());
+  if (modeSelect && modeSelect.value === 'demo' && args.indexOf('-demo') < 0) args.push('-demo');
 
   if (startBox) startBox.style.display = 'none';
   canvas.style.display = 'block'; // pages may keep the canvas hidden until now

@@ -8,5 +8,6 @@ data.zip
 /xrick/xrick
 vcpkg_installed/
 x64/
+__pycache__/
 # all build output, never sources: build.sh (build/win, build/web), the WSL Makefile (build/wsl)
 /build/
